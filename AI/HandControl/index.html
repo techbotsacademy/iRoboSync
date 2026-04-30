@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 3D Hand Controller</title>
+   
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #0a0a0a;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0; padding: 20px;
+        }
+        h2 { color: #00ffcc; text-shadow: 0 0 15px rgba(0,255,204,0.5); }
+       
+        .container {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            border: 2px solid #333;
+        }
+        #webcam { transform: rotateY(180deg); width: 640px; height: 480px; display: block; background: #111; }
+        #output_canvas { position: absolute; left: 0; top: 0; transform: rotateY(180deg); width: 640px; height: 480px; }
+
+
+        .controls {
+            margin-top: 20px; padding: 20px;
+            background: #1a1a1a; border-radius: 15px;
+            width: 600px; text-align: center;
+            border: 1px solid #333;
+        }
+       
+        button {
+            padding: 15px 35px; font-size: 16px; font-weight: bold;
+            background: linear-gradient(45deg, #00ffcc, #0099ff);
+            color: #000; border: none; border-radius: 50px;
+            cursor: pointer; transition: 0.3s;
+        }
+        button:hover { transform: scale(1.05); }
+       
+        .angle-display { display: flex; justify-content: space-around; margin-top: 20px; }
+        .angle-box {
+            background: #252525; padding: 15px; border-radius: 10px;
+            border-top: 4px solid #00ffcc; min-width: 90px;
+        }
+        .angle-box span { font-weight: bold; color: #00ffcc; font-size: 24px; display: block; }
+        #status { color: #888; font-size: 14px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+
+    <h2>AI Robotic Hand Control</h2>
+   
+    <div class="controls">
+        <button id="btnConnect">CONNECT TO ARDUINO</button>
+        <p id="status">Status: Disconnected</p>
+       
+        <div class="angle-display">
+            <div class="angle-box">INDEX<span id="val0">0</span></div>
+            <div class="angle-box">MIDDLE<span id="val1">0</span></div>
+            <div class="angle-box">RING<span id="val2">0</span></div>
+            <div class="angle-box">PINKY<span id="val3">0</span></div>
+        </div>
+    </div>
+
+
+    <div class="container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+
+
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const btnConnect = document.getElementById('btnConnect');
+        const statusText = document.getElementById('status');
+
+
+        let port, writer;
+
+
+        // 1. Web Serial Connection
+        btnConnect.addEventListener('click', async () => {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                writer = port.writable.getWriter();
+                statusText.innerText = "Status: Connected! 🚀";
+                statusText.style.color = "#00ffcc";
+                btnConnect.innerText = "CONNECTED ✅";
+            } catch (err) {
+                statusText.innerText = "Error: Serial port not selected.";
+                statusText.style.color = "#ff4444";
+            }
+        });
+
+
+        // 2. Mediapipe Results & Logic
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00ffcc', lineWidth: 2});
+                    drawLandmarks(canvasCtx, landmarks, {color: '#ff3366', radius: 3});
+
+
+                    const fingerTips = [8, 12, 16, 20];
+                    const fingerBases = [5, 9, 13, 17];
+                    let finalAngles = [];
+
+
+                    fingerTips.forEach((tipIdx, i) => {
+                        let tipY = landmarks[tipIdx].y;
+                        let baseY = landmarks[fingerBases[i]].y;
+                       
+                        let diff = (baseY - tipY) * 1000; // Height difference
+
+
+                        let snappedAngle;
+                        // --- 180 (Band) to 0 (Khula) Snap Logic ---
+                        if (diff < 20) {
+                            snappedAngle = 180; // Full Closed
+                        } else if (diff >= 20 && diff < 65) {
+                            snappedAngle = 90;  // Half Closed
+                        } else if (diff >= 65 && diff < 110) {
+                            snappedAngle = 45;  // Slightly Open
+                        } else {
+                            snappedAngle = 0;   // Full Open
+                        }
+                       
+                        finalAngles.push(snappedAngle);
+                        document.getElementById(`val${i}`).innerText = snappedAngle + "°";
+                    });
+
+
+                    // Send to Arduino
+                    if (writer) {
+                        const dataStr = `${finalAngles[0]},${finalAngles[1]},${finalAngles[2]},${finalAngles[3]}\n`;
+                        writer.write(new TextEncoder().encode(dataStr));
+                    }
+                }
+            }
+            canvasCtx.restore();
+        }
+
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+        hands.onResults(onResults);
+
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        camera.start();
+    </script>
+</body>
+</html>
