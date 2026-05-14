@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEURAL-SCAN | Multi-Stage Vehicle AI</title>
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+        :root {
+            --neon-blue: #00f2ff;
+            --neon-purple: #bc13fe;
+            --dark-bg: #0a0a0c;
+            --panel-bg: #16161a;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            padding: 20px;
+            text-align: center;
+            background: linear-gradient(180deg, #1a1a20 0%, transparent 100%);
+            border-bottom: 1px solid #333;
+        }
+
+        h1 {
+            margin: 0;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px var(--neon-blue);
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+            width: 95%;
+            max-width: 1400px;
+            margin-top: 20px;
+            padding-bottom: 50px;
+        }
+
+        .viewport-section {
+            background: var(--panel-bg);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #mainCanvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .panel-title {
+            color: var(--neon-purple);
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        #log-container {
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        .log-entry { margin-bottom: 4px; border-left: 2px solid var(--neon-blue); padding-left: 8px; }
+
+        .btn-primary {
+            background: transparent;
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            padding: 10px 20px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.3s;
+            font-weight: bold;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
+
+        #ocr-result {
+            font-size: 1.5rem;
+            text-align: center;
+            color: white;
+            letter-spacing: 2px;
+            padding: 10px;
+            background: #000;
+            border: 1px dashed var(--neon-blue);
+        }
+
+        .loader {
+            display: none;
+            width: 100%;
+            height: 4px;
+            background: #333;
+            margin: 10px 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loader::after {
+            content: '';
+            position: absolute;
+            width: 40%;
+            height: 100%;
+            background: var(--neon-blue);
+            animation: loading 1.5s infinite linear;
+        }
+
+        @keyframes loading {
+            0% { left: -40%; }
+            100% { left: 100%; }
+        }
+
+        .plate-preview {
+            width: 100%;
+            height: 100px;
+            background: #222;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #plateCanvas { border: 1px solid #555; height: 60px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Vehicle Analysis <span style="font-weight: 100;">System</span></h1>
+</header>
+
+<div class="main-container">
+    <!-- Main Display -->
+    <section class="viewport-section">
+        <div id="status-text" style="margin-bottom: 10px; font-weight: bold; color: var(--neon-blue);">READY SYSTEM</div>
+        <div class="loader" id="global-loader"></div>
+        <canvas id="mainCanvas"></canvas>
+        
+        <div style="margin-top: 20px; width: 100%;">
+            <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+            <button class="btn-primary" onclick="document.getElementById('imageUpload').click()">Upload Vehicle Image</button>
+        </div>
+    </section>
+
+    <!-- Controls & Results -->
+    <aside class="sidebar">
+        <div class="panel">
+            <div class="panel-title">OCR Recognition</div>
+            <div class="plate-preview" id="plate-preview-box">
+                <canvas id="plateCanvas"></canvas>
+            </div>
+            <div id="ocr-result">---- ----</div>
+            <button id="downloadPlate" class="btn-primary" style="margin-top:10px; font-size: 0.7rem; padding: 5px;" disabled>Download Plate Crop</button>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">Processing Logs</div>
+            <div id="log-container"></div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">Model Status</div>
+            <div id="model-status" style="font-size: 0.8rem;">
+                Initializing Vision Engines...
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script>
+    let detector;
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const plateCanvas = document.getElementById('plateCanvas');
+    const plateCtx = plateCanvas.getContext('2d');
+    const logContainer = document.getElementById('log-container');
+    const loader = document.getElementById('global-loader');
+
+    // 1. Initialize Models
+    async function initModels() {
+        try {
+            updateStatus("Loading COCO-SSD...", "neon-purple");
+            detector = await cocoSsd.load();
+            document.getElementById('model-status').innerHTML = "✅ Vision Model Loaded<br>✅ OCR Engine Ready";
+            updateStatus("READY", "neon-blue");
+            log("AI Models initialized successfully.");
+        } catch (e) {
+            log("Error loading models: " + e.message);
+        }
+    }
+
+    // Logging Utility
+    function log(msg) {
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logContainer.prepend(div);
+    }
+
+    function updateStatus(text, colorClass) {
+        const st = document.getElementById('status-text');
+        st.innerText = text;
+        loader.style.display = (text.includes("...")) ? "block" : "none";
+    }
+
+    // 2. Image Upload Handling
+    document.getElementById('imageUpload').addEventListener('change', function(e) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                log("Image uploaded. Resolution: " + img.width + "x" + img.height);
+                processImage(img);
+            }
+            img.src = event.target.result;
+        }
+        reader.readAsDataURL(e.target.files[0]);
+    });
+
+        // 3. MAIN PIPELINE
+    async function processImage(imgElement) {
+        if (!detector) {
+            alert("AI Models are still loading.");
+            return;
+        }
+        updateStatus("Detecting Vehicles...", "neon-blue");
+        
+        const predictions = await detector.detect(imgElement);
+        
+        // 1. Filter for vehicle classes
+        const vehicles = predictions.filter(p => 
+            ['car', 'truck', 'bus', 'motorcycle'].includes(p.class)
+        );
+
+        if (vehicles.length === 0) {
+            log("❌ No vehicles found.");
+            updateStatus("NO CAR DETECTED", "red");
+            return;
+        }
+
+        // 2. Identify the closest vehicle (Largest Bounding Box Area)
+        // Area = width * height
+        const closestVehicle = vehicles.sort((a, b) => {
+            const areaA = a.bbox[2] * a.bbox[3];
+            const areaB = b.bbox[2] * b.bbox[3];
+            return areaB - areaA; // Sort descending
+        })[0];
+
+        log(`Found ${vehicles.length} vehicles. Focusing on the closest ${closestVehicle.class}.`);
+
+        // 3. Draw detection box for the focused vehicle
+        ctx.strokeStyle = '#00f2ff';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(...closestVehicle.bbox);
+        
+        // 4. Highlight ignored vehicles in a dimmer color (Optional/UI Choice)
+        vehicles.slice(1).forEach(v => {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(...v.bbox);
+        });
+        
+        updateStatus("Locating Plate...", "neon-blue");
+        await detectLicensePlate(imgElement, closestVehicle.bbox);
+    }
+
+    function isInside(inner, outer) {
+        return inner[0] >= outer[0] && inner[1] >= outer[1] &&
+               (inner[0] + inner[2]) <= (outer[0] + outer[2]) &&
+               (inner[1] + inner[3]) <= (outer[1] + outer[3]);
+    }
+
+async function detectLicensePlate(img, carBbox) {
+    const [cx, cy, cw, ch] = carBbox;
+    const searchX = cx + (cw * 0.15);
+    const searchY = cy + (ch * 0.45);
+    const searchW = cw * 0.7;
+    const searchH = ch * 0.35;
+
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCanvas.width = searchW;
+    tempCanvas.height = searchH;
+    tempCtx.drawImage(img, searchX, searchY, searchW, searchH, 0, 0, searchW, searchH);
+    
+    const imageData = tempCtx.getImageData(0, 0, searchW, searchH);
+    const data = imageData.data;
+
+    let minX = searchW, maxX = 0, minY = searchH, maxY = 0;
+    let foundPlate = false;
+
+    for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+        if (avg > 200) { 
+            const px = (i / 4) % searchW;
+            const py = Math.floor((i / 4) / searchW);
+            if (px < minX) minX = px; if (px > maxX) maxX = px;
+            if (py < minY) minY = py; if (py > maxY) maxY = py;
+            foundPlate = true;
+        }
+    }
+
+if (foundPlate) {
+        // 1. Calculate the center and current width of the detected white area
+        const detectedWidth = maxX - minX;
+        const detectedHeight = maxY - minY;
+        const centerX = minX + (detectedWidth / 2);
+        const centerY = minY + (detectedHeight / 2);
+
+        // 2. FORCE A WIDER ASPECT RATIO
+        // Most plates are roughly 3:1 or 4:1. 
+        // We will force the width to be at least 80% of the search area 
+        // to ensure we don't "snip" the ends off.
+        const forcedW = Math.max(detectedWidth + 60, searchW * 0.85); 
+        const forcedH = Math.max(detectedHeight + 20, forcedW * 0.25);
+
+        // 3. Re-calculate bounds based on the center
+        const finalX = Math.max(0, searchX + centerX - (forcedW / 2));
+        const finalY = Math.max(0, searchY + centerY - (forcedH / 2));
+
+        const scale = 2;
+        plateCanvas.width = forcedW * scale;
+        plateCanvas.height = forcedH * scale;
+
+        plateCtx.imageSmoothingEnabled = false;
+        plateCtx.fillStyle = "white"; // Crucial: White background prevents black borders
+        plateCtx.fillRect(0, 0, plateCanvas.width, plateCanvas.height);
+        
+        plateCtx.drawImage(
+            img, 
+            finalX, finalY, forcedW, forcedH, 
+            0, 0, forcedW * scale, forcedH * scale
+        );
+
+        // ... continue to Binary Filter and runOCR ...
+        // --- IMPROVEMENT: REFINED BINARY FILTER ---
+        const pData = plateCtx.getImageData(0, 0, plateCanvas.width, plateCanvas.height);
+        const pD = pData.data;
+        for (let i = 0; i < pD.length; i += 4) {
+            // Using a weighted grayscale for better blue/red balance
+            const brightness = pD[i] * 0.299 + pD[i+1] * 0.587 + pD[i+2] * 0.114;
+            // High contrast threshold
+            const v = brightness > 160 ? 255 : 0; 
+            pD[i] = pD[i+1] = pD[i+2] = v;
+        }
+        plateCtx.putImageData(pData, 0, 0);
+
+        log("Plate localized and upscaled. Running engine...");
+        runOCR();
+    }
+}
+
+async function runOCR() {
+    try {
+        const resultText = document.getElementById('ocr-result');
+        const downloadBtn = document.getElementById('downloadPlate');
+        resultText.innerText = "RECOGNIZING...";
+
+        const { data: { text } } = await Tesseract.recognize(
+            plateCanvas,
+            'eng',
+            { 
+                tessedit_pageseg_mode: '7', 
+                tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+                tessedit_ocr_engine_mode: '1',
+                logger: m => {
+                    if(m.status === 'recognizing text') {
+                        updateStatus(`OCR: ${(m.progress * 100).toFixed(0)}%`, "neon-purple");
+                    }
+                }
+            }
+        );
+
+        // 1. Prepare raw text (Uppercase and remove spaces)
+        const rawText = text.toUpperCase().replace(/\s/g, '');
+        log(`Raw OCR: ${rawText}`);
+
+        const extractionRegex = /[A-Z]{2}[0-9]{1,2}[A-Z]{1,4}[0-9]{4}/;
+
+        // 3. Attempt to find the pattern within the string
+        const match = rawText.match(extractionRegex);
+
+        if (match) {
+            // SUCCESS: We found the sequence inside the noise
+            const extractedPlate = match[0];
+            resultText.innerText = extractedPlate;
+            resultText.style.color = "var(--neon-blue)";
+            log(`✅ EXTRACTED: ${extractedPlate}`);
+        } else {
+            // FAILURE: Pattern not found
+            resultText.innerText = "NOT FOUND";
+            resultText.style.color = "#ff4444";
+            log(`⚠️ PATTERN NOT FOUND in: ${rawText}`);
+        }
+
+        updateStatus("READY", "neon-blue");
+        
+        downloadBtn.disabled = false;
+        downloadBtn.onclick = () => {
+            const link = document.createElement('a');
+            const fileName = match ? match[0] : "unknown";
+            link.download = `plate_${fileName}.png`;
+            link.href = plateCanvas.toDataURL();
+            link.click();
+        };
+    } catch (e) {
+        log("OCR Error: " + e.message);
+        document.getElementById('ocr-result').innerText = "ERROR";
+    }
+}
+initModels();
+</script>
+
+</body>
+</html>
