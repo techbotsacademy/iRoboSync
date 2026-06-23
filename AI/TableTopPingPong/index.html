@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Table Top Ping pong - Hand Control</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #020a0f;
+  color: #00ffcc;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+  overflow-x: hidden;
+  padding: 10px 0 20px;
+}
+
+#title-bar {
+  text-align: center;
+  margin-bottom: 8px;
+}
+#title-bar h1 {
+  font-size: 1.6rem;
+  letter-spacing: 4px;
+  color: #fff;
+  text-shadow: 0 0 16px #00ffcc, 0 0 40px #00ffcc44;
+}
+#title-bar p {
+  font-size: 0.75rem;
+  color: #00ffcc99;
+  letter-spacing: 2px;
+}
+
+.main-area {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+#camera-wrap {
+  position: relative;
+  width: 320px;
+  height: 240px;
+  border: 2px solid #00ffcc55;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  flex-shrink: 0;
+}
+#camera-wrap::before {
+  content: 'CAMERA';
+  position: absolute;
+  top: 5px; left: 8px;
+  font-size: 0.6rem;
+  color: #00ffcc88;
+  z-index: 10;
+  letter-spacing: 2px;
+}
+#webcam {
+  width: 320px;
+  height: 240px;
+  object-fit: cover;
+  transform: scaleX(-1);
+  display: block;
+}
+#hand-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 320px;
+  height: 240px;
+  pointer-events: none;
+  transform: scaleX(-1);
+}
+
+#hand-status {
+  position: absolute;
+  bottom: 5px; left: 0; right: 0;
+  text-align: center;
+  font-size: 0.6rem;
+  color: #00ffcc;
+  letter-spacing: 1px;
+  z-index: 10;
+}
+
+#game-wrap {
+  position: relative;
+}
+
+canvas#game {
+  display: block;
+  background: #000;
+  border: 2px solid #00ffcc44;
+  border-radius: 8px;
+}
+
+#status-text {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #fff;
+  text-shadow: 0 0 10px #00ffcc;
+  margin: 6px 0;
+  letter-spacing: 2px;
+  min-height: 1.6rem;
+}
+
+.dashboard {
+  display: flex;
+  gap: 10px;
+  width: 660px;
+  margin-top: 8px;
+}
+.panel {
+  flex: 1;
+  background: rgba(0,255,204,0.04);
+  border: 1px solid #00ffcc33;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.75rem;
+  line-height: 1.7;
+}
+.panel.ai-panel { border-color: #ff006633; }
+.panel-label {
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+.score-panel {
+  text-align: center;
+  background: rgba(255,0,102,0.05);
+  border-color: #ff006644;
+}
+#score-board { font-size: 1.1rem; color: #fff; }
+#round-info { color: #00ffcc99; font-size: 0.7rem; }
+
+.btn-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+  justify-content: center;
+}
+button {
+  padding: 9px 22px;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 5px;
+  font-size: 0.85rem;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+button:hover { transform: scale(1.04); }
+#connectBtn { background: #ffcc00; color: #000; }
+#startBtn { background: #00ffcc; color: #000; }
+#connectBtn.connected { background: #00ffcc; }
+#camBtn { background: #7700ff; color: #fff; }
+
+.hand-indicator {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #333;
+  border: 2px solid #555;
+  transition: background 0.2s;
+}
+.hand-indicator.active { background: #00ff88; border-color: #00ff88; box-shadow: 0 0 8px #00ff88; }
+
+#loading-msg {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.65rem;
+  color: #00ffcc88;
+  text-align: center;
+  z-index: 20;
+  pointer-events: none;
+  line-height: 1.8;
+}
+</style>
+</head>
+<body>
+
+<div id="title-bar">
+  <h1>Table top Ping Pong</h1>
+  <p>Hand Control × Robotic Arm</p>
+</div>
+
+<div class="btn-group">
+  <button id="camBtn" onclick="startCamera()">📷 ENABLE HAND CAM</button>
+  <button id="connectBtn" onclick="connectWiFi()">🌐 CONNECT WIFI</button>
+  <button id="startBtn" onclick="startGame()">▶ START MATCH</button>
+</div>
+
+<div class="main-area">
+
+  <div id="camera-wrap">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="hand-overlay"></canvas>
+    <div id="hand-status">CAMERA OFF</div>
+    <div class="hand-indicator" id="hand-dot"></div>
+    <div id="loading-msg">Click<br>"Enable Hand Cam"<br>to start</div>
+  </div>
+
+  <div id="game-wrap">
+    <div id="status-text">Robotic System StandBy</div>
+    <canvas id="game" width="660" height="380"></canvas>
+  </div>
+
+</div>
+
+<div class="dashboard">
+  <div class="panel ai-panel">
+    <div class="panel-label" style="color:#ff0066;">[ WIFI OUTPUT ]</div>
+    <div id="ai-stats">Target Y: -- | Not Connected</div>
+  </div>
+  <div class="panel ai-panel" style="border-color:#7700ff44;">
+    <div class="panel-label" style="color:#aa44ff;">[ HAND TRACK ]</div>
+    <div id="hand-stats">Hand: Not Detected | Y: --</div>
+  </div>
+  <div class="panel score-panel">
+    <div style="font-size:0.65rem;letter-spacing:2px;margin-bottom:4px;">BEST OF 3</div>
+    <div id="round-info">Round: 1 / 3</div>
+    <div id="score-board">Human: 0 &nbsp;|&nbsp; AI: 0</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const statusText = document.getElementById("status-text");
+const startBtn = document.getElementById("startBtn");
+const handOverlay = document.getElementById("hand-overlay");
+const hCtx = handOverlay.getContext("2d");
+
+let running = false;
+let matchOver = false;
+let humanRounds = 0, aiRounds = 0, currentRound = 1;
+
+const BASE_SPEED = 5;
+const MAX_SPEED = 8;
+let hitCount = 0;
+let currentSpeed = BASE_SPEED;
+
+let esp32IP = "";
+let lastSentTime = 0;
+let isConnected = false;
+
+let handY = 190;
+let handDetected = false;
+let cameraActive = false;
+
+function connectWiFi() {
+  const ip = prompt("Enter ESP32 IP Address (e.g. 192.168.7.213):");
+  if (ip) {
+    esp32IP = ip;
+    isConnected = true;
+    const btn = document.getElementById("connectBtn");
+    btn.innerText = "✅ WIFI READY";
+    btn.classList.add("connected");
+    document.getElementById("ai-stats").innerHTML = `Target Y: -- | IP: ${esp32IP}`;
+  }
+}
+
+async function sendData(yValue) {
+  if (isConnected && esp32IP) {
+    const now = Date.now();
+    if (now - lastSentTime > 60) {
+      lastSentTime = now;
+      fetch(`http://${esp32IP}/move?y=${Math.round(yValue)}`).catch(() => {});
+      document.getElementById("ai-stats").innerHTML = `Target Y: ${Math.round(yValue)} | Sending...`;
+    }
+  }
+}
+
+function startCamera() {
+  if (cameraActive) return;
+  document.getElementById("loading-msg").innerText = "Loading MediaPipe...";
+  document.getElementById("hand-status").innerText = "STARTING...";
+
+  const videoEl = document.getElementById("webcam");
+
+  const hands = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.6
+  });
+
+  hands.onResults(onHandResults);
+
+  const camera = new Camera(videoEl, {
+    onFrame: async () => { await hands.send({ image: videoEl }); },
+    width: 320,
+    height: 240
+  });
+
+  camera.start().then(() => {
+    cameraActive = true;
+    document.getElementById("camBtn").innerText = "📷 CAM ACTIVE";
+    document.getElementById("camBtn").style.background = "#00ff88";
+    document.getElementById("camBtn").style.color = "#000";
+    document.getElementById("loading-msg").style.display = "none";
+    document.getElementById("hand-status").innerText = "DETECTING...";
+  }).catch(err => {
+    document.getElementById("loading-msg").innerText = "Camera error:\n" + err.message;
+  });
+}
+
+const FINGER_COLORS = [
+  "#ff4444", "#ff8800", "#ffdd00", "#00ff88", "#00aaff",
+  "#aa44ff", "#ff44aa", "#44ffee", "#ff6644", "#88ff00",
+  "#ff0099", "#00ffcc", "#ffaa00", "#4488ff", "#ff55cc",
+  "#55ffaa", "#ffcc44", "#aa88ff", "#ff8844", "#00ddff", "#aaffcc"
+];
+
+const CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [0,9],[9,10],[10,11],[11,12],
+  [0,13],[13,14],[14,15],[15,16],
+  [0,17],[17,18],[18,19],[19,20],
+  [5,9],[9,13],[13,17]
+];
+
+function onHandResults(results) {
+  hCtx.clearRect(0, 0, 320, 240);
+
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    const lms = results.multiHandLandmarks[0];
+    handDetected = true;
+    document.getElementById("hand-dot").classList.add("active");
+    document.getElementById("hand-status").innerText = "HAND DETECTED ✓";
+
+    const W = 320, H = 240;
+
+    hCtx.lineWidth = 2.5;
+    CONNECTIONS.forEach(([a, b], i) => {
+      const lA = lms[a], lB = lms[b];
+      hCtx.beginPath();
+      hCtx.strokeStyle = FINGER_COLORS[i % FINGER_COLORS.length] + "cc";
+      hCtx.moveTo(lA.x * W, lA.y * H);
+      hCtx.lineTo(lB.x * W, lB.y * H);
+      hCtx.stroke();
+    });
+
+    lms.forEach((lm, i) => {
+      const cx = lm.x * W;
+      const cy = lm.y * H;
+      const isFingerTip = [4,8,12,16,20].includes(i);
+
+      hCtx.beginPath();
+      hCtx.arc(cx, cy, isFingerTip ? 7 : 4.5, 0, Math.PI * 2);
+
+      const grad = hCtx.createRadialGradient(cx, cy, 0, cx, cy, isFingerTip ? 7 : 4.5);
+      grad.addColorStop(0, "#ffffff");
+      grad.addColorStop(1, FINGER_COLORS[i % FINGER_COLORS.length]);
+      hCtx.fillStyle = grad;
+      hCtx.fill();
+
+      hCtx.lineWidth = 1.5;
+      hCtx.strokeStyle = FINGER_COLORS[i % FINGER_COLORS.length];
+      hCtx.stroke();
+    });
+
+    const wrist = lms[0];
+    const middleTip = lms[12];
+    const avgY = (wrist.y + middleTip.y) / 2;
+    handY = avgY * canvas.height;
+
+    const displayY = Math.round(handY);
+    document.getElementById("hand-stats").innerText = `Hand: ACTIVE ✓ | Y: ${displayY}`;
+  } else {
+    handDetected = false;
+    document.getElementById("hand-dot").classList.remove("active");
+    document.getElementById("hand-status").innerText = "NO HAND";
+    document.getElementById("hand-stats").innerText = "Hand: Not Detected | Y: --";
+  }
+}
+
+let ball = { x: 330, y: 190, r: 7, dx: 0, dy: 0 };
+let player = { x: 15, y: 150, w: 10, h: 80 };
+let ai = { x: 635, y: 150, w: 10, h: 80, targetY: 190, error: 0 };
+let keys = {};
+
+window.addEventListener("keydown", e => keys[e.code] = true);
+window.addEventListener("keyup", e => keys[e.code] = false);
+
+function startGame() {
+  if (!running || matchOver) {
+    if (matchOver) {
+      humanRounds = 0; aiRounds = 0; currentRound = 1; matchOver = false;
+    }
+    resetRound();
+    startBtn.style.display = "none";
+    running = true;
+  }
+}
+
+function resetRound() {
+  ball.x = 330; ball.y = 190;
+  hitCount = 0;
+  currentSpeed = BASE_SPEED;
+  ball.dx = (Math.random() > 0.5 ? 1 : -1) * currentSpeed;
+  ball.dy = (Math.random() - 0.5) * 6;
+  ai.error = (Math.random() - 0.5) * 30;
+  statusText.innerText = `ROUND ${currentRound} — READY`;
+}
+
+function update() {
+  if (!running || matchOver) return;
+
+  if (handDetected && cameraActive) {
+    const targetY = handY - player.h / 2;
+    player.y += (targetY - player.y) * 0.35;
+    player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+  } else {
+    if (keys['ArrowUp'] && player.y > 0) player.y -= 7;
+    if (keys['ArrowDown'] && player.y < canvas.height - player.h) player.y += 7;
+  }
+
+  ball.x += ball.dx;
+  ball.y += ball.dy;
+
+  if (ball.y <= ball.r) { ball.y = ball.r; ball.dy = Math.abs(ball.dy); }
+  if (ball.y >= canvas.height - ball.r) { ball.y = canvas.height - ball.r; ball.dy = -Math.abs(ball.dy); }
+
+  if (ball.dx < 0 && ball.x - ball.r <= player.x + player.w &&
+      ball.x - ball.r >= player.x &&
+      ball.y > player.y && ball.y < player.y + player.h) {
+    hitCount++;
+    currentSpeed = Math.min(BASE_SPEED + hitCount * 0.6, MAX_SPEED);
+    ball.x = player.x + player.w + ball.r;
+    ball.dx = currentSpeed;
+    ball.dy = (ball.y - (player.y + player.h / 2)) * 0.22;
+  }
+
+  if (ball.dx > 0 && ball.x + ball.r >= ai.x &&
+      ball.x + ball.r <= ai.x + ai.w + 10 &&
+      ball.y > ai.y && ball.y < ai.y + ai.h) {
+    hitCount++;
+    currentSpeed = Math.min(BASE_SPEED + hitCount * 0.6, MAX_SPEED);
+    ball.x = ai.x - ball.r;
+    ball.dx = -currentSpeed;
+    ball.dy = (ball.y - (ai.y + ai.h / 2)) * 0.22;
+  }
+
+  if (ball.dx > 0) {
+    let tx = ball.x, ty = ball.y, tdy = ball.dy;
+    while (tx < ai.x) {
+      tx += ball.dx; ty += tdy;
+      if (ty <= 0 || ty >= canvas.height) tdy *= -1;
+    }
+    ai.targetY = ty + ai.error;
+    sendData(ai.targetY);
+  }
+
+  ai.y += (ai.targetY - (ai.y + ai.h / 2)) * 0.1;
+  ai.y = Math.max(0, Math.min(canvas.height - ai.h, ai.y));
+
+  if (ball.x < 0) scorePoint("AI");
+  else if (ball.x > canvas.width) scorePoint("HUMAN");
+}
+
+function drawTable() {
+  ctx.fillStyle = "#0a1a12";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = "#1a4030";
+  ctx.lineWidth = 1;
+  for (let y = 0; y < canvas.height; y += 30) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+  for (let x = 0; x < canvas.width; x += 60) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "#ffffff22";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(canvas.width / 2, 0);
+  ctx.lineTo(canvas.width / 2, canvas.height);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#00ffcc33";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+
+  ctx.strokeStyle = "#00ffcc88";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(canvas.width, 0);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height);
+  ctx.lineTo(canvas.width, canvas.height);
+  ctx.stroke();
+}
+
+function drawPredictionLine() {
+  if (running && ball.dx > 0) {
+    ctx.beginPath();
+    ctx.setLineDash([5, 8]);
+    ctx.strokeStyle = "rgba(255,0,102,0.3)";
+    ctx.lineWidth = 1;
+    ctx.moveTo(ball.x, ball.y);
+    ctx.lineTo(ai.x, ai.targetY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function drawBall() {
+  const grad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, ball.r);
+  grad.addColorStop(0, "#ffffff");
+  grad.addColorStop(0.5, "#ffeecc");
+  grad.addColorStop(1, "#ff8800");
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r + 2, 0, Math.PI * 2);
+  ctx.strokeStyle = "#ff880055";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawPaddle(x, y, w, h, colorTop, colorBot, label) {
+  const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+  grad.addColorStop(0, colorTop);
+  grad.addColorStop(1, colorBot);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 4);
+  ctx.fill();
+
+  ctx.strokeStyle = "#ffffff55";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 4);
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffffff99";
+  ctx.font = "bold 9px Courier New";
+  ctx.textAlign = "center";
+  ctx.fillText(label, x + w / 2, y - 5);
+}
+
+function drawHUD() {
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.beginPath();
+  ctx.roundRect(canvas.width / 2 - 80, 6, 160, 22, 4);
+  ctx.fill();
+
+  ctx.font = "bold 11px Courier New";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#00ffcc";
+  ctx.fillText(`${humanRounds}`, canvas.width / 2 - 35, 21);
+  ctx.fillStyle = "#ffffff55";
+  ctx.fillText(":", canvas.width / 2, 21);
+  ctx.fillStyle = "#ff0066";
+  ctx.fillText(`${aiRounds}`, canvas.width / 2 + 35, 21);
+
+  if (cameraActive && handDetected) {
+    ctx.fillStyle = "#00ff8855";
+    ctx.beginPath();
+    ctx.roundRect(8, 8, 80, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = "#00ff88";
+    ctx.font = "9px Courier New";
+    ctx.textAlign = "left";
+    ctx.fillText("✋ HAND MODE", 12, 19);
+  } else if (cameraActive) {
+    ctx.fillStyle = "#ff880055";
+    ctx.beginPath();
+    ctx.roundRect(8, 8, 88, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = "#ff8800";
+    ctx.font = "9px Courier New";
+    ctx.textAlign = "left";
+    ctx.fillText("✋ NO HAND — ↑↓", 12, 19);
+  }
+
+  // Speed meter bottom right
+  if (running) {
+    const speedPct = (currentSpeed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED);
+    const meterW = 80;
+    const meterX = canvas.width - meterW - 8;
+    const meterY = canvas.height - 22;
+
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.beginPath();
+    ctx.roundRect(meterX - 4, meterY - 2, meterW + 8, 18, 3);
+    ctx.fill();
+
+    ctx.fillStyle = "#333";
+    ctx.beginPath();
+    ctx.roundRect(meterX, meterY + 6, meterW, 6, 3);
+    ctx.fill();
+
+    const barColor = speedPct < 0.4 ? "#00ffcc" : speedPct < 0.75 ? "#ffcc00" : "#ff0066";
+    ctx.fillStyle = barColor;
+    ctx.beginPath();
+    ctx.roundRect(meterX, meterY + 6, meterW * speedPct, 6, 3);
+    ctx.fill();
+
+    ctx.fillStyle = barColor;
+    ctx.font = "8px Courier New";
+    ctx.textAlign = "left";
+    ctx.fillText(`SPD ${Math.round(currentSpeed * 10) / 10}`, meterX, meterY + 4);
+  }
+}
+
+function scorePoint(winner) {
+  running = false;
+  winner === "AI" ? aiRounds++ : humanRounds++;
+
+  if (humanRounds === 2 || aiRounds === 2) {
+    matchOver = true;
+    if (winner === "HUMAN") {
+      statusText.innerText = "🏆 HUMAN WINS THE MATCH!";
+      statusText.style.color = "#00ffcc";
+    } else {
+      statusText.innerText = "🤖 AI ARM WINS THE MATCH!";
+      statusText.style.color = "#ff0066";
+    }
+    startBtn.innerText = "▶ PLAY AGAIN";
+    startBtn.style.display = "block";
+  } else {
+    if (winner === "AI") {
+      statusText.innerText = "POINT → AI  |  Next round...";
+      statusText.style.color = "#ff0066";
+    } else {
+      statusText.innerText = "POINT → HUMAN  |  Next round...";
+      statusText.style.color = "#00ffcc";
+    }
+    currentRound++;
+    setTimeout(() => {
+      running = true;
+      resetRound();
+      statusText.style.color = "#fff";
+    }, 1500);
+  }
+
+  document.getElementById("score-board").innerHTML = `HUMAN: ${humanRounds} &nbsp;|&nbsp; AI: ${aiRounds}`;
+  document.getElementById("round-info").innerText = `Round: ${currentRound} / 3`;
+}
+
+function draw() {
+  drawTable();
+  drawPredictionLine();
+  drawBall();
+  drawPaddle(player.x, player.y, player.w, player.h, "#00ffee", "#007755", "YOU");
+  drawPaddle(ai.x, ai.y, ai.w, ai.h, "#ff4488", "#880033", "ARM");
+  drawHUD();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>OCR Preprocessor</title>
+<<script src="https://docs.opencv.org/4.x/opencv.js"></script>
+<style>
+body{font-family:Arial;margin:20px;background:#f4f4f4}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+button,input{padding:6px}
+canvas{border:1px solid #333;max-width:100%;background:white}
+textarea{width:100%;margin-top:10px}
+</style>
+</head>
+<body>
+
+<h2>OCR Image Preprocessor</h2>
+
+<input type="file" id="upload">
+
+<div class="controls">
+<button onclick="resetImage()">Reset</button>
+<button onclick="undo()">Undo</button>
+<button onclick="toGray()">Gray</button>
+<button onclick="invert()">Invert</button>
+<button onclick="gaussianBlur()">Gaussian Blur</button>
+<button onclick="medianBlur()">Median Blur</button>
+<button onclick="clahe()">CLAHE</button>
+<button onclick="binaryThreshold()">Binary Threshold</button>
+<button onclick="otsuThreshold()">Otsu Threshold</button>
+<button onclick="adaptiveMean()">Adaptive Mean</button>
+<button onclick="adaptiveGaussian()">Adaptive Gaussian</button>
+<button onclick="erodeImg()">Erode</button>
+<button onclick="dilateImg()">Dilate</button>
+<button onclick="opening()">Opening</button>
+<button onclick="closing()">Closing</button>
+<button onclick="sharpen()">Sharpen</button>
+</div>
+
+<div class="controls">
+<label>X Scale</label>
+<input type="number" id="scaleX" value="2" step="0.1">
+<label>Y Scale</label>
+<input type="number" id="scaleY" value="2" step="0.1">
+<button onclick="resizeImage()">Resize</button>
+
+<label>Threshold</label>
+<input type="number" id="thresholdVal" value="128">
+</div>
+
+<div class="controls">
+<button onclick="downloadImage()">Download Image</button>
+<button onclick="generateCode()">Generate Python Code</button>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<h3>Pipeline</h3>
+<textarea id="pipeline" rows="10" readonly></textarea>
+
+<h3>Generated Python Code</h3>
+<textarea id="generatedCode" rows="20"></textarea>
+
+<script>
+let cvReady=false;
+let originalMat=null;
+let currentMat=null;
+let history=[];
+let operations=[];
+
+cv['onRuntimeInitialized']=()=>{
+ cvReady=true;
+ console.log("OpenCV Ready");
+};
+
+document.getElementById('upload').addEventListener('change',function(e){
+ if(!cvReady){alert("OpenCV loading");return;}
+ let file=e.target.files[0];
+ let img=new Image();
+ img.onload=function(){
+  let canvas=document.getElementById('canvas');
+  canvas.width=img.width;
+  canvas.height=img.height;
+  canvas.getContext('2d').drawImage(img,0,0);
+
+  if(originalMat) originalMat.delete();
+  if(currentMat) currentMat.delete();
+
+  originalMat=cv.imread(canvas);
+  currentMat=originalMat.clone();
+
+  history=[];
+  operations=[];
+  updatePipeline();
+  cv.imshow('canvas',currentMat);
+ };
+ img.src=URL.createObjectURL(file);
+});
+
+function showMat(mat){cv.imshow('canvas',mat);}
+
+function updatePipeline(){
+ document.getElementById("pipeline").value=operations.join("\n");
+}
+
+function replaceCurrent(newMat,op){
+ history.push(currentMat.clone());
+ operations.push(op);
+ updatePipeline();
+ currentMat.delete();
+ currentMat=newMat;
+ showMat(currentMat);
+}
+
+function ensureGray(src){
+ if(src.channels()==1) return src.clone();
+ let gray=new cv.Mat();
+ cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
+ return gray;
+}
+
+function undo(){
+ if(history.length===0) return;
+ currentMat.delete();
+ currentMat=history.pop();
+ operations.pop();
+ updatePipeline();
+ showMat(currentMat);
+}
+
+function resetImage(){
+ if(!originalMat) return;
+ history.forEach(x=>x.delete());
+ history=[];
+ operations=[];
+ updatePipeline();
+ currentMat.delete();
+ currentMat=originalMat.clone();
+ showMat(currentMat);
+}
+
+function toGray(){
+ replaceCurrent(ensureGray(currentMat),"Grayscale");
+}
+
+function invert(){
+ let dst=new cv.Mat();
+ cv.bitwise_not(currentMat,dst);
+ replaceCurrent(dst,"Invert");
+}
+
+function gaussianBlur(){
+ let dst=new cv.Mat();
+ cv.GaussianBlur(currentMat,dst,new cv.Size(5,5),0);
+ replaceCurrent(dst,"GaussianBlur");
+}
+
+function medianBlur(){
+ let src=ensureGray(currentMat);
+ let dst=new cv.Mat();
+ cv.medianBlur(src,dst,5);
+ src.delete();
+ replaceCurrent(dst,"MedianBlur");
+}
+
+function clahe(){
+ let gray=ensureGray(currentMat);
+ let dst=new cv.Mat();
+ let c=new cv.CLAHE(3.0,new cv.Size(8,8));
+ c.apply(gray,dst);
+ gray.delete(); c.delete();
+ replaceCurrent(dst,"CLAHE");
+}
+
+function binaryThreshold(){
+ let gray=ensureGray(currentMat);
+ let dst=new cv.Mat();
+ let t=parseInt(document.getElementById("thresholdVal").value);
+ cv.threshold(gray,dst,t,255,cv.THRESH_BINARY);
+ gray.delete();
+ replaceCurrent(dst,"BinaryThreshold");
+}
+
+function otsuThreshold(){
+ let gray=ensureGray(currentMat);
+ let dst=new cv.Mat();
+ cv.threshold(gray,dst,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU);
+ gray.delete();
+ replaceCurrent(dst,"OtsuThreshold");
+}
+
+function adaptiveMean(){
+ let gray=ensureGray(currentMat);
+ let dst=new cv.Mat();
+ cv.adaptiveThreshold(gray,dst,255,cv.ADAPTIVE_THRESH_MEAN_C,cv.THRESH_BINARY,11,2);
+ gray.delete();
+ replaceCurrent(dst,"AdaptiveMean");
+}
+
+function adaptiveGaussian(){
+ let gray=ensureGray(currentMat);
+ let dst=new cv.Mat();
+ cv.adaptiveThreshold(gray,dst,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY,11,2);
+ gray.delete();
+ replaceCurrent(dst,"AdaptiveGaussian");
+}
+
+function erodeImg(){
+ let dst=new cv.Mat();
+ let k=cv.Mat.ones(3,3,cv.CV_8U);
+ cv.erode(currentMat,dst,k);
+ k.delete();
+ replaceCurrent(dst,"Erode");
+}
+
+function dilateImg(){
+ let dst=new cv.Mat();
+ let k=cv.Mat.ones(3,3,cv.CV_8U);
+ cv.dilate(currentMat,dst,k);
+ k.delete();
+ replaceCurrent(dst,"Dilate");
+}
+
+function opening(){
+ let dst=new cv.Mat();
+ let k=cv.Mat.ones(3,3,cv.CV_8U);
+ cv.morphologyEx(currentMat,dst,cv.MORPH_OPEN,k);
+ k.delete();
+ replaceCurrent(dst,"Opening");
+}
+
+function closing(){
+ let dst=new cv.Mat();
+ let k=cv.Mat.ones(3,3,cv.CV_8U);
+ cv.morphologyEx(currentMat,dst,cv.MORPH_CLOSE,k);
+ k.delete();
+ replaceCurrent(dst,"Closing");
+}
+
+function sharpen(){
+ let dst=new cv.Mat();
+ let k=cv.matFromArray(3,3,cv.CV_32F,[0,-1,0,-1,5,-1,0,-1,0]);
+ cv.filter2D(currentMat,dst,-1,k);
+ k.delete();
+ replaceCurrent(dst,"Sharpen");
+}
+
+function resizeImage(){
+ let sx=parseFloat(document.getElementById("scaleX").value);
+ let sy=parseFloat(document.getElementById("scaleY").value);
+ let dst=new cv.Mat();
+ let size=new cv.Size(Math.round(currentMat.cols*sx),Math.round(currentMat.rows*sy));
+ cv.resize(currentMat,dst,size,0,0,cv.INTER_CUBIC);
+ replaceCurrent(dst,`Resize(${sx},${sy})`);
+}
+
+function downloadImage(){
+ let a=document.createElement("a");
+ a.download="processed.png";
+ a.href=document.getElementById("canvas").toDataURL("image/png");
+ a.click();
+}
+
+function generateCode(){
+ let code=`import cv2\nimport numpy as np\n\nimg=cv2.imread("input.png")\n`;
+
+ operations.forEach(op=>{
+  if(op=="Grayscale") code+=`\nimg=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)\n`;
+  else if(op=="Invert") code+=`\nimg=cv2.bitwise_not(img)\n`;
+  else if(op=="GaussianBlur") code+=`\nimg=cv2.GaussianBlur(img,(5,5),0)\n`;
+  else if(op=="MedianBlur") code+=`\nimg=cv2.medianBlur(img,5)\n`;
+  else if(op=="CLAHE") code+=`\nclahe=cv2.createCLAHE(3.0,(8,8))\nimg=clahe.apply(img)\n`;
+  else if(op=="BinaryThreshold") code+=`\n_,img=cv2.threshold(img,128,255,cv2.THRESH_BINARY)\n`;
+  else if(op=="OtsuThreshold") code+=`\n_,img=cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)\n`;
+  else if(op=="AdaptiveMean") code+=`\nimg=cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,2)\n`;
+  else if(op=="AdaptiveGaussian") code+=`\nimg=cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY,11,2)\n`;
+  else if(op=="Erode") code+=`\nk=np.ones((3,3),np.uint8)\nimg=cv2.erode(img,k)\n`;
+  else if(op=="Dilate") code+=`\nk=np.ones((3,3),np.uint8)\nimg=cv2.dilate(img,k)\n`;
+  else if(op=="Opening") code+=`\nk=np.ones((3,3),np.uint8)\nimg=cv2.morphologyEx(img,cv2.MORPH_OPEN,k)\n`;
+  else if(op=="Closing") code+=`\nk=np.ones((3,3),np.uint8)\nimg=cv2.morphologyEx(img,cv2.MORPH_CLOSE,k)\n`;
+  else if(op=="Sharpen") code+=`\nk=np.array([[0,-1,0],[-1,5,-1],[0,-1,0]])\nimg=cv2.filter2D(img,-1,k)\n`;
+  else if(op.startsWith("Resize(")){
+   let m=op.match(/Resize\((.*),(.*)\)/);
+   code+=`\nimg=cv2.resize(img,None,fx=${m[1]},fy=${m[2]},interpolation=cv2.INTER_CUBIC)\n`;
+  }
+ });
+
+ code+=`\ncv2.imwrite("output.png",img)\n`;
+ document.getElementById("generatedCode").value=code;
+}
+</script>
+</body>
+</html>
