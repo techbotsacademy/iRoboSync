@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pose Runner — Body Controlled Game</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0a0a1a;
+  color: #fff;
+  font-family: 'Segoe UI', sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+#layout {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+}
+#cam-panel {
+  width: 280px;
+  min-width: 280px;
+  background: #0d0d22;
+  border-right: 2px solid #1a1a40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 8px;
+  gap: 8px;
+  position: relative;
+  overflow-y: auto;
+}
+#cam-title { font-size: 0.75rem; color: #7878aa; letter-spacing: 2px; text-transform: uppercase; }
+#cam-wrap {
+  position: relative; width: 260px; height: 195px;
+  border-radius: 10px; overflow: hidden; border: 2px solid #2a2a55;
+}
+#webcam { width: 260px; height: 195px; object-fit: cover; transform: scaleX(-1); display: block; }
+#pose-canvas { position: absolute; top: 0; left: 0; width: 260px; height: 195px; transform: scaleX(-1); }
+#pose-status {
+  font-size: 0.7rem; padding: 4px 10px; border-radius: 20px;
+  background: #1a1a35; border: 1px solid #333; color: #888; width: 100%; text-align: center;
+}
+#pose-status.detected { background: rgba(0,255,100,0.1); border-color: #00ff64; color: #00ff64; }
+#pose-status.warning { background: rgba(255,150,0,0.1); border-color: #ff9600; color: #ff9600; }
+
+.gesture-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; }
+.gesture-card {
+  background: #111128; border: 1px solid #222244; border-radius: 8px;
+  padding: 8px 6px; text-align: center; transition: all 0.15s;
+}
+.gesture-card.active {
+  background: rgba(0,200,255,0.12); border-color: #00c8ff;
+  box-shadow: 0 0 10px rgba(0,200,255,0.2);
+}
+.gesture-card .g-icon { font-size: 1.4rem; margin-bottom: 2px; }
+.gesture-card .g-label { font-size: 0.6rem; color: #666; letter-spacing: 1px; }
+.gesture-card.active .g-label { color: #00c8ff; }
+
+#debug-info { font-size: 0.6rem; color: #444; width: 100%; text-align: center; line-height: 1.8; }
+#debug-info span { color: #aaa; }
+
+/* Running speed indicator */
+#run-meter {
+  width: 100%; background: #111128; border: 1px solid #222244;
+  border-radius: 8px; padding: 8px; text-align: center;
+}
+#run-meter-label { font-size: 0.6rem; color: #666; margin-bottom: 4px; }
+#run-meter-bar-wrap { width: 100%; height: 8px; background: #1a1a35; border-radius: 4px; overflow: hidden; }
+#run-meter-bar { height: 8px; background: linear-gradient(90deg, #6c63ff, #00c8ff); width: 0%; border-radius: 4px; transition: width 0.1s; }
+
+#start-cam-btn {
+  width: 100%; padding: 10px;
+  background: linear-gradient(135deg, #6c63ff, #4a90d9);
+  border: none; border-radius: 8px; color: #fff;
+  font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: opacity 0.2s;
+}
+#start-cam-btn:hover { opacity: 0.85; }
+#start-cam-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#game-panel { flex: 1; position: relative; overflow: hidden; }
+#gameCanvas { display: block; width: 100%; height: 100%; }
+
+.g-overlay {
+  position: absolute; inset: 0; background: rgba(5,5,20,0.88);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 20; backdrop-filter: blur(6px);
+}
+.g-overlay h2 {
+  font-size: 2.8rem; font-weight: 900;
+  background: linear-gradient(135deg, #6c63ff, #00c8ff);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px;
+}
+.g-overlay .subtitle { color: #888; font-size: 0.9rem; margin-bottom: 24px; text-align: center; line-height: 1.6; }
+.g-overlay .instructions {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 16px 24px; margin-bottom: 24px;
+  font-size: 0.8rem; color: #bbb; line-height: 1.9; max-width: 420px;
+}
+.g-overlay .instructions b { color: #00c8ff; }
+.play-btn {
+  padding: 14px 40px; background: linear-gradient(135deg, #6c63ff, #00c8ff);
+  border: none; border-radius: 40px; color: #fff; font-size: 1.1rem; font-weight: bold;
+  cursor: pointer; box-shadow: 0 4px 24px rgba(108,99,255,0.4); transition: transform 0.15s, box-shadow 0.15s;
+}
+.play-btn:hover { transform: scale(1.05); box-shadow: 0 6px 32px rgba(108,99,255,0.6); }
+.score-big { font-size: 1.4rem; color: #fff; margin-bottom: 6px; }
+.score-big span { color: #ffcc00; font-weight: 900; font-size: 2rem; }
+
+#hud {
+  position: absolute; top: 12px; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 20px; pointer-events: none; z-index: 10;
+}
+.hud-pill {
+  background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; padding: 5px 14px; font-size: 0.8rem; backdrop-filter: blur(4px);
+}
+.hud-pill b { color: #ffcc00; }
+#pose-indicator {
+  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+  font-size: 0.75rem; color: rgba(255,255,255,0.4); pointer-events: none; z-index: 10;
+  background: rgba(0,0,0,0.5); padding: 4px 12px; border-radius: 20px;
+}
+#loading-bar-wrap { width: 100%; height: 4px; background: #1a1a35; border-radius: 2px; overflow: hidden; }
+#loading-bar { height: 4px; background: linear-gradient(90deg, #6c63ff, #00c8ff); width: 0%; transition: width 0.3s; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="layout">
+  <!-- CAMERA PANEL -->
+  <div id="cam-panel">
+    <div id="cam-title">📷 Pose Cam</div>
+    <div id="cam-wrap">
+      <video id="webcam" autoplay muted playsinline></video>
+      <canvas id="pose-canvas"></canvas>
+    </div>
+    <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+    <div id="pose-status">MediaPipe loading...</div>
+
+    <div class="gesture-grid">
+      <div class="gesture-card" id="g-run"><div class="g-icon">🏃</div><div class="g-label">RUNNING</div></div>
+      <div class="gesture-card" id="g-jump"><div class="g-icon">⬆️</div><div class="g-label">JUMP</div></div>
+      <div class="gesture-card" id="g-duck"><div class="g-icon">⬇️</div><div class="g-label">DUCK</div></div>
+      <div class="gesture-card" id="g-slide"><div class="g-icon">↔️</div><div class="g-label">LEAN LANE</div></div>
+    </div>
+
+    <div id="run-meter">
+      <div id="run-meter-label">ARM SWING SPEED</div>
+      <div id="run-meter-bar-wrap"><div id="run-meter-bar"></div></div>
+    </div>
+
+    <div id="debug-info">
+      Running: <span id="dbg-running">NO</span><br>
+      Jump: <span id="dbg-jump">NO</span><br>
+      Duck: <span id="dbg-duck">NO</span><br>
+      Lean: <span id="dbg-lean">CENTER</span><br>
+      Arm Swing: <span id="dbg-arm">0.000</span>
+    </div>
+
+    <button id="start-cam-btn" onclick="initCamera()">🎥 Start Camera</button>
+  </div>
+
+  <!-- GAME PANEL -->
+  <div id="game-panel">
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+      <div class="hud-pill">🏆 Score: <b id="score-val">0</b></div>
+      <div class="hud-pill">⚡ Speed: <b id="speed-val">1.0x</b></div>
+      <div class="hud-pill">❤️ Lives: <b id="lives-val">3</b></div>
+      <div class="hud-pill">🪙 Coins: <b id="coins-val">0</b></div>
+    </div>
+    <div id="pose-indicator">🏃"Swing arms to run, lift arms to jump, squat to duck, and lean to change lanes."</div>
+
+    <!-- START OVERLAY -->
+    <div class="g-overlay" id="start-overlay">
+  <h2>POSE RUNNER</h2>
+  <div class="subtitle">Control the game with your body!<br>No controller needed!</div>
+  <div class="instructions">
+    <b>🏃 Swing arms</b> → Run<br>
+    <b>✋ Stop moving</b> → Stop character<br>
+    <b>⬆️ Raise arms</b> → Jump<br>
+    <b>⬇️ Squat down</b> → Slide<br>
+    <b>↩️ Lean left</b> → Move to left lane<br>
+    <b>↪️ Lean right</b> → Move to right lane<br>
+    <b>⌨️ Keyboard:</b> Use ↑↓←→ arrow keys to play
+  </div>
+  <button class="play-btn" onclick="startGame()">▶ START GAME</button>
+</div>
+
+   <div class="g-overlay" id="gameover-overlay" style="display:none;">
+  <h2>GAME OVER</h2>
+  <div class="score-big">Score: <span id="final-score">0</span></div>
+  <div class="score-big" style="font-size:1rem;">🪙 Coins: <span id="final-coins" style="color:#ffcc00;">0</span></div>
+  <div class="subtitle" style="margin-top:8px;">Keep practicing!</div>
+  <button class="play-btn" onclick="startGame()">🔄 Play Again</button>
+</div>
+
+<!-- MediaPipe Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+<script>
+// ============================================================
+//  POSE DETECTION - FIXED VERSION
+// ============================================================
+const videoEl = document.getElementById('webcam');
+const poseCanvas = document.getElementById('pose-canvas');
+const poseCtx = poseCanvas.getContext('2d');
+poseCanvas.width = 260; poseCanvas.height = 195;
+
+let poseReady = false;
+let currentGesture = 'idle'; // 'idle', 'run', 'jump', 'duck'
+let leanDir = 0; // -1 left, 0 center, +1 right
+let landmarksData = null;
+let baseShoulderY = null;
+let lastJumpTime = 0;
+let lastLaneTime = 0;
+const JUMP_COOLDOWN = 700;
+const LANE_COOLDOWN = 600;
+
+// ARM SWING detection for running
+let prevLeftWristY = null;
+let prevRightWristY = null;
+let armSwingHistory = [];
+const ARM_SWING_WINDOW = 8;
+let armSwingScore = 0; // 0-1, how much arms are swinging
+const ARM_RUN_THRESHOLD = 0.018; // minimum swing to count as running
+
+function updateGestureUI(g, lean) {
+  ['g-run','g-jump','g-duck','g-slide'].forEach(id => {
+    document.getElementById(id).classList.remove('active');
+  });
+  if(g === 'jump') document.getElementById('g-jump').classList.add('active');
+  else if(g === 'duck') document.getElementById('g-duck').classList.add('active');
+  else if(g === 'run') document.getElementById('g-run').classList.add('active');
+  if(lean !== 0) document.getElementById('g-slide').classList.add('active');
+}
+
+async function initCamera() {
+  const btn = document.getElementById('start-cam-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Shuru ho raha hai...';
+  document.getElementById('pose-status').textContent = 'Camera access maang raha hoon...';
+  document.getElementById('loading-bar').style.width = '20%';
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    videoEl.srcObject = stream;
+    await new Promise(r => videoEl.onloadedmetadata = r);
+    document.getElementById('loading-bar').style.width = '50%';
+    document.getElementById('pose-status').textContent = 'MediaPipe Pose load ho raha hai...';
+
+    const pose = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
+    pose.setOptions({
+      modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false,
+      minDetectionConfidence: 0.6, minTrackingConfidence: 0.6
+    });
+    pose.onResults(onPoseResults);
+
+    document.getElementById('loading-bar').style.width = '80%';
+    const camera = new Camera(videoEl, {
+      onFrame: async () => { await pose.send({ image: videoEl }); },
+      width: 640, height: 480
+    });
+    await camera.start();
+
+    document.getElementById('loading-bar').style.width = '100%';
+    document.getElementById('pose-status').textContent = '✅ Pose detection active!';
+    document.getElementById('pose-status').className = 'detected';
+    btn.textContent = '✅ Camera Active';
+    poseReady = true;
+  } catch(e) {
+    document.getElementById('pose-status').textContent = '❌ Camera error: ' + e.message;
+    document.getElementById('pose-status').className = 'warning';
+    btn.disabled = false;
+    btn.textContent = '🔄 Phir Try Karo';
+    console.error(e);
+  }
+}
+
+function onPoseResults(results) {
+  poseCtx.clearRect(0, 0, 260, 195);
+  if (!results.poseLandmarks) {
+    document.getElementById('pose-status').className = 'warning';
+    document.getElementById('pose-status').textContent = '⚠️ Pose nahi dikh rahi';
+    currentGesture = 'idle';
+    return;
+  }
+
+  document.getElementById('pose-status').className = 'detected';
+  document.getElementById('pose-status').textContent = '✅ Pose detect ho gayi!';
+
+  const lm = results.poseLandmarks;
+  landmarksData = lm;
+  drawMiniSkeleton(lm);
+
+  // Key landmarks
+  const lShoulder = lm[11], rShoulder = lm[12];
+  const lHip = lm[23], rHip = lm[24];
+  const lWrist = lm[15], rWrist = lm[16];
+  const lElbow = lm[13], rElbow = lm[14];
+
+  const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+  const hipY = (lHip.y + rHip.y) / 2;
+  const shoulderX = (lShoulder.x + rShoulder.x) / 2;
+  const torsoHeight = hipY - shoulderY;
+
+  // Calibrate base shoulder Y
+  if(baseShoulderY === null) baseShoulderY = shoulderY;
+  if(currentGesture === 'idle' || currentGesture === 'run') {
+    baseShoulderY += (shoulderY - baseShoulderY) * 0.004;
+  }
+
+  const now = Date.now();
+
+  // ---- JUMP: shoulders rise a lot ----
+  const jumpThreshold = 0.07;
+  const isJumping = (baseShoulderY - shoulderY) > jumpThreshold;
+
+  // ---- DUCK: torso squishes ----
+  const normalTorso = 0.22;
+  const isDuckingPose = torsoHeight < normalTorso * 0.72 && !isJumping;
+
+  // ---- ARM SWING DETECTION for running ----
+  // Track wrist Y movement magnitude
+  let currentArmSwing = 0;
+  if(prevLeftWristY !== null && prevRightWristY !== null) {
+    const lDelta = Math.abs(lWrist.y - prevLeftWristY);
+    const rDelta = Math.abs(rWrist.y - prevRightWristY);
+    // Also track wrist position relative to elbow (arms pumping)
+    const lArmUp = lWrist.y < lElbow.y; 
+    const rArmUp = rWrist.y < rElbow.y;
+    // Running = one arm up, one arm down (alternating)
+    const armAlternating = (lArmUp !== rArmUp) ? 0.5 : 0;
+    currentArmSwing = (lDelta + rDelta) / 2 + armAlternating * 0.02;
+  }
+  prevLeftWristY = lWrist.y;
+  prevRightWristY = rWrist.y;
+
+  armSwingHistory.push(currentArmSwing);
+  if(armSwingHistory.length > ARM_SWING_WINDOW) armSwingHistory.shift();
+  armSwingScore = armSwingHistory.reduce((a,b) => a+b, 0) / armSwingHistory.length;
+
+  // Update run meter UI
+  const meterPct = Math.min(100, (armSwingScore / (ARM_RUN_THRESHOLD * 2)) * 100);
+  document.getElementById('run-meter-bar').style.width = meterPct + '%';
+
+  // ---- LEAN DETECTION (mirrored camera) ----
+  let lean = 0;
+  const leanThreshold = 0.08;
+  const centerX = 0.5;
+  // Camera is mirrored: body lean left => shoulderX > 0.5 on screen => go left lane
+  if(shoulderX > centerX + leanThreshold && now - lastLaneTime > LANE_COOLDOWN) {
+    lean = -1; // go left
+    lastLaneTime = now;
+  } else if(shoulderX < centerX - leanThreshold && now - lastLaneTime > LANE_COOLDOWN) {
+    lean = 1; // go right
+    lastLaneTime = now;
+  }
+
+  // ---- SET GESTURE ----
+  let gesture = 'idle';
+  if(isJumping && now - lastJumpTime > JUMP_COOLDOWN) {
+    gesture = 'jump'; lastJumpTime = now;
+  } else if(isDuckingPose) {
+    gesture = 'duck';
+  } else if(armSwingScore > ARM_RUN_THRESHOLD) {
+    gesture = 'run'; // only run if arms are moving!
+  } else {
+    gesture = 'idle'; // standing still = character stops
+  }
+
+  currentGesture = gesture;
+  leanDir = lean;
+
+  // Debug display
+  document.getElementById('dbg-running').textContent = gesture === 'run' ? '✅ YES' : 'NO';
+  document.getElementById('dbg-jump').textContent = isJumping ? '✅ YES' : 'NO';
+  document.getElementById('dbg-duck').textContent = isDuckingPose ? '✅ YES' : 'NO';
+  document.getElementById('dbg-lean').textContent = lean === -1 ? '⬅ LEFT' : lean === 1 ? '➡ RIGHT' : 'CENTER';
+  document.getElementById('dbg-arm').textContent = armSwingScore.toFixed(3);
+  updateGestureUI(gesture, lean);
+}
+
+function drawMiniSkeleton(lm) {
+  const W = 260, H = 195;
+  const connections = [
+    [11,12],[11,13],[13,15],[12,14],[14,16],
+    [11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]
+  ];
+  poseCtx.strokeStyle = '#00ff88';
+  poseCtx.lineWidth = 2;
+  for(const [a,b] of connections) {
+    if(lm[a].visibility > 0.4 && lm[b].visibility > 0.4) {
+      poseCtx.beginPath();
+      poseCtx.moveTo(lm[a].x * W, lm[a].y * H);
+      poseCtx.lineTo(lm[b].x * W, lm[b].y * H);
+      poseCtx.stroke();
+    }
+  }
+  const keyPts = [11,12,13,14,15,16,23,24,25,26,27,28,0];
+  for(const i of keyPts) {
+    if(lm[i].visibility > 0.4) {
+      poseCtx.fillStyle = i <= 10 ? '#ff6688' : '#00aaff';
+      poseCtx.beginPath();
+      poseCtx.arc(lm[i].x * W, lm[i].y * H, 3.5, 0, Math.PI*2);
+      poseCtx.fill();
+    }
+  }
+}
+
+// ============================================================
+//  GAME ENGINE
+// ============================================================
+const gc = document.getElementById('gameCanvas');
+const gctx = gc.getContext('2d');
+let GW, GH;
+
+function resizeGame() {
+  const panel = document.getElementById('game-panel');
+  GW = panel.clientWidth; GH = panel.clientHeight;
+  gc.width = GW; gc.height = GH;
+}
+resizeGame();
+window.addEventListener('resize', resizeGame);
+
+// Game state
+let gameRunning = false;
+let gameOver = false;
+let score = 0, coins = 0, lives = 3;
+let gameSpeed = 5;
+let frameNum = 0;
+let highScore = 0;
+
+// 3 lanes
+const LANES = 3;
+let playerLane = 1;
+let targetLane = 1;
+let laneTransX = 0;
+
+// Player state
+let playerY = 0;
+let playerVY = 0;
+let isOnGround = true;
+let isDucking = false;
+let isRunning = false; // NEW: track if player is actually running
+let playerAnim = 0;
+let playerFlash = 0;
+
+// Obstacles & coins
+let obstacles = [];
+let coinItems = [];
+let bgLayers = [];
+
+// Road scrolling
+let roadOffset = 0;
+
+// Input
+let poseQueue = [];
+let keyState = {};
+
+window.addEventListener('keydown', e => {
+  keyState[e.code] = true;
+  if(!gameRunning) return;
+  if(e.code === 'ArrowUp' || e.code === 'KeyW') poseQueue.push('jump');
+  if(e.code === 'ArrowLeft' || e.code === 'KeyA') poseQueue.push('left');
+  if(e.code === 'ArrowRight' || e.code === 'KeyD') poseQueue.push('right');
+  if(e.code === 'ArrowDown' || e.code === 'KeyS') { /* held */ }
+});
+window.addEventListener('keyup', e => { keyState[e.code] = false; });
+
+function getLaneX(lane) {
+  // 3 lanes evenly in center 60% of screen
+  const margin = GW * 0.2;
+  const usable = GW * 0.6;
+  const laneW = usable / LANES;
+  return margin + laneW * lane + laneW / 2;
+}
+
+function startGame() {
+  document.getElementById('start-overlay').style.display = 'none';
+  document.getElementById('gameover-overlay').style.display = 'none';
+  score = 0; coins = 0; lives = 3;
+  gameSpeed = 5; frameNum = 0;
+  playerLane = 1; targetLane = 1;
+  laneTransX = getLaneX(1);
+  playerY = 0; playerVY = 0;
+  isOnGround = true; isDucking = false; isRunning = false;
+  playerAnim = 0; playerFlash = 0;
+  obstacles = []; coinItems = []; roadOffset = 0;
+  poseQueue = [];
+  gameRunning = true; gameOver = false;
+  generateBG();
+  updateHUD();
+  requestAnimationFrame(gameLoop);
+}
+
+function generateBG() {
+  bgLayers = [];
+  for(let i = 0; i < 24; i++) {
+    bgLayers.push({
+      x: Math.random() * GW * 3,
+      type: Math.random() > 0.5 ? 'building' : 'tree',
+      h: 40 + Math.random() * 120,
+      w: 20 + Math.random() * 50,
+      layer: Math.floor(Math.random() * 3),
+      color: ['#1a1a3a','#0d1f2d','#152030','#1f2d1a'][Math.floor(Math.random()*4)]
+    });
+  }
+}
+
+function updateHUD() {
+  document.getElementById('score-val').textContent = score;
+  document.getElementById('speed-val').textContent = (gameSpeed/5).toFixed(1)+'x';
+  document.getElementById('lives-val').textContent = lives;
+  document.getElementById('coins-val').textContent = coins;
+}
+
+let obstacleTimer = 0;
+let coinTimer = 0;
+
+function spawnObstacle() {
+  const lane = Math.floor(Math.random() * LANES);
+  const types = ['barrier','train','low_bar'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  let h, w, needJump, needDuck;
+  if(type === 'barrier'){ h=70; w=38; needJump=true; needDuck=false; }
+  else if(type === 'train'){ h=85; w=90; needJump=true; needDuck=false; }
+  else if(type === 'low_bar'){ h=32; w=65; needJump=false; needDuck=true; }
+  else { h=55; w=50; needJump=true; needDuck=false; }
+  obstacles.push({ x: GW + 80, lane, type, h, w, needJump, needDuck, hit: false });
+}
+
+function spawnCoins() {
+  const lane = Math.floor(Math.random() * LANES);
+  const count = 3 + Math.floor(Math.random() * 4);
+  for(let i = 0; i < count; i++) {
+    coinItems.push({ x: GW + 50 + i * 36, lane, collected: false, bobPhase: Math.random()*Math.PI*2 });
+  }
+}
+
+function gameLoop(ts) {
+  if(!gameRunning) return;
+  frameNum++;
+
+  // Speed increases only when actually running
+  if(isRunning) {
+    gameSpeed = 5 + Math.floor(score / 200) * 0.8;
+    if(gameSpeed > 18) gameSpeed = 18;
+  }
+
+  processInput();
+  updatePhysics();
+  spawnItems();
+  checkCollisions();
+  render();
+  updateHUD();
+  requestAnimationFrame(gameLoop);
+}
+
+let lastPoseLane = 0;
+function processInput() {
+  if(poseReady) {
+    // Jump
+    if(currentGesture === 'jump' && isOnGround) doJump();
+    // Duck
+    isDucking = (currentGesture === 'duck');
+    // Running = only if arms are moving
+    isRunning = (currentGesture === 'run' || currentGesture === 'jump');
+    // Lane change
+    if(leanDir !== 0 && leanDir !== lastPoseLane) {
+      if(leanDir === -1 && playerLane > 0) targetLane = playerLane - 1;
+      if(leanDir === 1 && playerLane < LANES-1) targetLane = playerLane + 1;
+      lastPoseLane = leanDir;
+    }
+    if(leanDir === 0) lastPoseLane = 0;
+  }
+
+  // Keyboard fallback
+  while(poseQueue.length > 0) {
+    const act = poseQueue.shift();
+    if(act === 'jump' && isOnGround) { doJump(); isRunning = true; }
+    if(act === 'left' && playerLane > 0) targetLane = playerLane - 1;
+    if(act === 'right' && playerLane < LANES-1) targetLane = playerLane + 1;
+  }
+  if(!poseReady) {
+    isDucking = keyState['ArrowDown'] || keyState['KeyS'];
+    // Keyboard: running when any direction key held
+    isRunning = keyState['ArrowUp'] || keyState['ArrowLeft'] || keyState['ArrowRight'] ||
+                keyState['KeyW'] || keyState['KeyA'] || keyState['KeyD'] ||
+                !isDucking; // always run with keyboard for playability
+  }
+
+  // Smooth lane transition
+  const targetX = getLaneX(targetLane);
+  laneTransX += (targetX - laneTransX) * 0.15;
+  if(Math.abs(laneTransX - targetX) < 1) { laneTransX = targetX; playerLane = targetLane; }
+}
+
+function doJump() {
+  playerVY = -16;
+  isOnGround = false;
+}
+
+function updatePhysics() {
+  if(!isOnGround) {
+    playerVY += 0.65;
+    playerY -= playerVY;
+    if(playerY <= 0) { playerY = 0; playerVY = 0; isOnGround = true; }
+  }
+
+  // Running animation only when running
+  if(isOnGround && !isDucking && isRunning) playerAnim += 0.25;
+  else if(!isOnGround) playerAnim += 0.15;
+
+  if(playerFlash > 0) playerFlash--;
+
+  // Scroll only when running
+  if(isRunning) {
+    roadOffset = (roadOffset + gameSpeed) % 100;
+    for(const b of bgLayers) {
+      b.x -= gameSpeed * (0.2 + b.layer * 0.15);
+      if(b.x + b.w < 0) {
+        b.x = GW + Math.random() * 200;
+        b.h = 40 + Math.random() * 120;
+        b.w = 20 + Math.random() * 50;
+      }
+    }
+    score++;
+  }
+}
+
+function spawnItems() {
+  // Only spawn/move when running
+  if(!isRunning) return;
+
+  obstacleTimer++;
+  const spawnRate = Math.max(60, 130 - Math.floor(score/100)*5);
+  if(obstacleTimer >= spawnRate) { spawnObstacle(); obstacleTimer = 0; }
+
+  coinTimer++;
+  if(coinTimer >= 80) { spawnCoins(); coinTimer = 0; }
+
+  for(let i = obstacles.length-1; i>=0; i--) {
+    obstacles[i].x -= gameSpeed;
+    if(obstacles[i].x + obstacles[i].w < 0) obstacles.splice(i,1);
+  }
+  for(let i = coinItems.length-1; i>=0; i--) {
+    coinItems[i].x -= gameSpeed;
+    coinItems[i].bobPhase += 0.08;
+    if(coinItems[i].x < -30) coinItems.splice(i,1);
+  }
+}
+
+function checkCollisions() {
+  if(playerFlash > 0) return;
+  const px = laneTransX;
+  const ph = isDucking ? 38 : 68;
+  const pw = 32;
+
+  for(const obs of obstacles) {
+    if(obs.hit) continue;
+    if(obs.lane !== playerLane) continue;
+    if(px + pw/2 < obs.x - obs.w/2 + 8) continue;
+    if(px - pw/2 > obs.x + obs.w/2 - 8) continue;
+    if(obs.needDuck && isDucking) continue;
+    if(obs.needJump && !isOnGround && playerY > obs.h - 10) continue;
+    obs.hit = true;
+    lives--;
+    playerFlash = 90;
+    if(lives <= 0) { endGame(); return; }
+  }
+
+  for(const c of coinItems) {
+    if(c.collected) continue;
+    if(c.lane !== playerLane) continue;
+    if(Math.abs(px - c.x) < 28) { c.collected = true; coins++; }
+  }
+}
+
+function endGame() {
+  gameRunning = false; gameOver = true;
+  if(score > highScore) highScore = score;
+  document.getElementById('final-score').textContent = score;
+  document.getElementById('final-coins').textContent = coins;
+  document.getElementById('gameover-overlay').style.display = 'flex';
+}
+
+// ============================================================
+//  RENDER
+// ============================================================
+function render() {
+  gctx.clearRect(0, 0, GW, GH);
+  drawSky();
+  drawBG();
+  drawRoad();   // NEW: proper road with train tracks
+  drawCoins();
+  drawObstacles();
+  drawPlayer();
+  if(isRunning && gameSpeed >= 10) drawSpeedLines();
+}
+
+function drawSky() {
+  const grad = gctx.createLinearGradient(0, 0, 0, GH * 0.65);
+  grad.addColorStop(0, '#060618');
+  grad.addColorStop(0.5, '#110a2a');
+  grad.addColorStop(1, '#1a0a2a');
+  gctx.fillStyle = grad;
+  gctx.fillRect(0, 0, GW, GH * 0.65);
+
+  // Stars
+  gctx.fillStyle = 'rgba(255,255,255,0.6)';
+  for(let i = 0; i < 40; i++) {
+    const sx = (i * 137.5 + frameNum * 0.02) % GW;
+    const sy = (i * 73.1) % (GH * 0.55);
+    const r = i % 3 === 0 ? 1.5 : 0.8;
+    gctx.beginPath(); gctx.arc(sx, sy, r, 0, Math.PI*2); gctx.fill();
+  }
+}
+
+function drawBG() {
+  const ground = GH * 0.72;
+  for(const b of bgLayers) {
+    const alpha = [0.25, 0.45, 0.65][b.layer];
+    gctx.globalAlpha = alpha;
+    gctx.fillStyle = b.color;
+    if(b.type === 'building') {
+      gctx.fillRect(b.x, ground - b.h, b.w, b.h);
+      gctx.fillStyle = 'rgba(255,220,100,0.25)';
+      for(let wy = ground - b.h + 8; wy < ground - 8; wy += 14) {
+        for(let wx = b.x + 5; wx < b.x + b.w - 5; wx += 12) {
+          if((Math.floor(wx * 7 + wy * 3)) % 5 > 1) gctx.fillRect(wx, wy, 6, 7);
+        }
+      }
+    } else {
+      gctx.fillRect(b.x + b.w*0.4, ground - b.h*0.4, b.w*0.2, b.h*0.4);
+      gctx.fillStyle = '#162816';
+      gctx.beginPath();
+      gctx.arc(b.x + b.w/2, ground - b.h*0.4, b.w*0.5, 0, Math.PI*2);
+      gctx.fill();
+    }
+    gctx.globalAlpha = 1;
+  }
+}
+
+function drawRoad() {
+  const gy = GH * 0.72;
+  const roadH = GH - gy;
+
+  // ====== ROAD BASE (grey asphalt) ======
+  const roadGrad = gctx.createLinearGradient(0, gy, 0, GH);
+  roadGrad.addColorStop(0, '#3a3a3a');
+  roadGrad.addColorStop(0.3, '#2d2d2d');
+  roadGrad.addColorStop(1, '#1e1e1e');
+  gctx.fillStyle = roadGrad;
+  gctx.fillRect(0, gy, GW, roadH);
+
+  // Road edge lines (bright white) - left and right borders
+  gctx.strokeStyle = '#ffffff';
+  gctx.lineWidth = 4;
+  gctx.setLineDash([]);
+  gctx.beginPath(); gctx.moveTo(0, gy); gctx.lineTo(GW, gy); gctx.stroke(); // top edge
+  gctx.strokeStyle = '#888';
+  gctx.lineWidth = 2;
+  gctx.beginPath(); gctx.moveTo(0, GH-2); gctx.lineTo(GW, GH-2); gctx.stroke(); // bottom
+
+  // ====== LANE MARKERS ======
+  const margin = GW * 0.2;
+  const usable = GW * 0.6;
+  const laneW = usable / LANES;
+
+  // Left & right solid road edges
+  gctx.strokeStyle = '#ffcc00';
+  gctx.lineWidth = 3;
+  gctx.setLineDash([]);
+  gctx.beginPath(); gctx.moveTo(margin, gy); gctx.lineTo(margin, GH); gctx.stroke();
+  gctx.beginPath(); gctx.moveTo(margin + usable, gy); gctx.lineTo(margin + usable, GH); gctx.stroke();
+
+  // Dashed lane dividers between lanes
+  gctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  gctx.lineWidth = 2;
+  gctx.setLineDash([25, 18]);
+  gctx.lineDashOffset = -roadOffset;
+  for(let i = 1; i < LANES; i++) {
+    const lx = margin + laneW * i;
+    gctx.beginPath(); gctx.moveTo(lx, gy); gctx.lineTo(lx, GH); gctx.stroke();
+  }
+  gctx.setLineDash([]);
+
+  // ====== TRAIN TRACKS on road (railway look) ======
+  // Two rails per lane, with cross ties
+  for(let lane = 0; lane < LANES; lane++) {
+    const cx = getLaneX(lane);
+    const trackSpread = 12;
+
+    // Rail 1 & 2 (steel colored)
+    gctx.strokeStyle = '#888888';
+    gctx.lineWidth = 3;
+    gctx.setLineDash([]);
+    gctx.beginPath(); gctx.moveTo(cx - trackSpread, gy); gctx.lineTo(cx - trackSpread, GH); gctx.stroke();
+    gctx.beginPath(); gctx.moveTo(cx + trackSpread, gy); gctx.lineTo(cx + trackSpread, GH); gctx.stroke();
+
+    // Cross ties (wooden sleepers)
+    gctx.strokeStyle = '#5a3a1a';
+    gctx.lineWidth = 5;
+    const tieSpacing = 32;
+    const offset = roadOffset % tieSpacing;
+    for(let ty = gy + offset; ty < GH + tieSpacing; ty += tieSpacing) {
+      gctx.beginPath();
+      gctx.moveTo(cx - trackSpread - 6, ty);
+      gctx.lineTo(cx + trackSpread + 6, ty);
+      gctx.stroke();
+    }
+  }
+
+  // Grass/platform on sides (outside road)
+  gctx.fillStyle = '#1a2a0a';
+  gctx.fillRect(0, gy, margin, roadH);
+  gctx.fillRect(margin + usable, gy, GW - margin - usable, roadH);
+
+  // Platform edge lines
+  gctx.strokeStyle = '#4a3a1a';
+  gctx.lineWidth = 2;
+  gctx.beginPath(); gctx.moveTo(margin - 8, gy); gctx.lineTo(margin - 8, GH); gctx.stroke();
+  gctx.beginPath(); gctx.moveTo(margin + usable + 8, gy); gctx.lineTo(margin + usable + 8, GH); gctx.stroke();
+
+  // Horizon line (road meets sky)
+  const horizGrad = gctx.createLinearGradient(0, gy-4, 0, gy+6);
+  horizGrad.addColorStop(0, 'transparent');
+  horizGrad.addColorStop(0.5, 'rgba(108,99,255,0.3)');
+  horizGrad.addColorStop(1, 'transparent');
+  gctx.fillStyle = horizGrad;
+  gctx.fillRect(0, gy-4, GW, 10);
+}
+
+function drawCoins() {
+  const ground = GH * 0.72;
+  for(const c of coinItems) {
+    if(c.collected) continue;
+    const cx = getLaneX(c.lane);
+    // Coins are at lane X position now
+    const coinX = c.x - (getLaneX(1) - cx); // offset from center
+    const adjustedX = cx + (c.x - (GW + coinItems.find(ci=>ci===c)?.initialX || c.x));
+    // Simple: just use c.x but constrain to lane area
+    const cy = ground - 28 - Math.sin(c.bobPhase) * 7;
+    const cr = 10;
+    gctx.shadowBlur = 14; gctx.shadowColor = '#ffcc00';
+    gctx.fillStyle = '#ffcc00';
+    gctx.beginPath(); gctx.arc(c.x, cy, cr, 0, Math.PI*2); gctx.fill();
+    gctx.fillStyle = '#fff9';
+    gctx.beginPath(); gctx.arc(c.x - 3, cy - 3, cr*0.35, 0, Math.PI*2); gctx.fill();
+    // $ symbol
+    gctx.fillStyle = '#996600';
+    gctx.font = 'bold 9px Arial'; gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
+    gctx.fillText('$', c.x, cy);
+    gctx.shadowBlur = 0;
+  }
+}
+
+function drawObstacles() {
+  const ground = GH * 0.72;
+  for(const obs of obstacles) {
+    if(obs.hit) continue;
+    // Obstacles positioned at their lane X
+    const ox = obs.x;
+    const lx = getLaneX(obs.lane); // target lane center
+    // Draw obstacle centered on its lane (but x scrolls)
+    const drawX = ox; // obstacle scrolls from right to left
+    const oy = ground - obs.h;
+
+    gctx.shadowBlur = 16;
+
+    if(obs.type === 'barrier') {
+      gctx.shadowColor = '#ff4444';
+      // Post
+      gctx.fillStyle = '#cc2222';
+      gctx.fillRect(drawX - obs.w/2, oy, obs.w, obs.h);
+      // Warning stripes
+      for(let s=0; s<obs.h; s+=18) {
+        gctx.fillStyle = (Math.floor(s/18)%2===0) ? '#ff6600' : '#cc2222';
+        gctx.fillRect(drawX-obs.w/2, oy+s, obs.w, 9);
+      }
+      gctx.fillStyle = '#ffff00';
+      gctx.font = 'bold 18px Arial'; gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
+      gctx.fillText('⚠', drawX, oy + obs.h/2);
+
+    } else if(obs.type === 'train') {
+      // Train body
+      gctx.shadowColor = '#4488ff';
+      gctx.fillStyle = '#1133aa';
+      gctx.fillRect(drawX - obs.w/2, oy, obs.w, obs.h);
+      // Train windows
+      gctx.fillStyle = '#aaddff';
+      gctx.fillRect(drawX - obs.w/2 + 6, oy + 8, obs.w - 12, 18);
+      // Train front (face)
+      gctx.fillStyle = '#ffaa00';
+      gctx.fillRect(drawX - obs.w/2, oy, 8, obs.h);
+      // Headlight
+      gctx.fillStyle = '#ffffaa';
+      gctx.shadowBlur = 20; gctx.shadowColor = '#ffff00';
+      gctx.beginPath(); gctx.arc(drawX - obs.w/2 + 4, oy + obs.h - 15, 5, 0, Math.PI*2); gctx.fill();
+      // Wheels
+      gctx.shadowBlur = 0;
+      gctx.fillStyle = '#333';
+      gctx.beginPath(); gctx.arc(drawX - obs.w/2 + 12, ground - 3, 7, 0, Math.PI*2); gctx.fill();
+      gctx.beginPath(); gctx.arc(drawX + obs.w/2 - 12, ground - 3, 7, 0, Math.PI*2); gctx.fill();
+      gctx.fillStyle = '#88aaff';
+      gctx.font = 'bold 11px Arial'; gctx.textAlign = 'center';
+      gctx.fillText('🚂 TRAIN', drawX, oy + obs.h - 8);
+
+    } else if(obs.type === 'low_bar') {
+      gctx.shadowColor = '#ff8800';
+      gctx.fillStyle = '#cc6600';
+      gctx.fillRect(drawX - obs.w/2, ground - obs.h, obs.w, obs.h);
+      gctx.fillStyle = '#ffaa00';
+      gctx.fillRect(drawX - obs.w/2, ground - obs.h, obs.w, 6);
+      // "DUCK!" hint above
+      gctx.font = 'bold 13px Arial'; gctx.textAlign = 'center';
+      gctx.fillStyle = '#ffff00';
+      gctx.shadowColor = '#ffaa00';
+      gctx.fillText('⬇ JHUKO!', drawX, ground - obs.h - 10);
+    }
+    gctx.shadowBlur = 0;
+  }
+}
+
+function drawPlayer() {
+  const ground = GH * 0.72;
+  const px = laneTransX;
+  const py = ground - playerY;
+  const flash = playerFlash > 0 && Math.floor(playerFlash/6)%2===0;
+  if(flash) return;
+
+  gctx.save();
+  gctx.translate(px, py);
+
+  const legSwing = isRunning ? Math.sin(playerAnim) * 20 : 0;
+  // Arms swing opposite to legs when running
+  const armSwingAmt = isRunning ? Math.sin(playerAnim + Math.PI) * 18 : 0;
+
+  if(isDucking) {
+    drawCharacterDuck(gctx);
+  } else if(!isOnGround) {
+    drawCharacterJump(gctx);
+  } else if(isRunning) {
+    drawCharacterRun(gctx, legSwing, armSwingAmt);
+  } else {
+    drawCharacterIdle(gctx); // NEW: idle pose when standing still
+  }
+
+  gctx.restore();
+
+  // Shadow
+  gctx.save();
+  gctx.globalAlpha = 0.3;
+  gctx.fillStyle = '#000';
+  gctx.beginPath();
+  gctx.ellipse(px, ground + 5, 20, 5, 0, 0, Math.PI*2);
+  gctx.fill();
+  gctx.restore();
+}
+
+function drawCharacterIdle(ctx) {
+  // Standing still pose
+  ctx.fillStyle = '#6c63ff';
+  ctx.fillRect(-14, -68, 28, 36);
+  ctx.fillStyle = '#ffccaa';
+  ctx.beginPath(); ctx.arc(0, -78, 14, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.beginPath(); ctx.arc(-4, -79, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, -79, 2.5, 0, Math.PI*2); ctx.fill();
+  // Smile
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(0, -76, 5, 0.2, Math.PI - 0.2); ctx.stroke();
+  ctx.fillStyle = '#3a2a1a'; ctx.fillRect(-14, -92, 28, 16);
+  ctx.fillStyle = '#ff4455'; ctx.fillRect(-15, -66, 30, 8);
+  // Arms down naturally
+  ctx.strokeStyle = '#ffccaa'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-14, -60); ctx.lineTo(-18, -35); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(14, -60); ctx.lineTo(18, -35); ctx.stroke();
+  // Legs straight
+  ctx.strokeStyle = '#3a3a6a'; ctx.lineWidth = 10;
+  ctx.beginPath(); ctx.moveTo(-7, -32); ctx.lineTo(-8, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(7, -32); ctx.lineTo(8, 0); ctx.stroke();
+  ctx.fillStyle = '#ff6644';
+  ctx.fillRect(-16, -4, 14, 6); ctx.fillRect(4, -4, 14, 6);
+}
+
+function drawCharacterRun(ctx, legSwing, armSwing) {
+  ctx.fillStyle = '#6c63ff';
+  ctx.fillRect(-14, -68, 28, 36);
+  ctx.fillStyle = '#ffccaa';
+  ctx.beginPath(); ctx.arc(0, -78, 14, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.beginPath(); ctx.arc(-4, -79, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, -79, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#3a2a1a'; ctx.fillRect(-14, -92, 28, 16);
+  ctx.fillStyle = '#ff4455'; ctx.fillRect(-15, -66, 30, 8);
+  // RUNNING ARMS: aage-piche swing
+  ctx.strokeStyle = '#ffccaa'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-14, -60); ctx.lineTo(-24, -42 + armSwing); ctx.stroke(); // left arm
+  ctx.beginPath(); ctx.moveTo(14, -60); ctx.lineTo(24, -42 - armSwing); ctx.stroke();   // right arm (opposite)
+  // Running legs
+  ctx.strokeStyle = '#3a3a6a'; ctx.lineWidth = 10;
+  ctx.beginPath(); ctx.moveTo(-7, -32); ctx.lineTo(-10, -10 + legSwing); ctx.lineTo(-13, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(7, -32); ctx.lineTo(10, -10 - legSwing); ctx.lineTo(13, 0); ctx.stroke();
+  ctx.fillStyle = '#ff6644';
+  ctx.fillRect(-20, -4, 14, 6); ctx.fillRect(6, -4, 14, 6);
+}
+
+function drawCharacterJump(ctx) {
+  ctx.fillStyle = '#6c63ff'; ctx.fillRect(-14, -55, 28, 28);
+  ctx.fillStyle = '#ffccaa';
+  ctx.beginPath(); ctx.arc(0, -64, 14, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.beginPath(); ctx.arc(-4, -65, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, -65, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#3a2a1a'; ctx.fillRect(-14, -78, 28, 16);
+  ctx.fillStyle = '#ff4455'; ctx.fillRect(-15, -54, 30, 7);
+  // Both arms UP for jump
+  ctx.strokeStyle = '#ffccaa'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-14, -50); ctx.lineTo(-26, -68); ctx.stroke(); // arms up
+  ctx.beginPath(); ctx.moveTo(14, -50); ctx.lineTo(26, -68); ctx.stroke();
+  // Legs tucked
+  ctx.strokeStyle = '#3a3a6a'; ctx.lineWidth = 10;
+  ctx.beginPath(); ctx.moveTo(-7, -27); ctx.lineTo(-18, -14); ctx.lineTo(-10, -4); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(7, -27); ctx.lineTo(18, -14); ctx.lineTo(10, -4); ctx.stroke();
+  ctx.fillStyle = '#ff6644';
+  ctx.fillRect(-16, -2, 10, 5); ctx.fillRect(6, -2, 10, 5);
+}
+
+function drawCharacterDuck(ctx) {
+  ctx.fillStyle = '#6c63ff'; ctx.fillRect(-16, -30, 32, 22);
+  ctx.fillStyle = '#ffccaa';
+  ctx.beginPath(); ctx.arc(0, -38, 13, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.beginPath(); ctx.arc(-4, -38, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4, -38, 2, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#3a2a1a'; ctx.fillRect(-13, -50, 26, 14);
+  ctx.fillStyle = '#ff4455'; ctx.fillRect(-16, -30, 32, 6);
+  // Arms wide out
+  ctx.strokeStyle = '#ffccaa'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-16, -22); ctx.lineTo(-30, -16); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(16, -22); ctx.lineTo(30, -16); ctx.stroke();
+  ctx.strokeStyle = '#3a3a6a'; ctx.lineWidth = 10;
+  ctx.beginPath(); ctx.moveTo(-8, -8); ctx.lineTo(-15, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(8, -8); ctx.lineTo(15, 0); ctx.stroke();
+  ctx.fillStyle = '#ff6644';
+  ctx.fillRect(-22, -2, 12, 5); ctx.fillRect(10, -2, 12, 5);
+}
+
+function drawSpeedLines() {
+  const alpha = Math.min(0.25, (gameSpeed - 10) / 25);
+  gctx.globalAlpha = alpha;
+  gctx.strokeStyle = '#ffffff';
+  gctx.lineWidth = 1;
+  for(let i = 0; i < 10; i++) {
+    const y = (i * 73 + frameNum * 3) % (GH * 0.72);
+    const len = 30 + (i * 20) % 50;
+    const x = (i * 137 + frameNum * 5) % GW;
+    gctx.beginPath(); gctx.moveTo(x, y); gctx.lineTo(x + len, y); gctx.stroke();
+  }
+  gctx.globalAlpha = 1;
+}
+</script>
+</body>
+</html>

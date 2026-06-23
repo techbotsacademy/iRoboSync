@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>AI Code Runner - Pacman Pro (Teacher Edition)</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+    <style>
+
+        :root {
+
+            --bg: #0d1117;
+
+            --editor-bg: #161b22;
+
+            --accent: #58a6ff;
+
+            --yellow: #f1e05a;
+
+        }
+
+
+
+        body {
+
+            margin: 0; padding: 0;
+
+            background-color: var(--bg);
+
+            color: #c9d1d9;
+
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+
+            display: flex; height: 100vh; overflow: hidden;
+
+        }
+
+
+
+        /* --- Left Side: Code Editor --- */
+
+        .editor-side {
+
+            width: 40%;
+
+            background: var(--editor-bg);
+
+            border-right: 1px solid #30363d;
+
+            display: flex; flex-direction: column;
+
+        }
+
+        .editor-header {
+
+            padding: 10px 20px; background: #21262d;
+
+            font-size: 13px; color: #8b949e;
+
+            display: flex; justify-content: space-between; align-items: center;
+
+        }
+
+        .code-view {
+
+            flex-grow: 1; padding: 20px;
+
+            font-family: 'Consolas', 'Monaco', monospace;
+
+            font-size: 13px; line-height: 1.5;
+
+            color: #d1d5db; overflow-y: auto; white-space: pre;
+
+        }
+
+        .keyword { color: #ff7b72; }
+
+        .func { color: #d2a8ff; }
+
+        .comment { color: #8b949e; }
+
+
+
+        /* --- Right Side: Game Console --- */
+
+        .console-side {
+
+            width: 60%;
+
+            display: flex; flex-direction: column;
+
+            align-items: center; justify-content: center;
+
+            background: #010409; position: relative;
+
+        }
+
+        .controls {
+
+            position: absolute; top: 20px;
+
+            display: flex; gap: 15px;
+
+        }
+
+        button {
+
+            padding: 10px 25px; border-radius: 6px; border: none;
+
+            font-weight: bold; cursor: pointer; transition: 0.2s;
+
+        }
+
+        #runBtn { background: #238636; color: white; }
+
+        #startBtn { background: var(--yellow); color: black; display: none; }
+
+
+
+        .game-display {
+
+            width: 440px; height: 360px;
+
+            border: 2px dashed #30363d;
+
+            display: flex; align-items: center; justify-content: center;
+
+            border-radius: 12px; transition: 0.5s;
+
+        }
+
+        .game-display.active {
+
+            border: 4px solid #1919a6;
+
+            background: #000; box-shadow: 0 0 30px rgba(0, 82, 255, 0.2);
+
+        }
+
+        canvas { display: none; background: black; }
+
+       
+
+        #status-bar {
+
+            position: absolute; bottom: 0; width: 100%;
+
+            background: #21262d; padding: 5px 20px;
+
+            font-size: 12px; color: #8b949e;
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+
+
+    <div class="editor-side">
+
+        <div class="editor-header">
+
+            <span>pacman_ai_logic.js</span>
+
+            <span style="color: #238636;">● AI Training Active</span>
+
+        </div>
+
+        <div class="code-view">
+
+<span class="comment">// 1. Collect Pacman movement data</span>
+
+<span class="keyword">const</span> input = pacman.position;
+
+<span class="keyword">const</span> label = pacman.next_step;
+
+
+
+<span class="comment">// 2. Neural Network Predicts Ghost Move</span>
+
+<span class="keyword">function</span> <span class="func">ai_predict</span>() {
+
+    <span class="keyword">return</span> model.predict(input);
+
+}
+
+
+
+<span class="comment">// 3. Visualizing "Ghost Thoughts"</span>
+
+<span class="keyword">function</span> <span class="func">drawPrediction</span>() {
+
+    drawText(<span class="string">"NEXT STEP: "</span> + direction);
+
+    drawLine(ghost, target);
+
+}
+
+        </div>
+
+    </div>
+
+
+
+    <div class="console-side">
+
+        <div class="controls">
+
+            <button id="runBtn">▶ RUN CODE</button>
+
+            <button id="startBtn">START GAME</button>
+
+        </div>
+
+
+
+        <div class="game-display" id="displayBox">
+
+            <span id="placeholderText">System Idle. Press Run to Mount AI...</span>
+
+            <canvas id="game" width="400" height="320"></canvas>
+
+        </div>
+
+
+
+        <div id="status-bar">Status: Ready | AI Brain: Standby</div>
+
+    </div>
+
+
+
+<script>
+
+const canvas = document.getElementById("game");
+
+const ctx = canvas.getContext("2d");
+
+const TILE = 20;
+
+
+
+const maze = [
+
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+
+    [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
+
+    [1,0,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,0,1],
+
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+
+    [1,1,1,0,1,1,0,1,1,1,1,1,1,0,1,1,0,1,1,1],
+
+    [1,1,1,0,1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,1],
+
+    [1,0,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,1],
+
+    [1,1,1,0,1,1,0,1,1,1,1,1,1,0,1,1,0,1,1,1],
+
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+
+    [1,0,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,0,1],
+
+    [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
+
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+
+];
+
+
+
+let dots = JSON.parse(JSON.stringify(maze));
+
+let pacman = { px: 20, py: 20, dir: "right", nextDir: "right", speed: 1.2 };
+
+let ghost = { px: 360, py: 180, speed: 0.8};
+
+let running = false;
+
+let trainX = [], trainY = [];
+
+let model;
+
+let currentPrediction = {x: 0, y: 0, moveName: "WAITING"};
+
+
+
+async function initAI() {
+
+    model = tf.sequential();
+
+    model.add(tf.layers.dense({units: 32, inputShape: [2], activation: 'relu'}));
+
+    model.add(tf.layers.dense({units: 2}));
+
+    model.compile({optimizer: tf.train.adam(0.05), loss: 'meanSquaredError'});
+
+}
+
+initAI();
+
+
+
+window.addEventListener("keydown", e => {
+
+    if(e.key === "ArrowUp") pacman.nextDir = "up";
+
+    if(e.key === "ArrowDown") pacman.nextDir = "down";
+
+    if(e.key === "ArrowLeft") pacman.nextDir = "left";
+
+    if(e.key === "ArrowRight") pacman.nextDir = "right";
+
+});
+
+
+
+function canMove(px, py) {
+
+    let margin = 4;
+
+    let x1 = Math.floor((px + margin) / TILE);
+
+    let y1 = Math.floor((py + margin) / TILE);
+
+    let x2 = Math.floor((px + TILE - margin) / TILE);
+
+    let y2 = Math.floor((py + TILE - margin) / TILE);
+
+    if(y1 < 0 || y2 >= maze.length || x1 < 0 || x2 >= maze[0].length) return false;
+
+    return maze[y1][x1] === 0 && maze[y1][x2] === 0 && maze[y2][x1] === 0 && maze[y2][x2] === 0;
+
+}
+
+
+
+function update() {
+
+    if(!running) return;
+
+
+
+    let nvx = 0, nvy = 0;
+
+    if(pacman.nextDir === "up") nvy = -pacman.speed;
+
+    if(pacman.nextDir === "down") nvy = pacman.speed;
+
+    if(pacman.nextDir === "left") nvx = -pacman.speed;
+
+    if(pacman.nextDir === "right") nvx = pacman.speed;
+
+
+
+    if(canMove(pacman.px + nvx, pacman.py + nvy)) pacman.dir = pacman.nextDir;
+
+
+
+    let vx = 0, vy = 0;
+
+    if(pacman.dir === "up") vy = -pacman.speed;
+
+    if(pacman.dir === "down") vy = pacman.speed;
+
+    if(pacman.dir === "left") vx = -pacman.speed;
+
+    if(pacman.dir === "right") vx = pacman.speed;
+
+
+
+    if(canMove(pacman.px + vx, pacman.py + vy)) {
+
+        pacman.px += vx;
+
+        pacman.py += vy;
+
+        trainX.push([pacman.px/400, pacman.py/320]);
+
+        trainY.push([(pacman.px+vx*15)/400, (pacman.py+vy*15)/320]);
+
+        if(trainX.length > 200) { trainX.shift(); trainY.shift(); }
+
+    }
+
+
+
+    let tx = Math.floor((pacman.px + 10)/TILE);
+
+    let ty = Math.floor((pacman.py + 10)/TILE);
+
+    if(dots[ty] && dots[ty][tx] === 0) dots[ty][tx] = 5;
+
+
+
+    // --- GHOST AI PREDICTION LOGIC ---
+
+    let targetX = pacman.px, targetY = pacman.py;
+
+    if(trainX.length > 50) {
+
+        const pred = model.predict(tf.tensor2d([[pacman.px/400, pacman.py/320]])).dataSync();
+
+        targetX = pred[0] * 400;
+
+        targetY = pred[1] * 320;
+
+       
+
+        let dx = targetX - ghost.px;
+
+        let dy = targetY - ghost.py;
+
+        if(Math.abs(dx) > Math.abs(dy)) currentPrediction.moveName = dx > 0 ? "RIGHT →" : "← LEFT";
+
+        else currentPrediction.moveName = dy > 0 ? "DOWN ↓" : "↑ UP";
+
+       
+
+        currentPrediction.x = targetX;
+
+        currentPrediction.y = targetY;
+
+    }
+
+
+
+    let gvx = Math.sign(targetX - ghost.px) * ghost.speed;
+
+    let gvy = Math.sign(targetY - ghost.py) * ghost.speed;
+
+
+
+    if(canMove(ghost.px + gvx, ghost.py)) ghost.px += gvx;
+
+    if(canMove(ghost.px, ghost.py + gvy)) ghost.py += gvy;
+
+
+
+    if(Math.hypot(pacman.px - ghost.px, pacman.py - ghost.py) < 15) {
+
+        running = false;
+
+        alert("GAME OVER! AI Captured Pacman.");
+
+        location.reload();
+
+    }
+
+}
+
+
+
+function draw() {
+
+    ctx.fillStyle = "black";
+
+    ctx.fillRect(0,0,400,320);
+
+
+
+    // Maze
+
+    for(let y=0; y<maze.length; y++) {
+
+        for(let x=0; x<maze[y].length; x++) {
+
+            if(maze[y][x] === 1) {
+
+                ctx.fillStyle = "#1919a6";
+
+                ctx.fillRect(x*TILE, y*TILE, TILE-1, TILE-1);
+
+            } else if(dots[y][x] === 0) {
+
+                ctx.fillStyle = "#ffb8ae";
+
+                ctx.beginPath(); ctx.arc(x*TILE+10, y*TILE+10, 2, 0, 7); ctx.fill();
+
+            }
+
+        }
+
+    }
+
+
+
+    // --- AI VISUALIZATION OVERLAY ---
+
+    if(trainX.length > 50) {
+
+        // Ghost Vision Line
+
+        ctx.strokeStyle = "rgba(0, 255, 100, 0.4)";
+
+        ctx.setLineDash([5, 3]);
+
+        ctx.beginPath();
+
+        ctx.moveTo(ghost.px + 10, ghost.py + 10);
+
+        ctx.lineTo(currentPrediction.x + 10, currentPrediction.y + 10);
+
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+
+
+
+        // Move Label
+
+        ctx.fillStyle = "#00ff00";
+
+        ctx.font = "bold 11px monospace";
+
+        ctx.fillText("AI DECISION: " + currentPrediction.moveName, ghost.px - 20, ghost.py - 15);
+
+       
+
+        // Target Dot
+
+        ctx.fillStyle = "#ff00ff";
+
+        ctx.beginPath(); ctx.arc(currentPrediction.x + 10, currentPrediction.y + 10, 4, 0, 7); ctx.fill();
+
+    }
+
+
+
+    // AI Stats Box
+
+    ctx.fillStyle = "rgba(22, 27, 34, 0.8)";
+
+    ctx.fillRect(270, 10, 120, 45);
+
+    ctx.strokeStyle = "#58a6ff";
+
+    ctx.strokeRect(270, 10, 120, 45);
+
+    ctx.fillStyle = "white";
+
+    ctx.font = "10px Arial";
+
+    ctx.fillText("AI BRAIN STATUS", 280, 25);
+
+    ctx.fillStyle = "#f1e05a";
+
+    ctx.fillText("Samples: " + trainX.length + "/200", 280, 40);
+
+
+
+    // Draw Pacman
+
+    ctx.save();
+
+    ctx.translate(pacman.px + 10, pacman.py + 10);
+
+    let rotation = 0;
+
+    if(pacman.dir === "left") rotation = Math.PI;
+
+    if(pacman.dir === "up") rotation = -Math.PI/2;
+
+    if(pacman.dir === "down") rotation = Math.PI/2;
+
+    ctx.rotate(rotation);
+
+    ctx.fillStyle = "yellow";
+
+    ctx.beginPath();
+
+    let mouth = Math.abs(Math.sin(Date.now()/150)) * 0.2;
+
+    ctx.arc(0, 0, 8, (0.2 + mouth) * Math.PI, (1.8 - mouth) * Math.PI);
+
+    ctx.lineTo(0,0); ctx.fill();
+
+    ctx.restore();
+
+
+
+    // Draw Ghost
+
+    ctx.fillStyle = "red";
+
+    ctx.beginPath(); ctx.arc(ghost.px+10, ghost.py+8, 8, Math.PI, 0);
+
+    ctx.fillRect(ghost.px+2, ghost.py+8, 16, 8);
+
+    ctx.fillStyle = "white";
+
+    ctx.beginPath(); ctx.arc(ghost.px+6, ghost.py+7, 2.5, 0, 7); ctx.fill();
+
+    ctx.beginPath(); ctx.arc(ghost.px+14, ghost.py+7, 2.5, 0, 7); ctx.fill();
+
+}
+
+
+
+function gameLoop() {
+
+    update();
+
+    draw();
+
+    if(running) requestAnimationFrame(gameLoop);
+
+}
+
+
+
+async function trainAI() {
+
+    if(running && trainX.length > 50) {
+
+        const xs = tf.tensor2d(trainX);
+
+        const ys = tf.tensor2d(trainY);
+
+        await model.fit(xs, ys, {epochs: 1, verbose: 0});
+
+        tf.dispose([xs, ys]);
+
+    }
+
+    setTimeout(trainAI, 600);
+
+}
+
+
+
+document.getElementById("runBtn").onclick = () => {
+
+    document.getElementById("placeholderText").style.display = "none";
+
+    document.getElementById("game").style.display = "block";
+
+    document.getElementById("displayBox").classList.add("active");
+
+    document.getElementById("runBtn").style.display = "none";
+
+    document.getElementById("startBtn").style.display = "block";
+
+    document.getElementById("status-bar").innerText = "Status: AI Model Loaded. Ready to Track.";
+
+};
+
+
+
+document.getElementById("startBtn").onclick = () => {
+
+    if(!running) {
+
+        running = true;
+
+        gameLoop();
+
+        trainAI();
+
+        document.getElementById("status-bar").innerText = "Status: AI Prediction Active | Ghost Brain: Learning...";
+
+        document.getElementById("startBtn").innerText = "SYSTEM RUNNING";
+
+        document.getElementById("startBtn").style.opacity = "0.5";
+
+    }
+
+};
+
+</script>
+
+</body>
+
+</html>
