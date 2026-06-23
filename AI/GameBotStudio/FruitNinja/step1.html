@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Gesture Fruit Ninja</title>
+   
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --panel-bg: rgba(20, 20, 35, 0.75);
+            --neon-green: #39ff14;
+            --neon-blue: #00f0ff;
+            --neon-pink: #ff007f;
+            --neon-red: #ff3333;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background: radial-gradient(circle at center, #1a1a2e 0%, #0a0a12 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            padding: 20px;
+        }
+
+        /* Master Responsive Split Layout */
+        .app-container {
+            display: flex;
+            width: 100%;
+            max-width: 1600px; /* Adjusting container for bigger panels */
+            height: 85vh;
+            gap: 25px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        /* Left Camera Panel - BIGGER CAMERA BOX */
+        .camera-panel {
+            flex: 1.5;
+            max-width: 600px; /* CAMERA BOX IS NOW BIGGER */
+            align-items: center;
+            justify-content: space-between;
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+        }
+
+        .camera-panel h2 {
+            font-size: 1.4rem;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #webcam {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror camera feed */
+            opacity: 0.4;
+        }
+
+        #output_canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            left: 0;
+            top: 0;
+            z-index: 2;
+            transform: scaleX(-1); /* Mirror drawings to match video */
+        }
+
+        #loading-tracking {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--neon-blue);
+            font-weight: bold;
+            text-align: center;
+            z-index: 3;
+        }
+
+        .instructions {
+            margin-top: 15px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #aaa;
+            text-align: center;
+        }
+
+        /* Right Game Panel */
+        .game-panel {
+            flex: 2;
+            position: relative;
+            border-color: var(--neon-pink);
+            box-shadow: 0 0 15px rgba(255, 0, 127, 0.2);
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: url('https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=1000') center/cover no-repeat;
+        }
+
+        .game-container::before {
+            content: '';
+            position: absolute;
+            top:0; left:0; width:100%; height:100%;
+            background: rgba(10, 10, 20, 0.65); /* Dark cyberpunk overlay onto market pattern */
+            z-index: 0;
+        }
+
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Heads Up Display (HUD) */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .hud-item {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            letter-spacing: 1px;
+        }
+
+        /* Overlay Screen Management */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(5, 5, 10, 0.85);
+            backdrop-filter: blur(8px);
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        .game-title {
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: 5px;
+            margin-bottom: 5px;
+            text-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }
+
+        .subtitle {
+            color: var(--neon-blue);
+            letter-spacing: 4px;
+            margin-bottom: 30px;
+            font-size: 1rem;
+        }
+
+        .btn {
+            background: transparent;
+            color: #fff;
+            border: 2px solid var(--neon-green);
+            padding: 14px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.2);
+        }
+
+        .btn:hover {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: 0 0 25px var(--neon-green);
+            transform: scale(1.05);
+        }
+
+        .high-score-board {
+            margin-top: 40px;
+            width: 60%;
+            text-align: center;
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .high-score-board h3 {
+            margin-bottom: 10px;
+            font-size: 1rem;
+            color: var(--neon-blue);
+        }
+
+        .high-score-board ol {
+            list-style-position: inside;
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+
+        /* Neon Text Helpers */
+        .neon-text { color: var(--neon-pink); text-shadow: 0 0 10px var(--neon-pink); }
+        .neon-text-blue { color: var(--neon-blue); text-shadow: 0 0 10px var(--neon-blue); }
+        .neon-text-purple { color: #bf00ff; text-shadow: 0 0 10px #bf00ff; }
+        .neon-text-red { color: var(--neon-red); text-shadow: 0 0 10px var(--neon-red); }
+
+        #pauseBtn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid #fff;
+            color: white;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+
+        /* Screen Shake Effect */
+        .shake {
+            animation: shakeAnim 0.4s ease-in-out;
+        }
+        @keyframes shakeAnim {
+            0%, 100% { transform: translate(0, 0); }
+            20%, 60% { transform: translate(-8px, 6px); }
+            40%, 80% { transform: translate(8px, -6px); }
+        }
+
+        /* Responsive adjustments */
+        @media(max-width: 1100px) {
+            .app-container {
+                flex-direction: column;
+                height: auto;
+                overflow-y: scroll;
+            }
+            .camera-panel {
+                max-width: 100%;
+            }
+            .game-panel {
+                height: 500px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <div class="panel camera-panel">
+            <h2><span class="neon-text">AI HAND TRACKING</span></h2>
+            <div class="video-container">
+                <video id="webcam" autoplay playsinline></video>
+                <canvas id="output_canvas"></canvas>
+                <div id="loading-tracking">Initializing Hand Tracking...</div>
+            </div>
+            <div class="instructions">
+                <p>👋 Move your <strong>Index Finger</strong> to slice fruits!</p>
+                <p>🔴 Keep your full hand visible in the camera frame.</p>
+            </div>
+        </div>
+
+        <div class="panel game-panel">
+            <div class="game-container" id="gameContainer">
+                <canvas id="gameCanvas"></canvas>
+
+                <div id="hud">
+                    <div class="hud-item">Score: <span id="scoreVal" class="neon-text-blue">0</span></div>
+                    <div class="hud-item">Combo: <span id="comboVal" class="neon-text-purple">X1</span></div>
+                    <div class="hud-item">Misses: <span id="missVal" class="neon-text-red">0/5</span></div>
+                </div>
+
+                <div id="welcomeScreen" class="screen active">
+                    <h1 class="game-title">FRUIT <span class="neon-text">NINJA</span></h1>
+                    <p class="subtitle">AI GESTURE EDITION</p>
+                    <button id="startBtn" class="btn">START GAME</button>
+                    <div class="high-score-board">
+                        <h3>🏆 Top High Scores</h3>
+                        <ol id="leaderboardList"></ol>
+                    </div>
+                </div>
+
+                <div id="gameOverScreen" class="screen">
+                    <h1 class="neon-text-red">GAME OVER</h1>
+                    <p>You let 5 fruits drop!</p>
+                    <div class="final-score">Final Score: <span id="finalScoreVal">0</span></div>
+                    <button id="restartBtn" class="btn">PLAY AGAIN</button>
+                </div>
+
+                <button id="pauseBtn" class="control-btn" style="display:none;">⏸</button>
+            </div>
+        </div>
+    </div>
+
+    <audio id="sndSplat" src="https://actions.google.com/sounds/v1/cartoon/splat.ogg" preload="auto"></audio>
+    <audio id="sndExplode" src="https://actions.google.com/sounds/v1/science_fiction/ambient_space_explosion.ogg" preload="auto"></audio>
+    <audio id="sndSwoosh" src="https://actions.google.com/sounds/v1/cartoon/slide_whistle_up.ogg" preload="auto"></audio>
+
+    <script>
+        // --- DOM Elements ---
+        const videoElement = document.getElementById('webcam');
+        const cameraCanvas = document.getElementById('output_canvas');
+        const cameraCtx = cameraCanvas.getContext('2d');
+        const gameCanvas = document.getElementById('gameCanvas');
+        const gameCtx = gameCanvas.getContext('2d');
+        const gameContainer = document.getElementById('gameContainer');
+
+        const loadingTracking = document.getElementById('loading-tracking');
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const scoreVal = document.getElementById('scoreVal');
+        const comboVal = document.getElementById('comboVal');
+        const missVal = document.getElementById('missVal');
+        const finalScoreVal = document.getElementById('finalScoreVal');
+        const leaderboardList = document.getElementById('leaderboardList');
+
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // --- Audio Handles ---
+        const sndSplat = document.getElementById('sndSplat');
+        const sndExplode = document.getElementById('sndExplode');
+        const sndSwoosh = document.getElementById('sndSwoosh');
+
+        // --- Game Settings & State Variables ---
+        let score = 0;
+        let missedCount = 0;
+        let isPlaying = false;
+        let highScores = JSON.parse(localStorage.getItem('fn_highscores')) || [150, 90, 40, 10];
+
+        let fruits = [];
+        let particles = [];
+        let bladeTrail = [];
+        let lastSpawnTime = 0;
+        let spawnInterval = 1800; // Drops to spawn faster over time
+        let baseSpeedY = -12; // Physics configuration
+        let gravity = 0.25;
+
+        // Index Finger Tracked Position (Mapped to Game Screen Size)
+        let swordX = null;
+        let swordY = null;
+        let prevSwordX = null;
+        let prevSwordY = null;
+
+        // Fruit Definition Matrix [Color, Radius, Splat Color, Label]
+        const FRUIT_TYPES = [
+            { name: '🍉 Watermelon', color: '#2e7d32', radius: 45, splash: '#d32f2f' },
+            { name: '🍎 Apple', color: '#ff1744', radius: 30, splash: '#ffeb3b' },
+            { name: '🍊 Orange', color: '#ff9100', radius: 32, splash: '#ffe082' },
+            { name: '🍌 Banana', color: '#ffea00', radius: 28, splash: '#fffde7' },
+            { name: '🍍 Pineapple', color: '#afb42b', radius: 38, splash: '#fff59d' },
+            { name: '💣 BOMB', color: '#212121', radius: 30, isBomb: true }
+        ];
+
+        // --- Initialize Layout Dimensions ---
+        function resizeCanvases() {
+            cameraCanvas.width = videoElement.videoWidth || 640;
+            cameraCanvas.height = videoElement.videoHeight || 480;
+           
+            gameCanvas.width = gameContainer.clientWidth;
+            gameCanvas.height = gameContainer.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvases);
+
+        // --- MediaPipe Hand Tracking Setup ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults(onHandResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+        camera.start().then(() => {
+            loadingTracking.style.display = 'none';
+            resizeCanvases();
+        });
+
+        // --- MediaPipe Callback Handler ---
+        function onHandResults(results) {
+            cameraCtx.clearRect(0, 0, cameraCanvas.width, cameraCanvas.height);
+           
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+               
+                // 1. Draw modern skeleton "dots & bones" UI on camera feedback panel
+                drawHandSkeleton(landmarks);
+               
+                // 2. Track Index Finger Tip (Landmark #8)
+                const indexTip = landmarks[8];
+               
+                // Smoothly cache positions for velocity computations
+                prevSwordX = swordX;
+                prevSwordY = swordY;
+               
+                // Mirror coordinates (X axis flipped)
+                const targetX = (1 - indexTip.x) * gameCanvas.width;
+                const targetY = indexTip.y * gameCanvas.height;
+               
+                // Smooth out gesture jittering using Linear Interpolation (lerp)
+                if (swordX === null) {
+                    swordX = targetX;
+                    swordY = targetY;
+                } else {
+                    swordX += (targetX - swordX) * 0.45;
+                    swordY += (targetY - swordY) * 0.45;
+                }
+               
+                // Track modern blade trails
+                if(isPlaying) {
+                    bladeTrail.push({ x: swordX, y: swordY, age: 0 });
+                    if(bladeTrail.length > 12) bladeTrail.shift();
+                    checkSlices();
+                }
+            } else {
+                // Reset tracking points if hand drops from camera frame entirely
+                swordX = null; swordY = null;
+            }
+        }
+
+        // Draw elegant dot matrix mapping across user hand structures
+        function drawHandSkeleton(landmarks) {
+            cameraCtx.fillStyle = '#00f0ff';
+            cameraCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            cameraCtx.lineWidth = 3;
+
+            // Draw connecting structural bones
+            for (let i = 0; i < landmarks.length; i++) {
+                const pt = landmarks[i];
+                const cx = pt.x * cameraCanvas.width;
+                const cy = pt.y * cameraCanvas.height;
+               
+                // Structural lines configuration mapping out hand skeletons
+                if (i > 0 && i !== 5 && i !== 9 && i !== 13 && i !== 17) {
+                    const prev = landmarks[i - 1];
+                    cameraCtx.beginPath();
+                    cameraCtx.moveTo(prev.x * cameraCanvas.width, prev.y * cameraCanvas.height);
+                    cameraCtx.lineTo(cx, cy);
+                    cameraCtx.stroke();
+                }
+               
+                // Render precise tracking neon dots
+                cameraCtx.beginPath();
+                cameraCtx.arc(cx, cy, 5, 0, 2 * Math.PI);
+                cameraCtx.fill();
+            }
+        }
+
+        // --- Class Definitions: Fruit Components ---
+        class Fruit {
+            constructor() {
+                const type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+                this.name = type.name;
+                this.color = type.color;
+                this.radius = type.radius;
+                this.splash = type.splash;
+                this.isBomb = type.isBomb || false;
+
+                // Physics parameters (Spawning upwards up from the bottom)
+                this.x = Math.random() * (gameCanvas.width * 0.6) + (gameCanvas.width * 0.2);
+                this.y = gameCanvas.height + 50;
+                this.vx = (Math.random() - 0.5) * 5;
+                this.vy = baseSpeedY - (Math.random() * 4); // Random upward arcs
+                this.rotation = 0;
+                this.vRot = (Math.random() - 0.5) * 0.08; // Rotation speeds
+               
+                this.sliced = false;
+                this.half1 = null;
+                this.half2 = null;
+            }
+
+            update() {
+                if (!this.sliced) {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.vy += gravity; // Gravity pull
+                    this.rotation += this.vRot;
+                } else {
+                    // Update separate halves physics engines if sliced
+                    this.half1.x += this.half1.vx;
+                    this.half1.y += this.half1.vy;
+                    this.half1.vy += gravity;
+                    this.half1.rotation += this.half1.vRot;
+
+                    this.half2.x += this.half2.vx;
+                    this.half2.y += this.half2.vy;
+                    this.half2.vy += gravity;
+                    this.half2.rotation += this.half2.vRot;
+                }
+            }
+
+            draw() {
+                gameCtx.save();
+                if (!this.sliced) {
+                    // Render Whole Object
+                    gameCtx.translate(this.x, this.y);
+                    gameCtx.rotate(this.rotation);
+                   
+                    // Outer skin graphic representation
+                    gameCtx.beginPath();
+                    gameCtx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    gameCtx.fillStyle = this.color;
+                    gameCtx.fill();
+                    gameCtx.lineWidth = 3;
+                    gameCtx.strokeStyle = '#fff';
+                    gameCtx.stroke();
+
+                    // Label identification strings overlayed inside fruit
+                    gameCtx.fillStyle = '#fff';
+                    gameCtx.font = "24px Arial";
+                    gameCtx.textAlign = "center";
+                    gameCtx.textBaseline = "middle";
+                    gameCtx.fillText(this.name.split(' ')[0], 0, 0); // Draws emojis perfectly
+                } else {
+                    // Render Half #1 Split Section
+                    gameCtx.save();
+                    gameCtx.translate(this.half1.x, this.half1.y);
+                    gameCtx.rotate(this.half1.rotation);
+                    gameCtx.beginPath();
+                    gameCtx.arc(0, 0, this.radius, 0, Math.PI, true);
+                    gameCtx.fillStyle = this.color;
+                    gameCtx.fill();
+                    gameCtx.strokeStyle = '#fff';
+                    gameCtx.stroke();
+                    gameCtx.restore();
+
+                    // Render Half #2 Split Section
+                    gameCtx.save();
+                    gameCtx.translate(this.half2.x, this.half2.y);
+                    gameCtx.rotate(this.half2.rotation);
+                    gameCtx.beginPath();
+                    gameCtx.arc(0, 0, this.radius, 0, Math.PI, false);
+                    gameCtx.fillStyle = this.color;
+                    gameCtx.fill();
+                    gameCtx.strokeStyle = '#fff';
+                    gameCtx.stroke();
+                    gameCtx.restore();
+                }
+                gameCtx.restore();
+            }
+
+            slice() {
+                this.sliced = true;
+                // Explode physics setup breaking body objects cleanly outwards
+                this.half1 = { x: this.x - 10, y: this.y, vx: this.vx - 3, vy: this.vy - 2, rotation: this.rotation, vRot: -0.1 };
+                this.half2 = { x: this.x + 10, y: this.y, vx: this.vx + 3, vy: this.vy - 1, rotation: this.rotation, vRot: 0.1 };
+               
+                // Spawn juice particles system structures
+                if(!this.isBomb) {
+                    for(let i=0; i<15; i++) {
+                        particles.push(new JuiceParticle(this.x, this.y, this.splash));
+                    }
+                }
+            }
+        }
+
+        class JuiceParticle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.vx = (Math.random() - 0.5) * 10;
+                this.vy = (Math.random() - 0.5) * 10 - 2;
+                this.radius = Math.random() * 5 + 3;
+                this.alpha = 1;
+                this.life = 1.0;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += gravity * 0.5;
+                this.alpha -= 0.02;
+            }
+            draw() {
+                gameCtx.save();
+                gameCtx.globalAlpha = Math.max(0, this.alpha);
+                gameCtx.fillStyle = this.color;
+                gameCtx.beginPath();
+                gameCtx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+                gameCtx.fill();
+                gameCtx.restore();
+            }
+        }
+
+        // --- Blade Trail Processing ---
+        function drawBladeTrail() {
+            if (bladeTrail.length < 2) return;
+            gameCtx.save();
+            gameCtx.lineCap = 'round';
+            gameCtx.lineJoin = 'round';
+
+            for (let i = 1; i < bladeTrail.length; i++) {
+                const pt1 = bladeTrail[i - 1];
+                const pt2 = bladeTrail[i];
+                const progress = i / bladeTrail.length;
+               
+                gameCtx.beginPath();
+                gameCtx.moveTo(pt1.x, pt1.y);
+                gameCtx.lineTo(pt2.x, pt2.y);
+               
+                // Futuristic Glowing Neon Blade Trail Properties
+                gameCtx.strokeStyle = `rgba(0, 240, 255, ${progress})`;
+                gameCtx.lineWidth = progress * 14;
+                gameCtx.shadowColor = '#00f0ff';
+                gameCtx.shadowBlur = 15;
+                gameCtx.stroke();
+            }
+            gameCtx.restore();
+        }
+
+        // --- Intersection Line-to-Circle Collision Check ---
+        function checkSlices() {
+            if (prevSwordX === null || swordX === null) return;
+           
+            let sliceRegisteredThisFrame = false;
+
+            fruits.forEach(fruit => {
+                if (fruit.sliced) return;
+
+                // Line segment intersection metric calculations checking collisions onto target objects
+                const dist = distToSegment({x: fruit.x, y: fruit.y}, {x: prevSwordX, y: prevSwordY}, {x: swordX, y: swordY});
+               
+                if (dist < fruit.radius) {
+                    fruit.slice();
+                    sliceRegisteredThisFrame = true;
+
+                    if (fruit.isBomb) {
+                        triggerBombExplosion();
+                    } else {
+                        score += 10;
+                        scoreVal.textContent = score;
+                        playAudio(sndSplat);
+                    }
+                }
+            });
+           
+            if (sliceRegisteredThisFrame) {
+                playAudio(sndSwoosh);
+            }
+        }
+
+        function distToSegment(p, v, w) {
+            const l2 = Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
+            if (l2 === 0) return Math.sqrt(Math.pow(p.x - v.x, 2) + Math.pow(p.y - v.y, 2));
+            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.sqrt(Math.pow(p.x - (v.x + t * (w.x - v.x)), 2) + Math.pow(p.y - (v.y + t * (w.y - v.y)), 2));
+        }
+
+        // --- Bomb Impact Handling ---
+        function triggerBombExplosion() {
+            playAudio(sndExplode);
+            gameContainer.classList.add('shake');
+            setTimeout(() => gameContainer.classList.remove('shake'), 400);
+           
+            // Major impact score deduction penalties
+            score = Math.max(0, score - 30);
+            scoreVal.textContent = score;
+        }
+
+        // --- Audio Playback Wrapper Helper ---
+        function playAudio(audioNode) {
+            audioNode.currentTime = 0;
+            audioNode.play().catch(() => {/* Handle browsers muting autoplay */});
+        }
+
+        // --- Main Engine Loop ---
+        function gameLoop(timestamp) {
+            if (!isPlaying) return;
+
+            gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            // Progressive Spawning Engine
+            if (timestamp - lastSpawnTime > spawnInterval) {
+                // Spawn 1 to 3 fruits concurrently based on scale velocity
+                const spawnCount = Math.floor(Math.random() * (score > 100 ? 3 : 2)) + 1;
+                for(let i=0; i<spawnCount; i++){
+                    fruits.push(new Fruit());
+                }
+                lastSpawnTime = timestamp;
+
+                // Scaling Difficulty Accelerator Curve
+                if(spawnInterval > 700) spawnInterval -= 25;
+                if(baseSpeedY > -16) baseSpeedY -= 0.1;
+            }
+
+            // Process Object Updates & Cleanup Off-screens
+            for (let i = fruits.length - 1; i >= 0; i--) {
+                const f = fruits[i];
+                f.update();
+                f.draw();
+
+                // Check missed targets bounds dropping off screen bounds
+                if (!f.sliced && f.y > gameCanvas.height + 80 && f.vy > 0) {
+                    if (!f.isBomb) {
+                        missedCount++;
+                        missVal.textContent = `${missedCount}/5`;
+                        if (missedCount >= 5) {
+                            endGame();
+                        }
+                    }
+                    fruits.splice(i, 1);
+                } else if (f.sliced && f.y > gameCanvas.height + 200) {
+                    // Clean up old split components efficiently
+                    fruits.splice(i, 1);
+                }
+            }
+
+            // Particle Handling Updates
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+
+            // Render modern touch mechanics sword tracks
+            drawBladeTrail();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Game Life-cycle Controls ---
+        function startGame() {
+            score = 0;
+            missedCount = 0;
+            spawnInterval = 1800;
+            baseSpeedY = -12;
+            fruits = [];
+            particles = [];
+            bladeTrail = [];
+           
+            scoreVal.textContent = score;
+            missVal.textContent = "0/5";
+           
+            welcomeScreen.classList.remove('active');
+            gameOverScreen.classList.remove('active');
+           
+            isPlaying = true;
+            lastSpawnTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Game End Handling ---
+        function endGame() {
+            isPlaying = false;
+            finalScoreVal.textContent = score;
+           
+            // Set leaderboard save status configurations
+            highScores.push(score);
+            highScores.sort((a, b) => b - a);
+            highScores = highScores.slice(0, 5); // Keep top 5
+            localStorage.setItem('fn_highscores', JSON.stringify(highScores));
+           
+            renderLeaderboard();
+            gameOverScreen.classList.add('active');
+        }
+
+        function renderLeaderboard() {
+            leaderboardList.innerHTML = highScores
+                .map(pts => `<li><span class="neon-text-blue">${pts} pts</span></li>`)
+                .join('');
+        }
+
+        // --- Event Registrations ---
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', startGame);
+
+        // Inherent initial boot configuration setups
+        renderLeaderboard();
+    </script>
+</body>
+</html>
+
