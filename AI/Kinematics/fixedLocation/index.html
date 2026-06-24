@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Robotic Arm Vision System</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            text-align: center;
+            margin: 0;
+            min-height: 100vh;
+            color: #e8eef5;
+            background: radial-gradient(circle at 20% 20%, #1b2340 0%, #0a0d1a 55%, #050608 100%);
+            padding-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 22px;
+            letter-spacing: 2px;
+            font-weight: 600;
+            color: #7fdfff;
+            text-transform: uppercase;
+            padding: 22px 0 6px;
+            margin: 0;
+            text-shadow: 0 0 18px rgba(127, 223, 255, 0.45);
+        }
+
+        .status-bar {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #5dffb0;
+            background: rgba(13, 18, 32, 0.85);
+            border: 1px solid rgba(93, 255, 176, 0.35);
+            border-radius: 30px;
+            box-shadow: 0 0 25px rgba(93, 255, 176, 0.15);
+            backdrop-filter: blur(6px);
+        }
+
+        .container {
+            position: relative;
+            display: inline-block;
+            width: 1000px;
+            height: 700px;
+            margin-top: 22px;
+            border: 1px solid rgba(127, 223, 255, 0.25);
+            border-radius: 24px;
+            overflow: hidden;
+            background: #02030a;
+            box-shadow:
+                0 0 0 1px rgba(255,255,255,0.03) inset,
+                0 25px 60px rgba(0,0,0,0.6),
+                0 0 80px rgba(40, 90, 160, 0.18);
+        }
+
+        #webcam { display: none; }
+        #output_canvas { width: 1000px; height: 700px; display: block; }
+
+        /* Subtle scanline / grid overlay for the "robotic vision" feel */
+        .scan-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(127, 223, 255, 0.045) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(127, 223, 255, 0.045) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .corner {
+            position: absolute;
+            width: 34px;
+            height: 34px;
+            border: 3px solid rgba(127, 223, 255, 0.55);
+            z-index: 6;
+            pointer-events: none;
+        }
+        .corner-tl { top: 14px; left: 14px; border-right: none; border-bottom: none; }
+        .corner-tr { top: 14px; right: 14px; border-left: none; border-bottom: none; }
+        .corner-bl { bottom: 14px; left: 14px; border-right: none; border-top: none; }
+        .corner-br { bottom: 14px; right: 14px; border-left: none; border-top: none; }
+
+        .zone {
+            position: absolute;
+            border: 3px dashed rgba(255, 255, 255, 0.22);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            transition: 0.25s ease;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Bigger zones than before */
+        #zone-left  { left: 90px;  top: 280px; width: 340px; height: 340px; }
+        #zone-right { right: 90px; top: 280px; width: 340px; height: 340px; }
+
+        .active-zone {
+            border: 5px solid #00ff7b !important;
+            background: rgba(0, 255, 123, 0.16) !important;
+            box-shadow: 0 0 55px rgba(0, 255, 123, 0.55), inset 0 0 30px rgba(0, 255, 123, 0.2);
+        }
+
+        /* Person uses the same green highlight style as an object,
+           but it is a distinct color so you can tell person vs object at a glance */
+        .person-zone {
+            border: 5px solid #ff5d5d !important;
+            background: rgba(255, 93, 93, 0.16) !important;
+            box-shadow: 0 0 55px rgba(255, 93, 93, 0.55), inset 0 0 30px rgba(255, 93, 93, 0.2);
+        }
+
+        .ai-label {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #00ff7b;
+            background: rgba(5, 10, 8, 0.85);
+            padding: 8px 16px;
+            border-radius: 8px;
+            visibility: hidden;
+            border: 1px solid #00ff7b;
+            text-shadow: 0 0 12px rgba(0, 255, 123, 0.6);
+        }
+
+        .person-zone .ai-label {
+            color: #ff5d5d;
+            border-color: #ff5d5d;
+            text-shadow: 0 0 12px rgba(255, 93, 93, 0.6);
+        }
+
+        .controls { margin-top: 26px; }
+
+        button {
+            padding: 15px 38px;
+            font-size: 16px;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            border-radius: 50px;
+            border: none;
+            font-weight: 700;
+            margin: 6px;
+            transition: 0.25s;
+            text-transform: uppercase;
+        }
+
+        #connectBtn {
+            background: linear-gradient(135deg, #ffb347, #ff7e29);
+            color: #1a0d00;
+            box-shadow: 0 6px 18px rgba(255, 130, 40, 0.35);
+        }
+        #connectBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(255, 130, 40, 0.5); }
+
+        #startBtn {
+            background: linear-gradient(135deg, #34e89e, #0f9b6e);
+            color: #02160f;
+            box-shadow: 0 6px 18px rgba(15, 155, 110, 0.35);
+        }
+        #startBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(15, 155, 110, 0.5); }
+
+        button:disabled {
+            background: #2b2f3a;
+            color: #6b7280;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Robotic Arm Vision System</h1>
+    <div class="status-bar" id="status">1. CONNECT ARDUINO &nbsp;→&nbsp; 2. START CAMERA</div>
+
+    <div class="container">
+        <video id="webcam" playsinline></video>
+        <canvas id="output_canvas" width="1000" height="700"></canvas>
+
+        <div class="scan-overlay"></div>
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
+
+        <div id="zone-left" class="zone"><span class="ai-label" id="label-left"></span></div>
+        <div id="zone-right" class="zone"><span class="ai-label" id="label-right"></span></div>
+    </div>
+
+    <div class="controls">
+        <button id="connectBtn">Connect Arduino</button>
+        <button id="startBtn" disabled>Start Camera & Voice</button>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('output_canvas');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const connectBtn = document.getElementById('connectBtn');
+
+        const zoneLeftEl = document.getElementById('zone-left');
+        const zoneRightEl = document.getElementById('zone-right');
+
+        let net, port, writer;
+        let currentL = "", currentR = "";   // object currently in each zone (not counting person)
+        let personSideZone = "";            // "left", "right", or "" (person inside a small zone box)
+        let isAtHome = true;
+
+        // ---------------- Serial Connection ----------------
+        connectBtn.onclick = async () => {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+                writer = port.writable.getWriter();
+                status.innerText = "Arduino Connected!";
+                startBtn.disabled = false;
+            } catch (e) { status.innerText = "Error: please reconnect serial."; }
+        };
+
+        async function sendCommand(cmd) {
+            if (writer) {
+                const data = new TextEncoder().encode(cmd);
+                await writer.write(data);
+                isAtHome = (cmd === 'S');
+            }
+        }
+
+        // ---------------- Voice Recognition ----------------
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = true;
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+
+        recognition.onresult = (event) => {
+            const speech = event.results[event.results.length - 1][0].transcript.toLowerCase();
+            status.innerText = "I heard: " + speech;
+
+            // ---- "Point out person" mode ----
+            if ((speech.includes("point out") || speech.includes("point")) && speech.includes("person")) {
+                handlePointPerson();
+                return;
+            }
+
+            // ---- Normal pick/find logic for objects ----
+            const target = matchSpokenTarget(speech);
+            if (target !== "") {
+                if (currentL === target) {
+                    status.innerText = "Moving LEFT for " + target;
+                    sendCommand('L');
+                } else if (currentR === target) {
+                    status.innerText = "Moving RIGHT for " + target;
+                    sendCommand('R');
+                } else {
+                    status.innerText = target + " not visible in zones!";
+                }
+            }
+        };
+
+        function matchSpokenTarget(speech) {
+            const map = {
+                "cell phone": ["cell phone", "phone", "mobile"],
+                "spoon": ["spoon"],
+                "fork": ["fork"],
+                "wheel": ["wheel"]
+            };
+            for (const [label, keywords] of Object.entries(map)) {
+                if (keywords.some(k => speech.includes(k))) return label.toUpperCase();
+            }
+            return "";
+        }
+
+        function handlePointPerson() {
+            if (personSideZone === "left") {
+                status.innerText = "Pointing towards person (left)";
+                sendCommand('L');
+            } else if (personSideZone === "right") {
+                status.innerText = "Pointing towards person (right)";
+                sendCommand('R');
+            } else {
+                status.innerText = "No person detected in zones!";
+            }
+        }
+
+        // ---------------- AI Model ----------------
+        async function loadAI() {
+            net = await cocoSsd.load();
+            status.innerText = "AI model loaded!";
+        }
+        loadAI();
+
+        // Bigger zones, matching the new CSS box sizes/positions above.
+        const zones = {
+            left:  { x: 90,  y: 280, w: 340, h: 340 },
+            right: { x: 610, y: 280, w: 340, h: 340 }
+        };
+
+        // COCO-SSD does NOT have a "wheel" class. A round wheel gets
+        // detected as the closest round shape it knows: donut, frisbee,
+        // sports ball, clock, or mouse. We map ONLY those round/wheel-like
+        // classes to "WHEEL". Every other object keeps its true, real name
+        // (cell phone, spoon, fork, etc.) - no renaming for those.
+        const WHEEL_ALIASES = ["donut", "frisbee", "sports ball", "clock", "mouse"];
+
+        function standardLabel(cocoClass) {
+            if (WHEEL_ALIASES.includes(cocoClass)) return "WHEEL";
+            return cocoClass.toUpperCase();
+        }
+
+        async function detectObjects() {
+            if (!net || video.readyState !== 4) return;
+            const predictions = await net.detect(video, 10, 0.35);
+
+            let foundL = "";   // object label in left zone
+            let foundR = "";   // object label in right zone
+            let personL = false;
+            let personR = false;
+
+            predictions.forEach(p => {
+                const centerX = p.bbox[0] + p.bbox[2] / 2;
+                const centerY = p.bbox[1] + p.bbox[3] / 2;
+                const scaleX = 1000 / video.videoWidth;
+                const scaleY = 700 / video.videoHeight;
+
+                // Single mirror, matching the single mirrored draw in onFrame.
+                const finalX = (video.videoWidth - centerX) * scaleX;
+                const finalY = centerY * scaleY;
+
+                const inLeftZone  = finalX > zones.left.x  && finalX < (zones.left.x  + zones.left.w)  &&
+                                     finalY > zones.left.y  && finalY < (zones.left.y  + zones.left.h);
+                const inRightZone = finalX > zones.right.x && finalX < (zones.right.x + zones.right.w) &&
+                                     finalY > zones.right.y && finalY < (zones.right.y + zones.right.h);
+
+                if (p.class === "person") {
+                    // Person now ONLY counts if inside one of the small zone boxes.
+                    // Outside the boxes -> ignored completely (no full-screen detection).
+                    if (inLeftZone)  personL = true;
+                    if (inRightZone) personR = true;
+                    return;
+                }
+
+                const name = standardLabel(p.class);
+                if (inLeftZone)  foundL = name;
+                if (inRightZone) foundR = name;
+            });
+
+            currentL = foundL;
+            currentR = foundR;
+
+            updateZone('left',  foundL, personL);
+            updateZone('right', foundR, personR);
+
+            personSideZone = personL ? "left" : (personR ? "right" : "");
+
+            // Auto-home only when truly empty (no object AND no person in either zone)
+            const leftEmpty  = foundL === "" && !personL;
+            const rightEmpty = foundR === "" && !personR;
+            if (leftEmpty && rightEmpty && !isAtHome) {
+                sendCommand('S');
+                status.innerText = "Boxes empty: returning home";
+            }
+        }
+
+        function updateZone(side, objectLabel, hasPerson) {
+            const el  = document.getElementById(`label-${side}`);
+            const box = document.getElementById(`zone-${side}`);
+
+            box.classList.remove('active-zone', 'person-zone');
+
+            if (hasPerson) {
+                // Person detected inside this zone box -> highlight red, label PERSON
+                el.innerText = "PERSON";
+                el.style.visibility = "visible";
+                box.classList.add('person-zone');
+            } else if (objectLabel) {
+                // Object detected inside this zone box -> highlight green, real object name
+                el.innerText = objectLabel;
+                el.style.visibility = "visible";
+                box.classList.add('active-zone');
+            } else {
+                el.style.visibility = "hidden";
+            }
+        }
+
+        // ---------------- Camera ----------------
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                ctx.save();
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, -1000, 0, 1000, 700);
+                ctx.restore();
+                await detectObjects();
+            }, width: 1000, height: 700
+        });
+
+        startBtn.onclick = () => {
+            camera.start();
+            recognition.start();
+            status.innerText = "System active! Say an object name, or 'point out person'";
+        };
+    </script>
+</body>
+</html> 
