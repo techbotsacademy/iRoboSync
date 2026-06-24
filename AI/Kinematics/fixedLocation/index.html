@@ -30,6 +30,39 @@
             margin: 0;
             text-shadow: 0 0 18px rgba(127, 223, 255, 0.45);
         }
+        button {
+            padding: 15px 38px;
+            font-size: 16px;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            border-radius: 50px;
+            border: none;
+            font-weight: 700;
+            margin: 6px;
+            transition: 0.25s;
+            text-transform: uppercase;
+        }
+
+        #connectBtn {
+            background: linear-gradient(135deg, #ffb347, #ff7e29);
+            color: #1a0d00;
+            box-shadow: 0 6px 18px rgba(255, 130, 40, 0.35);
+        }
+        #connectBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(255, 130, 40, 0.5); }
+
+        #startBtn {
+            background: linear-gradient(135deg, #34e89e, #0f9b6e);
+            color: #02160f;
+            box-shadow: 0 6px 18px rgba(15, 155, 110, 0.35);
+        }
+        #startBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(15, 155, 110, 0.5); }
+
+        button:disabled {
+            background: #2b2f3a;
+            color: #6b7280;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
 
         .status-bar {
             display: inline-block;
@@ -49,7 +82,7 @@
             position: relative;
             display: inline-block;
             width: 1000px;
-            height: 700px;
+            height: 400px;
             margin-top: 22px;
             border: 1px solid rgba(127, 223, 255, 0.25);
             border-radius: 24px;
@@ -102,8 +135,8 @@
         }
 
         /* Bigger zones than before */
-        #zone-left  { left: 90px;  top: 280px; width: 340px; height: 340px; }
-        #zone-right { right: 90px; top: 280px; width: 340px; height: 340px; }
+        #zone-left  { left: 90px;  top: 50px; width: 340px; height: 340px; }
+        #zone-right { right: 90px; top: 50px; width: 340px; height: 340px; }
 
         .active-zone {
             border: 5px solid #00ff7b !important;
@@ -140,40 +173,6 @@
 
         .controls { margin-top: 26px; }
 
-        button {
-            padding: 15px 38px;
-            font-size: 16px;
-            letter-spacing: 0.5px;
-            cursor: pointer;
-            border-radius: 50px;
-            border: none;
-            font-weight: 700;
-            margin: 6px;
-            transition: 0.25s;
-            text-transform: uppercase;
-        }
-
-        #connectBtn {
-            background: linear-gradient(135deg, #ffb347, #ff7e29);
-            color: #1a0d00;
-            box-shadow: 0 6px 18px rgba(255, 130, 40, 0.35);
-        }
-        #connectBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(255, 130, 40, 0.5); }
-
-        #startBtn {
-            background: linear-gradient(135deg, #34e89e, #0f9b6e);
-            color: #02160f;
-            box-shadow: 0 6px 18px rgba(15, 155, 110, 0.35);
-        }
-        #startBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(15, 155, 110, 0.5); }
-
-        button:disabled {
-            background: #2b2f3a;
-            color: #6b7280;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
         .debug-bar {
             display: inline-block;
             margin-top: 10px;
@@ -193,6 +192,11 @@
 <body>
 
     <h1>Robotic Arm Vision System</h1>
+    <div class="controls">
+        <button id="connectBtn">Connect Arduino</button>
+        <button id="startBtn" disabled>Start Camera & Voice</button>
+    </div>
+
     <div class="status-bar" id="status">1. CONNECT ARDUINO &nbsp;→&nbsp; 2. START CAMERA</div>
     <div class="debug-bar" id="debugBar">
         Last signal sent: <span id="debugSignal">none</span> &nbsp;|&nbsp;
@@ -211,11 +215,6 @@
 
         <div id="zone-left" class="zone"><span class="ai-label" id="label-left"></span></div>
         <div id="zone-right" class="zone"><span class="ai-label" id="label-right"></span></div>
-    </div>
-
-    <div class="controls">
-        <button id="connectBtn">Connect Arduino</button>
-        <button id="startBtn" disabled>Start Camera & Voice</button>
     </div>
 
     <script>
