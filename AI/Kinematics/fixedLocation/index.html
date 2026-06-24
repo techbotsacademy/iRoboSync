@@ -173,12 +173,31 @@
             cursor: not-allowed;
             box-shadow: none;
         }
+
+        .debug-bar {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 22px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            color: #ffd27f;
+            background: rgba(13, 18, 32, 0.85);
+            border: 1px solid rgba(255, 210, 127, 0.35);
+            border-radius: 20px;
+            box-shadow: 0 0 18px rgba(255, 210, 127, 0.12);
+        }
+        .debug-bar span { color: #7fdfff; font-weight: 700; }
     </style>
 </head>
 <body>
 
     <h1>Robotic Arm Vision System</h1>
     <div class="status-bar" id="status">1. CONNECT ARDUINO &nbsp;→&nbsp; 2. START CAMERA</div>
+    <div class="debug-bar" id="debugBar">
+        Last signal sent: <span id="debugSignal">none</span> &nbsp;|&nbsp;
+        Person zone (stable): <span id="debugPersonZone">none</span>
+    </div>
 
     <div class="container">
         <video id="webcam" playsinline></video>
@@ -226,7 +245,31 @@
             } catch (e) { status.innerText = "Error: please reconnect serial."; }
         };
 
+        /*
+          COMMAND MEANINGS (must match Arduino code exactly):
+            'L' -> Sirf POINT karo LEFT (person ke liye - claw nahi khulta, sirf base ghoomta hai)
+            'R' -> Sirf POINT karo RIGHT (person ke liye - claw nahi khulta)
+            'P' -> FULL PICK sequence LEFT (object ke liye - base ghoome + shoulder/elbow jhuke + claw band/khule)
+            'Q' -> FULL PICK sequence RIGHT (object ke liye - same as 'P' but right side)
+            'S' -> STOP / wapas HOME position
+        */
+        const COMMAND_MEANINGS = {
+            'L': 'L (point LEFT - person)',
+            'R': 'R (point RIGHT - person)',
+            'P': 'P (pick sequence LEFT - object)',
+            'Q': 'Q (pick sequence RIGHT - object)',
+            'S': 'S (home/stop)'
+        };
+
         async function sendCommand(cmd) {
+            // Always update the debug box, even if Arduino isn't connected yet,
+            // so you can see exactly what the app WOULD send and when.
+            const debugSignalEl = document.getElementById('debugSignal');
+            if (debugSignalEl) {
+                const time = new Date().toLocaleTimeString();
+                debugSignalEl.innerText = (COMMAND_MEANINGS[cmd] || cmd) + " @ " + time;
+            }
+
             if (writer) {
                 const data = new TextEncoder().encode(cmd);
                 await writer.write(data);
@@ -244,21 +287,30 @@
             const speech = event.results[event.results.length - 1][0].transcript.toLowerCase();
             status.innerText = "I heard: " + speech;
 
-            // ---- "Point out person" mode ----
-            if ((speech.includes("point out") || speech.includes("point")) && speech.includes("person")) {
+            // ---- "Person" mode: point towards whichever box has the person ----
+            // Trigger words: "point", "point out", "find", "where" + "person"
+            const personTriggerWords = ["point", "find", "where", "show", "locate"];
+            const isPersonCommand = personTriggerWords.some(w => speech.includes(w)) && speech.includes("person");
+            if (isPersonCommand) {
                 handlePointPerson();
                 return;
             }
 
             // ---- Normal pick/find logic for objects ----
+            // "find wheel", "touch wheel", "find spoon" etc. - sab action words yahin handle hote hain.
+            // Object mile to FULL PICK sequence chalega (base ghoomega + shoulder/elbow jhukenge +
+            // claw khulega -> band hoga -> 2 sec wait -> uthega -> home wapas aayega)
+            const actionWords = ["find", "touch", "pick", "get", "grab"];
+            const isActionCommand = actionWords.some(w => speech.includes(w));
+
             const target = matchSpokenTarget(speech);
-            if (target !== "") {
+            if (isActionCommand && target !== "") {
                 if (currentL === target) {
-                    status.innerText = "Moving LEFT for " + target;
-                    sendCommand('L');
+                    status.innerText = "Picking up " + target + " (LEFT)";
+                    sendCommand('P');   // FULL pick sequence - left
                 } else if (currentR === target) {
-                    status.innerText = "Moving RIGHT for " + target;
-                    sendCommand('R');
+                    status.innerText = "Picking up " + target + " (RIGHT)";
+                    sendCommand('Q');   // FULL pick sequence - right
                 } else {
                     status.innerText = target + " not visible in zones!";
                 }
@@ -315,6 +367,22 @@
             return cocoClass.toUpperCase();
         }
 
+        // ---- Smoothing/debounce state ----
+        // AI confidence flickers frame-to-frame, so a real object/person can briefly
+        // drop below the 0.35 threshold for one frame and disappear/reappear.
+        // We require a few consecutive "missing" frames before clearing a zone,
+        // and we always show the latest "found" result immediately.
+        let missCountL = 0;
+        let missCountR = 0;
+        let personMissCountL = 0;
+        let personMissCountR = 0;
+        const MISS_TOLERANCE = 4; // ~4 frames of no-detection before we clear the zone
+
+        // These hold the SMOOTHED (debounced) person state - this is what voice
+        // commands actually read, NOT the raw per-frame personL/personR.
+        let stablePersonL = false;
+        let stablePersonR = false;
+
         async function detectObjects() {
             if (!net || video.readyState !== 4) return;
             const predictions = await net.detect(video, 10, 0.35);
@@ -325,44 +393,116 @@
             let personR = false;
 
             predictions.forEach(p => {
-                const centerX = p.bbox[0] + p.bbox[2] / 2;
-                const centerY = p.bbox[1] + p.bbox[3] / 2;
                 const scaleX = 1000 / video.videoWidth;
                 const scaleY = 700 / video.videoHeight;
 
-                // Single mirror, matching the single mirrored draw in onFrame.
-                const finalX = (video.videoWidth - centerX) * scaleX;
-                const finalY = centerY * scaleY;
+                const boxLeftRaw  = p.bbox[0];
+                const boxTopRaw   = p.bbox[1];
+                const boxW        = p.bbox[2];
+                const boxH        = p.bbox[3];
 
-                const inLeftZone  = finalX > zones.left.x  && finalX < (zones.left.x  + zones.left.w)  &&
-                                     finalY > zones.left.y  && finalY < (zones.left.y  + zones.left.h);
-                const inRightZone = finalX > zones.right.x && finalX < (zones.right.x + zones.right.w) &&
-                                     finalY > zones.right.y && finalY < (zones.right.y + zones.right.h);
+                // Mirror horizontally (matches the single mirrored draw in onFrame).
+                const mirroredRight = (video.videoWidth - boxLeftRaw) * scaleX;
+                const mirroredLeft  = (video.videoWidth - (boxLeftRaw + boxW)) * scaleX;
+                const boxTop    = boxTopRaw * scaleY;
+                const boxBottom = (boxTopRaw + boxH) * scaleY;
+
+                // Horizontal center - reliable for left-vs-right because the body's
+                // left/right position doesn't change with height the way center-Y does.
+                const centerX = (mirroredLeft + mirroredRight) / 2;
+
+                // For small objects, use full bbox center (X and Y).
+                const centerY = (boxTop + boxBottom) / 2;
+                const centerInLeftZone  = centerX > zones.left.x  && centerX < (zones.left.x  + zones.left.w)  &&
+                                           centerY > zones.left.y  && centerY < (zones.left.y  + zones.left.h);
+                const centerInRightZone = centerX > zones.right.x && centerX < (zones.right.x + zones.right.w) &&
+                                           centerY > zones.right.y && centerY < (zones.right.y + zones.right.h);
 
                 if (p.class === "person") {
-                    // Person now ONLY counts if inside one of the small zone boxes.
-                    // Outside the boxes -> ignored completely (no full-screen detection).
-                    if (inLeftZone)  personL = true;
-                    if (inRightZone) personR = true;
+                    // PERSON: use horizontal center-X to decide LEFT vs RIGHT (exclusive -
+                    // a person can only be in one side, never both), combined with a
+                    // vertical check using whether the body overlaps the zone's height band
+                    // (a tall standing person's true Y-center sits above the zone boxes,
+                    // so we check band-overlap instead of center-Y).
+                    const xInLeftZone  = centerX > zones.left.x  && centerX < (zones.left.x  + zones.left.w);
+                    const xInRightZone = centerX > zones.right.x && centerX < (zones.right.x + zones.right.w);
+                    const yOverlapsZoneBand = boxBottom > zones.left.y && boxTop < (zones.left.y + zones.left.h);
+
+                    if (xInLeftZone && yOverlapsZoneBand)  personL = true;
+                    if (xInRightZone && yOverlapsZoneBand) personR = true;
                     return;
                 }
 
                 const name = standardLabel(p.class);
-                if (inLeftZone)  foundL = name;
-                if (inRightZone) foundR = name;
+                if (centerInLeftZone)  foundL = name;
+                if (centerInRightZone) foundR = name;
             });
+
+            // ---- Smoothing for objects (fixes wheel flicker) ----
+            // If something is found this frame, show it immediately and reset miss-count.
+            // If nothing found this frame, only clear after MISS_TOLERANCE consecutive misses.
+            if (foundL !== "") {
+                missCountL = 0;
+            } else {
+                missCountL++;
+                if (missCountL < MISS_TOLERANCE) foundL = currentL; // keep showing last known label briefly
+                else foundL = "";
+            }
+
+            if (foundR !== "") {
+                missCountR = 0;
+            } else {
+                missCountR++;
+                if (missCountR < MISS_TOLERANCE) foundR = currentR;
+                else foundR = "";
+            }
 
             currentL = foundL;
             currentR = foundR;
 
-            updateZone('left',  foundL, personL);
-            updateZone('right', foundR, personR);
+            // ---- Smoothing for PERSON (fixes "find person works sometimes, not always") ----
+            // THIS is the critical fix: previously personSideZone was set directly from
+            // the raw per-frame personL/personR, so if the AI missed the person in the
+            // exact single frame when the voice command fired, the command silently did
+            // nothing. Now we debounce person detection the same way as objects, so a
+            // single missed frame doesn't wipe out the person's known position.
+            if (personL) {
+                personMissCountL = 0;
+                stablePersonL = true;
+            } else {
+                personMissCountL++;
+                if (personMissCountL >= MISS_TOLERANCE) stablePersonL = false;
+            }
 
-            personSideZone = personL ? "left" : (personR ? "right" : "");
+            if (personR) {
+                personMissCountR = 0;
+                stablePersonR = true;
+            } else {
+                personMissCountR++;
+                if (personMissCountR >= MISS_TOLERANCE) stablePersonR = false;
+            }
+
+            updateZone('left',  foundL, stablePersonL);
+            updateZone('right', foundR, stablePersonR);
+
+            // Person side is exclusive: if somehow both are true (rare edge case),
+            // treat as ambiguous and clear both to avoid sending a wrong command.
+            if (stablePersonL && stablePersonR) {
+                personSideZone = ""; // ambiguous - don't move arm on bad data
+            } else {
+                personSideZone = stablePersonL ? "left" : (stablePersonR ? "right" : "");
+            }
+
+            // Live debug display - shows exactly what the voice command will use
+            // if "find person" / "point out person" is said right now.
+            const debugPersonZoneEl = document.getElementById('debugPersonZone');
+            if (debugPersonZoneEl) {
+                debugPersonZoneEl.innerText = personSideZone === "" ? "none" : personSideZone.toUpperCase();
+            }
 
             // Auto-home only when truly empty (no object AND no person in either zone)
-            const leftEmpty  = foundL === "" && !personL;
-            const rightEmpty = foundR === "" && !personR;
+            const leftEmpty  = foundL === "" && !stablePersonL;
+            const rightEmpty = foundR === "" && !stablePersonR;
             if (leftEmpty && rightEmpty && !isAtHome) {
                 sendCommand('S');
                 status.innerText = "Boxes empty: returning home";
@@ -404,8 +544,8 @@
         startBtn.onclick = () => {
             camera.start();
             recognition.start();
-            status.innerText = "System active! Say an object name, or 'point out person'";
+            status.innerText = "System active! Say 'find/touch [object]' to pick, or 'point out person'";
         };
     </script>
 </body>
-</html> 
+</html>
