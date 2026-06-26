@@ -354,7 +354,7 @@
             voiceBtn.classList.remove('listening');
             voiceBtn.innerText = '🎤 Voice ON (5 min)';
             try { recognition.stop(); } catch (e) {}
-            status.innerText = "Voice command time khatam - button dabao to phir se ON karne ke liye";
+            status.innerText = "Click on Voice ON button to start listening";
         }
 
         voiceBtn.onclick = () => {
@@ -413,11 +413,11 @@
                 // frame by detectObjects), so if the object moved boxes, this still
                 // reads its CURRENT box, not a stale one.
                 if (currentL === target) {
-                    status.innerText = "Picking up " + target + " (LEFT)";
-                    sendCommand('P');   // FULL pick sequence - left
+                    status.innerText = "Poinint " + target + " (LEFT)";
+                    sendCommand('L');   // FULL pick sequence - left
                 } else if (currentR === target) {
-                    status.innerText = "Picking up " + target + " (RIGHT)";
-                    sendCommand('Q');   // FULL pick sequence - right
+                    status.innerText = "Pointing " + target + " (RIGHT)";
+                    sendCommand('R');   // FULL pick sequence - right
                 } else {
                     status.innerText = target + " not visible in zones!";
                 }
@@ -467,7 +467,7 @@
         // sports ball, clock, or mouse. We map ONLY those round/wheel-like
         // classes to "WHEEL". Every other object keeps its true, real name
         // (cell phone, spoon, fork, etc.) - no renaming for those.
-        const WHEEL_ALIASES = ["donut", "frisbee", "sports ball", "clock", "mouse"];
+        const WHEEL_ALIASES = ["doughnut", "frisbee", "sports ball", "clock", "mouse"];
 
         function standardLabel(cocoClass) {
             if (WHEEL_ALIASES.includes(cocoClass)) return "WHEEL";
