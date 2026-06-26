@@ -246,18 +246,14 @@
 
         /*
           COMMAND MEANINGS (must match Arduino code exactly):
-            'L' -> Sirf POINT karo LEFT (person ke liye - claw nahi khulta, sirf base ghoomta hai)
-            'R' -> Sirf POINT karo RIGHT (person ke liye - claw nahi khulta)
-            'P' -> FULL PICK sequence LEFT (object ke liye - base ghoome + shoulder/elbow jhuke + claw band/khule)
-            'Q' -> FULL PICK sequence RIGHT (object ke liye - same as 'P' but right side)
-            'S' -> STOP / wapas HOME position
+            'L' -> POINT LEFT (Send L to Arduino to turn left)
+            'R' -> POINT RIGHT (Send R to Arduino to turn right)
+            'C' -> CENTRE / Send C to Arduino to go to the HOME position
         */
         const COMMAND_MEANINGS = {
-            'L': 'L (point LEFT - person)',
-            'R': 'R (point RIGHT - person)',
-            'P': 'P (pick sequence LEFT - object)',
-            'Q': 'Q (pick sequence RIGHT - object)',
-            'S': 'S (home/stop)'
+            'L': 'L (point LEFT)',
+            'R': 'R (point RIGHT)',
+            'C': 'C (home/centre)'
         };
 
         async function sendCommand(cmd) {
@@ -272,7 +268,7 @@
             if (writer) {
                 const data = new TextEncoder().encode(cmd);
                 await writer.write(data);
-                isAtHome = (cmd === 'S');
+                isAtHome = (cmd === 'C');
             }
         }
 
@@ -295,21 +291,17 @@
                 return;
             }
 
-            // ---- Normal pick/find logic for objects ----
-            // "find wheel", "touch wheel", "find spoon" etc. - sab action words yahin handle hote hain.
-            // Object mile to FULL PICK sequence chalega (base ghoomega + shoulder/elbow jhukenge +
-            // claw khulega -> band hoga -> 2 sec wait -> uthega -> home wapas aayega)
-            const actionWords = ["find", "touch", "pick", "get", "grab"];
+            const actionWords = ["find", "point"];
             const isActionCommand = actionWords.some(w => speech.includes(w));
 
             const target = matchSpokenTarget(speech);
             if (isActionCommand && target !== "") {
                 if (currentL === target) {
-                    status.innerText = "Picking up " + target + " (LEFT)";
-                    sendCommand('P');   // FULL pick sequence - left
+                    status.innerText = "Pointing at " + target + " (LEFT)";
+                    sendCommand('L');   // point sequence - left
                 } else if (currentR === target) {
-                    status.innerText = "Picking up " + target + " (RIGHT)";
-                    sendCommand('Q');   // FULL pick sequence - right
+                    status.innerText = "Pointing at" + target + " (RIGHT)";
+                    sendCommand('R');   // point sequence - right
                 } else {
                     status.innerText = target + " not visible in zones!";
                 }
@@ -503,7 +495,7 @@
             const leftEmpty  = foundL === "" && !stablePersonL;
             const rightEmpty = foundR === "" && !stablePersonR;
             if (leftEmpty && rightEmpty && !isAtHome) {
-                sendCommand('S');
+                sendCommand('C');
                 status.innerText = "Boxes empty: returning home";
             }
         }
@@ -543,7 +535,7 @@
         startBtn.onclick = () => {
             camera.start();
             recognition.start();
-            status.innerText = "System active! Say 'find/touch [object]' to pick, or 'point out person'";
+            status.innerText = "System active! Say 'find/point [object]' to 'point at it'";
         };
     </script>
 </body>
