@@ -272,18 +272,14 @@
 
         /*
           COMMAND MEANINGS (must match Arduino code exactly):
-            'L' -> Sirf POINT karo LEFT (person ke liye - claw nahi khulta, sirf base ghoomta hai)
-            'R' -> Sirf POINT karo RIGHT (person ke liye - claw nahi khulta)
-            'P' -> FULL PICK sequence LEFT (object ke liye - base ghoome + shoulder/elbow jhuke + claw band/khule)
-            'Q' -> FULL PICK sequence RIGHT (object ke liye - same as 'P' but right side)
-            'S' -> STOP / wapas HOME position
+            'L' -> POINT LEFT (person ke liye - claw nahi khulta, sirf base ghoomta hai)
+            'R' -> POINT RIGHT (person ke liye - claw nahi khulta)
+            'C' -> STOP / wapas HOME position
         */
         const COMMAND_MEANINGS = {
             'L': 'L (point LEFT - person)',
             'R': 'R (point RIGHT - person)',
-            'P': 'P (pick sequence LEFT - object)',
-            'Q': 'Q (pick sequence RIGHT - object)',
-            'S': 'S (home/stop)'
+            'C': 'C (home/stop)'
         };
 
         async function sendCommand(cmd) {
@@ -298,7 +294,7 @@
             if (writer) {
                 const data = new TextEncoder().encode(cmd);
                 await writer.write(data);
-                isAtHome = (cmd === 'S');
+                isAtHome = (cmd === 'C');
             }
         }
 
@@ -611,7 +607,7 @@
             const leftEmpty  = foundL === "" && !stablePersonL;
             const rightEmpty = foundR === "" && !stablePersonR;
             if (leftEmpty && rightEmpty && !isAtHome) {
-                sendCommand('S');
+                sendCommand('C');
                 status.innerText = "Boxes empty: returning home";
             }
         }
