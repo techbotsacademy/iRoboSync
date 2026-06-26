@@ -463,7 +463,7 @@
         // sports ball, clock, or mouse. We map ONLY those round/wheel-like
         // classes to "WHEEL". Every other object keeps its true, real name
         // (cell phone, spoon, fork, etc.) - no renaming for those.
-        const WHEEL_ALIASES = ["doughnut", "frisbee", "sports ball", "clock", "mouse"];
+        const WHEEL_ALIASES = ["cup","doughnut", "frisbee", "sports ball", "clock", "mouse"];
 
         function standardLabel(cocoClass) {
             if (WHEEL_ALIASES.includes(cocoClass)) return "WHEEL";
