@@ -21,8 +21,8 @@ void handleMove() {
     int y = server.arg("y").toInt();
 
     // Game canvas is 380 pixels high
-    targetAngle = map(y, 0, 380, 10, 115);
-    targetAngle = constrain(targetAngle, 10, 115);
+    targetAngle = map(y, 0, 380, 10, 125);
+    targetAngle = constrain(targetAngle, 10, 125);
 
     Serial.print("Target Y: ");
     Serial.print(y);

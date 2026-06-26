@@ -17,8 +17,8 @@ const int SHOULDER_HOME  = 90;
 const int ELBOW_HOME     = 90;
 const int CLAW_HOME      = 90;
 
-const int BASE_POINT_LEFT   = 45;  // Left point
-const int BASE_POINT_RIGHT  = -45;  // Right point
+const int BASE_POINT_LEFT   = 135;  // Left point
+const int BASE_POINT_RIGHT  = 45;  // Right point
 
 void setup() {
   Serial.begin(9600);
