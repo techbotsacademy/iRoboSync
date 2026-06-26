@@ -2,81 +2,78 @@
 #include <ESP32Servo.h>
 #include <WebServer.h>
 
-// WiFi Details
-const char* ssid = "GoSpaze_WFD";
-const char* password = "9845454344";
+const char* ssid = "user_name";
+const char* password = "password";
 
 WebServer server(80);
 
-// Servo Objects
-Servo baseServo;
-Servo shoulderServo;
 Servo elbowServo;
-Servo clawServo;
 
-// Pins
-const int basePin = 13;
-const int shoulderPin = 12;
 const int elbowPin = 14;
-const int clawPin = 27;
+
+int currentAngle = 90;
+int targetAngle = 90;
 
 void handleMove() {
+
   if (server.hasArg("y")) {
-    String yValue = server.arg("y");
-    int y = yValue.toInt();
 
-    // Map the Y coordinate (0 to 400 from Canvas) to Servo degrees (0 to 180)
-    // 400 is the height of your canvas
-    int angle = map(y, 0, 400, 0, 180); 
-    
-    // Constraints to prevent damage
-    angle = constrain(angle, 10, 170);
+    int y = server.arg("y").toInt();
 
-    // Sirf Base servo move kar rahe hain kyunki wahi ball ko follow karega
-    baseServo.write(angle);
-    
-    // Baki servos ko ek fixed position pe rakhte hain (Table Tennis posture)
-    shoulderServo.write(90); 
-    elbowServo.write(90);
-    clawServo.write(100); // Claw closed to hold paddle
+    // Game canvas is 380 pixels high
+    targetAngle = map(y, 0, 380, 10, 115);
+    targetAngle = constrain(targetAngle, 10, 115);
+
+    Serial.print("Target Y: ");
+    Serial.print(y);
+    Serial.print("  Servo Target: ");
+    Serial.println(targetAngle);
 
     server.send(200, "text/plain", "OK");
-  } else {
-    server.send(400, "text/plain", "Missing Y");
+  }
+  else {
+    server.send(400, "text/plain", "No y");
   }
 }
 
 void setup() {
+
   Serial.begin(115200);
 
-  // Attach Servos
-  baseServo.attach(basePin);
-  shoulderServo.attach(shoulderPin);
   elbowServo.attach(elbowPin);
-  clawServo.attach(clawPin);
+  elbowServo.write(currentAngle);
 
-  // Connect to WiFi
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
+
+  Serial.print("Connecting");
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
 
-  Serial.println("\nWiFi Connected!");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP()); // Is IP ko copy karke browser prompt mein dalein
+  Serial.println();
+  Serial.println("Connected");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
 
-  // API Route
-  server.on("/move", HTTP_GET, handleMove);
-  
-  // Enable CORS (taki browser request block na kare)
   server.enableCORS();
-  
+  server.on("/move", HTTP_GET, handleMove);
   server.begin();
 }
 
 void loop() {
-  server.handleClient();
-}
 
+  server.handleClient();
+
+  // Smooth movement
+  if (currentAngle < targetAngle) {
+    currentAngle++;
+    elbowServo.write(currentAngle);
+  }
+  else if (currentAngle > targetAngle) {
+    currentAngle--;
+    elbowServo.write(currentAngle);
+  }
+}

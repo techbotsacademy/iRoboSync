@@ -30,39 +30,6 @@
             margin: 0;
             text-shadow: 0 0 18px rgba(127, 223, 255, 0.45);
         }
-        button {
-            padding: 15px 38px;
-            font-size: 16px;
-            letter-spacing: 0.5px;
-            cursor: pointer;
-            border-radius: 50px;
-            border: none;
-            font-weight: 700;
-            margin: 6px;
-            transition: 0.25s;
-            text-transform: uppercase;
-        }
-
-        #connectBtn {
-            background: linear-gradient(135deg, #ffb347, #ff7e29);
-            color: #1a0d00;
-            box-shadow: 0 6px 18px rgba(255, 130, 40, 0.35);
-        }
-        #connectBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(255, 130, 40, 0.5); }
-
-        #startBtn {
-            background: linear-gradient(135deg, #34e89e, #0f9b6e);
-            color: #02160f;
-            box-shadow: 0 6px 18px rgba(15, 155, 110, 0.35);
-        }
-        #startBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(15, 155, 110, 0.5); }
-
-        button:disabled {
-            background: #2b2f3a;
-            color: #6b7280;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
 
         .status-bar {
             display: inline-block;
@@ -81,9 +48,9 @@
         .container {
             position: relative;
             display: inline-block;
-            width: 1000px;
-            height: 400px;
-            margin-top: 22px;
+            width: 900px;
+            height: 500px;
+            margin-top: 15px;
             border: 1px solid rgba(127, 223, 255, 0.25);
             border-radius: 24px;
             overflow: hidden;
@@ -171,7 +138,57 @@
             text-shadow: 0 0 12px rgba(255, 93, 93, 0.6);
         }
 
-        .controls { margin-top: 26px; }
+        .controls { margin-top: 15px; }
+
+        button {
+            padding: 15px 38px;
+            font-size: 16px;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            border-radius: 50px;
+            border: none;
+            font-weight: 700;
+            margin: 6px;
+            transition: 0.25s;
+            text-transform: uppercase;
+        }
+
+        #connectBtn {
+            background: linear-gradient(135deg, #ffb347, #ff7e29);
+            color: #1a0d00;
+            box-shadow: 0 6px 18px rgba(255, 130, 40, 0.35);
+        }
+        #connectBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(255, 130, 40, 0.5); }
+
+        #startBtn {
+            background: linear-gradient(135deg, #34e89e, #0f9b6e);
+            color: #02160f;
+            box-shadow: 0 6px 18px rgba(15, 155, 110, 0.35);
+        }
+        #startBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(15, 155, 110, 0.5); }
+
+        button:disabled {
+            background: #2b2f3a;
+            color: #6b7280;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        #voiceBtn {
+            background: linear-gradient(135deg, #b06aff, #7a2cff);
+            color: #f5eaff;
+            box-shadow: 0 6px 18px rgba(122, 44, 255, 0.35);
+        }
+        #voiceBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(122, 44, 255, 0.5); }
+        #voiceBtn.listening {
+            background: linear-gradient(135deg, #ff5d9e, #ff2d6b);
+            animation: pulseMic 1.2s infinite;
+        }
+        @keyframes pulseMic {
+            0%   { box-shadow: 0 0 0px rgba(255, 45, 107, 0.6); }
+            50%  { box-shadow: 0 0 22px rgba(255, 45, 107, 0.9); }
+            100% { box-shadow: 0 0 0px rgba(255, 45, 107, 0.6); }
+        }
 
         .debug-bar {
             display: inline-block;
@@ -192,15 +209,15 @@
 <body>
 
     <h1>Robotic Arm Vision System</h1>
-    <div class="controls">
-        <button id="connectBtn">Connect Arduino</button>
-        <button id="startBtn" disabled>Start Camera & Voice</button>
-    </div>
-
-    <div class="status-bar" id="status">1. CONNECT ARDUINO &nbsp;→&nbsp; 2. START CAMERA</div>
+    <div class="status-bar" id="status">1. CONNECT ARDUINO &nbsp;→&nbsp; 2. START CAMERA &nbsp;→&nbsp; 3. PRESS VOICE BUTTON</div>
     <div class="debug-bar" id="debugBar">
         Last signal sent: <span id="debugSignal">none</span> &nbsp;|&nbsp;
         Person zone (stable): <span id="debugPersonZone">none</span>
+    </div>
+    <div class="controls">
+        <button id="connectBtn">Connect Arduino</button>
+        <button id="startBtn" disabled>Start Camera</button>
+        <button id="voiceBtn" disabled>🎤 Voice ON (5 min)</button>
     </div>
 
     <div class="container">
@@ -215,6 +232,15 @@
 
         <div id="zone-left" class="zone"><span class="ai-label" id="label-left"></span></div>
         <div id="zone-right" class="zone"><span class="ai-label" id="label-right"></span></div>
+    </div>
+
+    <!-- <div class="controls">
+        <button id="connectBtn">Connect Arduino</button>
+        <button id="startBtn" disabled>Start Camera</button>
+        <button id="voiceBtn" disabled>🎤 Voice ON (5 min)</button>
+    </div> -->
+    <div class="debug-bar" id="voiceTimerBar" style="display:none;">
+        Voice listening: <span id="voiceCountdown">5:00</span> remaining
     </div>
 
     <script>
@@ -246,14 +272,18 @@
 
         /*
           COMMAND MEANINGS (must match Arduino code exactly):
-            'L' -> POINT LEFT (Send L to Arduino to turn left)
-            'R' -> POINT RIGHT (Send R to Arduino to turn right)
-            'C' -> CENTRE / Send C to Arduino to go to the HOME position
+            'L' -> Sirf POINT karo LEFT (person ke liye - claw nahi khulta, sirf base ghoomta hai)
+            'R' -> Sirf POINT karo RIGHT (person ke liye - claw nahi khulta)
+            'P' -> FULL PICK sequence LEFT (object ke liye - base ghoome + shoulder/elbow jhuke + claw band/khule)
+            'Q' -> FULL PICK sequence RIGHT (object ke liye - same as 'P' but right side)
+            'S' -> STOP / wapas HOME position
         */
         const COMMAND_MEANINGS = {
-            'L': 'L (point LEFT)',
-            'R': 'R (point RIGHT)',
-            'C': 'C (home/centre)'
+            'L': 'L (point LEFT - person)',
+            'R': 'R (point RIGHT - person)',
+            'P': 'P (pick sequence LEFT - object)',
+            'Q': 'Q (pick sequence RIGHT - object)',
+            'S': 'S (home/stop)'
         };
 
         async function sendCommand(cmd) {
@@ -268,15 +298,93 @@
             if (writer) {
                 const data = new TextEncoder().encode(cmd);
                 await writer.write(data);
-                isAtHome = (cmd === 'C');
+                isAtHome = (cmd === 'S');
             }
         }
 
         // ---------------- Voice Recognition ----------------
+        // FIX: Chrome's SpeechRecognition silently stops itself even when
+        // continuous = true (network hiccup, ~60s internal timeout, or after
+        // certain results). The OLD code had no onend/onerror handler, so once
+        // it stopped, it stayed dead until a full page refresh - matching
+        // exactly what was reported ("ek bar command leta hai, fir kuch nahi").
+        // FIX: we now listen for onend/onerror and auto-restart the engine
+        // immediately as long as voiceModeActive is true, so it keeps listening
+        // no matter how many times Chrome decides to stop it internally.
         const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         recognition.continuous = true;
         recognition.lang = 'en-US';
         recognition.interimResults = false;
+
+        let voiceModeActive = false;   // true while the 5-min voice window is open
+        let voiceTimerEnd = 0;         // timestamp (ms) when the window should close
+        let voiceCountdownInterval = null;
+        const VOICE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+        const voiceBtn = document.getElementById('voiceBtn');
+        const voiceTimerBar = document.getElementById('voiceTimerBar');
+        const voiceCountdownEl = document.getElementById('voiceCountdown');
+
+        function startVoiceWindow() {
+            voiceModeActive = true;
+            voiceTimerEnd = Date.now() + VOICE_WINDOW_MS;
+            voiceBtn.classList.add('listening');
+            voiceBtn.innerText = '🎤 Listening...';
+            voiceTimerBar.style.display = 'inline-block';
+
+            try { recognition.start(); } catch (e) { /* already started - fine, ignore */ }
+
+            if (voiceCountdownInterval) clearInterval(voiceCountdownInterval);
+            voiceCountdownInterval = setInterval(() => {
+                const remainingMs = voiceTimerEnd - Date.now();
+                if (remainingMs <= 0) {
+                    stopVoiceWindow();
+                    return;
+                }
+                const mins = Math.floor(remainingMs / 60000);
+                const secs = Math.floor((remainingMs % 60000) / 1000);
+                voiceCountdownEl.innerText = mins + ":" + String(secs).padStart(2, '0');
+            }, 250);
+        }
+
+        function stopVoiceWindow() {
+            voiceModeActive = false;
+            if (voiceCountdownInterval) clearInterval(voiceCountdownInterval);
+            voiceTimerBar.style.display = 'none';
+            voiceBtn.classList.remove('listening');
+            voiceBtn.innerText = '🎤 Voice ON (5 min)';
+            try { recognition.stop(); } catch (e) {}
+            status.innerText = "Voice command time khatam - button dabao to phir se ON karne ke liye";
+        }
+
+        voiceBtn.onclick = () => {
+            if (voiceModeActive) {
+                stopVoiceWindow();   // manual toggle off
+            } else {
+                startVoiceWindow();
+            }
+        };
+
+        // THE KEY FIX: whenever the engine stops for ANY reason (error or
+        // natural end), restart it immediately if we're still inside the
+        // 5-minute window. This is what makes "100 baar bolo, sun-ti rahegi"
+        // actually true, instead of dying after the first command.
+        recognition.onend = () => {
+            if (voiceModeActive && Date.now() < voiceTimerEnd) {
+                try { recognition.start(); } catch (e) { /* tiny race, ignore */ }
+            } else if (voiceModeActive) {
+                stopVoiceWindow(); // window time naturally finished
+            }
+        };
+
+        recognition.onerror = (event) => {
+            // "no-speech" and "aborted" happen constantly during normal pauses
+            // between sentences - these are NOT real failures, just silence.
+            // onend will fire right after this anyway and trigger the restart.
+            if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                status.innerText = "Voice glitch (" + event.error + ") - auto-restarting...";
+            }
+        };
 
         recognition.onresult = (event) => {
             const speech = event.results[event.results.length - 1][0].transcript.toLowerCase();
@@ -291,17 +399,25 @@
                 return;
             }
 
-            const actionWords = ["find", "point"];
+            // ---- Normal pick/find logic for objects ----
+            // "find wheel", "touch wheel", "find spoon" etc. - sab action words yahin handle hote hain.
+            // Object mile to FULL PICK sequence chalega (base ghoomega + shoulder/elbow jhukenge +
+            // claw khulega -> band hoga -> 2 sec wait -> uthega -> home wapas aayega)
+            const actionWords = ["find", "touch", "pick", "get", "grab"];
             const isActionCommand = actionWords.some(w => speech.includes(w));
 
             const target = matchSpokenTarget(speech);
             if (isActionCommand && target !== "") {
+                // FIX: re-check currentL/currentR fresh at the moment of speaking -
+                // these always hold the LATEST detected zone contents (updated every
+                // frame by detectObjects), so if the object moved boxes, this still
+                // reads its CURRENT box, not a stale one.
                 if (currentL === target) {
-                    status.innerText = "Pointing at " + target + " (LEFT)";
-                    sendCommand('L');   // point sequence - left
+                    status.innerText = "Picking up " + target + " (LEFT)";
+                    sendCommand('P');   // FULL pick sequence - left
                 } else if (currentR === target) {
-                    status.innerText = "Pointing at" + target + " (RIGHT)";
-                    sendCommand('R');   // point sequence - right
+                    status.innerText = "Picking up " + target + " (RIGHT)";
+                    sendCommand('Q');   // FULL pick sequence - right
                 } else {
                     status.innerText = target + " not visible in zones!";
                 }
@@ -495,7 +611,7 @@
             const leftEmpty  = foundL === "" && !stablePersonL;
             const rightEmpty = foundR === "" && !stablePersonR;
             if (leftEmpty && rightEmpty && !isAtHome) {
-                sendCommand('C');
+                sendCommand('S');
                 status.innerText = "Boxes empty: returning home";
             }
         }
@@ -534,8 +650,8 @@
 
         startBtn.onclick = () => {
             camera.start();
-            recognition.start();
-            status.innerText = "System active! Say 'find/point [object]' to 'point at it'";
+            voiceBtn.disabled = false;
+            status.innerText = "Camera active! Press the Voice button to start listening for 5 minutes.";
         };
     </script>
 </body>

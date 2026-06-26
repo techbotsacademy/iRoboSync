@@ -23,7 +23,7 @@ const int BASE_POINT_RIGHT  = -45;  // Right point
 void setup() {
   Serial.begin(9600);
   baseServo.attach(9);
-  goHome();
+  baseServo.write(BASE_HOME);
 }
 
 void loop() {
@@ -33,11 +33,11 @@ void loop() {
     switch (cmd) {
       // Both Person and Objects now use the same pointing logic
       case 'L':
-        baseServo.write(baseAngle);
+        baseServo.write(BASE_POINT_LEFT);
         break;
 
       case 'R':
-        baseServo.write(baseAngle);
+        baseServo.write(BASE_POINT_RIGHT);
         break;
 
       case 'C':
