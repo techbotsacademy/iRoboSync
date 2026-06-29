@@ -20,35 +20,36 @@ void loop() {
 
   // Receive Y value from HTML over Web Serial
   if (Serial.available()) {
-
-    int y = Serial.parseInt();
+    String input = Serial.readStringUntil('\n'); // Read full line
+    int y = input.toInt(); // Convert to number    
 
     if (y >= 0 && y <= 380) {
 
-      targetAngle = map(y, 0, 380, 10, 125);
-      targetAngle = constrain(targetAngle, 10, 125);
-
-      Serial.print("Y: ");
-      Serial.print(y);
-      Serial.print("  Servo: ");
-      Serial.println(targetAngle);
+      targetAngle = map(y, 0, 380, 10, 150);
+      targetAngle = 150 - targetAngle;
     }
+    Serial.print("Target Y: ");
+    Serial.print(y);
+    Serial.print("  Servo Target: ");
+    Serial.println(targetAngle);
 
-    // Clear remaining characters (newline, etc.)
-    while (Serial.available()) {
-      Serial.read();
-    }
+     if (targetAngle > currentAngle) {
+        // Move forward
+        for (int angle = currentAngle; angle <= targetAngle; angle += 1) {
+          elbowServo.write(angle);
+          delay(5);
+        }
+      } else {
+        // Move backward
+        for (int angle = currentAngle; angle >= targetAngle; angle -= 1) {
+          elbowServo.write(angle);
+          delay(5);
+        }
+      }
+
+      // Ensure the servo reaches the exact target
+      elbowServo.write(targetAngle);
+      currentAngle = targetAngle;
   }
 
-  // Smooth servo movement
-  if (currentAngle < targetAngle) {
-    currentAngle++;
-    elbowServo.write(currentAngle);
-    delay(10);
-  }
-  else if (currentAngle > targetAngle) {
-    currentAngle--;
-    elbowServo.write(currentAngle);
-    delay(10);
-  }
 }

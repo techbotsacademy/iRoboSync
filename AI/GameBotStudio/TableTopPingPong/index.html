@@ -227,7 +227,7 @@ button:hover { transform: scale(1.04); }
   <div class="panel score-panel">
     <div style="font-size:0.65rem;letter-spacing:2px;margin-bottom:4px;">BEST OF 3</div>
     <div id="round-info">Round: 1 / 3</div>
-    <div id="score-board">Human: 0 &nbsp;|&nbsp; AI: 0</div>
+    <div id="score-board">You: 0 &nbsp;|&nbsp; AI: 0</div>
   </div>
 </div>
 
@@ -472,7 +472,7 @@ function update() {
   ai.y = Math.max(0, Math.min(canvas.height - ai.h, ai.y));
 
   if (ball.x < 0) scorePoint("AI");
-  else if (ball.x > canvas.width) scorePoint("HUMAN");
+  else if (ball.x > canvas.width) scorePoint("You");
 }
 
 function drawTable() {
@@ -639,8 +639,8 @@ function scorePoint(winner) {
 
   if (humanRounds === 2 || aiRounds === 2) {
     matchOver = true;
-    if (winner === "HUMAN") {
-      statusText.innerText = "🏆 HUMAN WINS THE MATCH!";
+    if (winner === "YOU") {
+      statusText.innerText = "🏆 YOU WIN THE MATCH!";
       statusText.style.color = "#00ffcc";
     } else {
       statusText.innerText = "🤖 AI ARM WINS THE MATCH!";
@@ -653,7 +653,7 @@ function scorePoint(winner) {
       statusText.innerText = "POINT → AI  |  Next round...";
       statusText.style.color = "#ff0066";
     } else {
-      statusText.innerText = "POINT → HUMAN  |  Next round...";
+      statusText.innerText = "POINT → YOU  |  Next round...";
       statusText.style.color = "#00ffcc";
     }
     currentRound++;
@@ -664,7 +664,7 @@ function scorePoint(winner) {
     }, 1500);
   }
 
-  document.getElementById("score-board").innerHTML = `HUMAN: ${humanRounds} &nbsp;|&nbsp; AI: ${aiRounds}`;
+  document.getElementById("score-board").innerHTML = `YOU: ${humanRounds} &nbsp;|&nbsp; AI: ${aiRounds}`;
   document.getElementById("round-info").innerText = `Round: ${currentRound} / 3`;
 }
 

@@ -219,6 +219,7 @@ button:hover { transform: scale(1.04); }
   <div class="panel ai-panel">
     <div class="panel-label" style="color:#ff0066;">[ WIFI OUTPUT ]</div>
     <div id="ai-stats">Target Y: -- | Not Connected</div>
+    <pre id="serialOutput"></pre>
   </div>
   <div class="panel ai-panel" style="border-color:#7700ff44;">
     <div class="panel-label" style="color:#aa44ff;">[ HAND TRACK ]</div>
@@ -258,29 +259,58 @@ let isConnected = false;
 let handY = 190;
 let handDetected = false;
 let cameraActive = false;
+let buffer = "";
+
 const connectBtn = document.getElementById("connectBtn");
+const decoder = new TextDecoderStream();
+const reader = decoder.readable.getReader();
+
 connectBtn.addEventListener("click", async () => {
   try {
     port = await navigator.serial.requestPort();
     await port.open({ baudRate: 9600 });
     writer = port.writable.getWriter();
+    port.readable.pipeTo(decoder.writable);
+    
     statusText.innerText = "Arduino Connected ✅";
   } catch (error) {
     statusText.innerText = "Connection Failed ❌";
   }
 });
 
-
 async function sendData(yValue) {
-  if (isConnected && esp32IP) {
-    const now = Date.now();
-    if (now - lastSentTime > 60) {
-      lastSentTime = now;
-      fetch(`http://${esp32IP}/move?y=${Math.round(yValue)}`).catch(() => {});
-      document.getElementById("ai-stats").innerHTML = `Target Y: ${Math.round(yValue)} | Sending...`;
-    }
-  }
+  if (!writer) return;
+  const now = Date.now();
+  if (now - lastSentTime < 60) 
+    return;
+  const data = new TextEncoder().encode(yValue + "\n");
+  document.getElementById("ai-stats").innerHTML = `Target Y: ${Math.round(yValue)} | Sending...`;
+  await writer.write(data);
+  lastSentTime = now;
 }
+
+
+async function readSerial() {
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += value;
+
+        // Process complete lines
+        let lines = buffer.split("\n");
+        buffer = lines.pop(); // Keep incomplete line
+
+        for (const line of lines) {
+            const text = line.trim();
+            console.log(text);
+
+            document.getElementById("serialOutput").textContent += text + "\n";
+        }
+    }
+}
+
+readSerial();
 
 function startCamera() {
   if (cameraActive) return;
