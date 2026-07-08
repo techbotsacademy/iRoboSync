@@ -1,0 +1,11 @@
+Create a Fruit Ninja game using HTML, CSS, and JavaScript.
+
+Requirements:
+
+Full-screen canvas.
+Random fruits appear every second.
+Fruits follow a realistic arc.
+Detect collisions between the cursor and fruits.
+Increase the score when a fruit is sliced.
+Show an animation when fruits are cut.
+End the game after three missed fruits.
