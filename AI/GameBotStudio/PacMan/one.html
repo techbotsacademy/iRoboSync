@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcade Chaser (Pac-Man Inspired)</title>
+    <style>
+        body {
+            background-color: #111;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #game-container {
+            text-align: center;
+            position: relative;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            color: #ffdf00;
+            text-shadow: 0 0 10px rgba(255, 223, 0, 0.5);
+        }
+
+        #ui {
+            font-size: 24px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            width: 440px;
+        }
+
+        canvas {
+            border: 4px solid #0000ff;
+            box-shadow: 0 0 20px rgba(0, 0, 255, 0.5);
+            background-color: black;
+        }
+
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #ff0000;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        #game-over-screen h2 {
+            color: #ff0000;
+            margin-top: 0;
+            font-size: 36px;
+        }
+
+        button {
+            background-color: #ffdf00;
+            border: none;
+            color: black;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background-color: white;
+            box-shadow: 0 0 10px white;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <h1>ARCADE CHASER</h1>
+        <div id="ui">
+            <div>SCORE: <span id="score">0</span></div>
+        </div>
+        
+        <canvas id="gameCanvas" width="440" height="440"></canvas>
+
+        <div id="game-over-screen" id="gameOverScreen">
+            <h2>GAME OVER</h2>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button onclick="resetGame()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreEl = document.getElementById("score");
+        const finalScoreEl = document.getElementById("final-score");
+        const gameOverScreen = document.getElementById("game-over-screen");
+
+        const TILE_SIZE = 20;
+        let score = 0;
+        let gameOver = false;
+
+        // 1 = Wall, 0 = Dot, 2 = Empty Space
+        const map = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1],
+            [1,0,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,1,1,0,1],
+            [1,0,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,1],
+            [1,1,1,1,1,0,1,1,1,2,1,1,2,1,1,1,0,1,1,1,1,1],
+            [2,2,2,2,1,0,1,2,2,2,2,2,2,2,2,1,0,1,2,2,2,2],
+            [1,1,1,1,1,0,1,2,1,1,2,2,1,1,2,1,0,1,1,1,1,1],
+            [2,2,2,2,2,0,2,2,1,2,2,2,2,1,2,2,0,2,2,2,2,2],
+            [1,1,1,1,1,0,1,2,1,1,1,1,1,1,2,1,0,1,1,1,1,1],
+            [2,2,2,2,1,0,1,2,2,2,2,2,2,2,2,1,0,1,2,2,2,2],
+            [1,1,1,1,1,0,1,2,1,1,1,1,1,1,2,1,0,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1],
+            [1,0,0,0,1,0,0,0,0,0,2,2,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,0,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1,1,1],
+            [1,0,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+
+        // Clone map for resets
+        let currentMap = JSON.parse(JSON.stringify(map));
+
+        class Player {
+            constructor() {
+                this.x = 10 * TILE_SIZE + TILE_SIZE / 2;
+                this.y = 16 * TILE_SIZE + TILE_SIZE / 2;
+                this.radius = 8;
+                this.speed = 2;
+                this.dirX = 0;
+                this.dirY = 0;
+                this.nextDirX = 0;
+                this.nextDirY = 0;
+                this.mouthAngle = 0.2;
+                this.mouthSpeed = 0.02;
+            }
+
+            draw() {
+                ctx.beginPath();
+                // Dynamic mouth biting animation movement
+                this.mouthAngle += this.mouthSpeed;
+                if (this.mouthAngle > 0.4 || this.mouthAngle < 0.05) {
+                    this.mouthSpeed = -this.mouthSpeed;
+                }
+
+                let rotation = 0;
+                if (this.dirX === 1) rotation = 0;
+                if (this.dirX === -1) rotation = Math.PI;
+                if (this.dirY === 1) rotation = Math.PI / 2;
+                if (this.dirY === -1) rotation = Math.PI * 1.5;
+
+                ctx.arc(
+                    this.x, this.y, this.radius, 
+                    rotation + this.mouthAngle, 
+                    rotation + Math.PI * 2 - this.mouthAngle
+                );
+                ctx.lineTo(this.x, this.y);
+                ctx.fillStyle = "#ffdf00";
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            move() {
+                // Check if we can change to the intended queued direction
+                if (this.x % TILE_SIZE === TILE_SIZE / 2 && this.y % TILE_SIZE === TILE_SIZE / 2) {
+                    if (!this.isColliding(this.nextDirX, this.nextDirY)) {
+                        this.dirX = this.nextDirX;
+                        this.dirY = this.nextDirY;
+                    }
+                }
+
+                // Move if no wall ahead
+                if (!this.isColliding(this.dirX, this.dirY)) {
+                    this.x += this.dirX * this.speed;
+                    this.y += this.dirY * this.speed;
+                }
+
+                // Handle screen wrap around (tunnels)
+                if (this.x < 0) this.x = canvas.width;
+                if (this.x > canvas.width) this.x = 0;
+
+                // Eat dots
+                let tileX = Math.floor(this.x / TILE_SIZE);
+                let tileY = Math.floor(this.y / TILE_SIZE);
+                if (currentMap[tileY] && currentMap[tileY][tileX] === 0) {
+                    currentMap[tileY][tileX] = 2; // set to empty
+                    score += 10;
+                    scoreEl.innerText = score;
+                }
+            }
+
+            isColliding(dx, dy) {
+                let nextX = this.x + dx * (TILE_SIZE / 2 + 1);
+                let nextY = this.y + dy * (TILE_SIZE / 2 + 1);
+                let tileX = Math.floor(nextX / TILE_SIZE);
+                let tileY = Math.floor(nextY / TILE_SIZE);
+
+                if (currentMap[tileY] && currentMap[tileY][tileX] === 1) {
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        class Ghost {
+            constructor(tileX, tileY, color) {
+                this.x = tileX * TILE_SIZE + TILE_SIZE / 2;
+                this.y = tileY * TILE_SIZE + TILE_SIZE / 2;
+                this.color = color;
+                this.radius = 8;
+                this.speed = 2;
+                this.dirX = 1;
+                this.dirY = 0;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y - 2, this.radius, Math.PI, 0, false);
+                ctx.lineTo(this.x + this.radius, this.y + this.radius);
+                // Simple wavy ghost bottom
+                ctx.lineTo(this.x + this.radius/2, this.y + this.radius/2);
+                ctx.lineTo(this.x, this.y + this.radius);
+                ctx.lineTo(this.x - this.radius/2, this.y + this.radius/2);
+                ctx.lineTo(this.x - this.radius, this.y + this.radius);
+                ctx.closePath();
+                ctx.fillStyle = this.color;
+                ctx.fill();
+
+                // Eyes
+                ctx.beginPath();
+                ctx.arc(this.x - 3, this.y - 2, 2.5, 0, Math.PI * 2);
+                ctx.arc(this.x + 3, this.y - 2, 2.5, 0, Math.PI * 2);
+                ctx.fillStyle = "white";
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(this.x - 3 + this.dirX, this.y - 2 + this.dirY, 1, 0, Math.PI * 2);
+                ctx.arc(this.x + 3 + this.dirX, this.y - 2 + this.dirY, 1, 0, Math.PI * 2);
+                ctx.fillStyle = "blue";
+                ctx.fill();
+            }
+
+            move() {
+                // Grid alignment check to make a decision
+                if (this.x % TILE_SIZE === TILE_SIZE / 2 && this.y % TILE_SIZE === TILE_SIZE / 2) {
+                    const directions = [
+                        {x: 1, y: 0}, {x: -1, y: 0},
+                        {x: 0, y: 1}, {x: 0, y: -1}
+                    ];
+                    
+                    // Filter out reversed direction and walls to get valid moves
+                    let validMoves = directions.filter(dir => {
+                        if (dir.x === -this.dirX && dir.y === -this.dirY) return false;
+                        
+                        let nextX = this.x + dir.x * TILE_SIZE;
+                        let nextY = this.y + dir.y * TILE_SIZE;
+                        let tileX = Math.floor(nextX / TILE_SIZE);
+                        let tileY = Math.floor(nextY / TILE_SIZE);
+                        return currentMap[tileY] && currentMap[tileY][tileX] !== 1;
+                    });
+
+                    // Fallback to allowing turn back if dead end
+                    if (validMoves.length === 0) {
+                        validMoves = [{x: -this.dirX, y: -this.dirY}];
+                    }
+
+                    // Simple Chase AI: pick the valid move closest to the player
+                    let bestMove = validMoves[0];
+                    let minDistance = Infinity;
+
+                    for (let move of validMoves) {
+                        let nextX = this.x + move.x * TILE_SIZE;
+                        let nextY = this.y + move.y * TILE_SIZE;
+                        let dist = Math.hypot(player.x - nextX, player.y - nextY);
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            bestMove = move;
+                        }
+                    }
+
+                    this.dirX = bestMove.x;
+                    this.dirY = bestMove.y;
+                }
+
+                this.x += this.dirX * this.speed;
+                this.y += this.dirY * this.speed;
+            }
+        }
+
+        let player = new Player();
+        let ghosts = [
+            new Ghost(10, 8, "#ff0000"), // Blinky (Red)
+            new Ghost(11, 8, "#ffb8ff"), // Pinky (Pink)
+            new Ghost(9, 10, "#00ffff")  // Inky (Cyan)
+        ];
+
+        // Input listeners
+        window.addEventListener("keydown", e => {
+            switch(e.key) {
+                case "ArrowUp":    player.nextDirX = 0;  player.nextDirY = -1; break;
+                case "ArrowDown":  player.nextDirX = 0;  player.nextDirY = 1;  break;
+                case "ArrowLeft":  player.nextDirX = -1; player.nextDirY = 0;  break;
+                case "ArrowRight": player.nextDirX = 1;  player.nextDirY = 0;  break;
+            }
+        });
+
+        function drawMap() {
+            for (let row = 0; row < currentMap.length; row++) {
+                for (let col = 0; col < currentMap[row].length; col++) {
+                    if (currentMap[row][col] === 1) {
+                        ctx.fillStyle = "#1919a6";
+                        ctx.fillRect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    } else if (currentMap[row][col] === 0) {
+                        ctx.beginPath();
+                        ctx.arc(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2, 2.5, 0, Math.PI * 2);
+                        ctx.fillStyle = "#ffb8ae";
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        function checkCollisions() {
+            for (let ghost of ghosts) {
+                let dist = Math.hypot(player.x - ghost.x, player.y - ghost.y);
+                if (dist < player.radius + ghost.radius) {
+                    gameOver = true;
+                    finalScoreEl.innerText = score;
+                    gameOverScreen.style.display = "block";
+                }
+            }
+        }
+
+        function resetGame() {
+            currentMap = JSON.parse(JSON.stringify(map));
+            score = 0;
+            scoreEl.innerText = score;
+            gameOver = false;
+            gameOverScreen.style.display = "none";
+            player = new Player();
+            ghosts = [
+                new Ghost(10, 8, "#ff0000"),
+                new Ghost(11, 8, "#ffb8ff"),
+                new Ghost(9, 10, "#00ffff")
+            ];
+            gameLoop();
+        }
+
+        function gameLoop() {
+            if (gameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update positions
+            player.move();
+            ghosts.forEach(ghost => ghost.move());
+
+            // Check if player bumped into a ghost
+            checkCollisions();
+
+            // Render Frame
+            drawMap();
+            player.draw();
+            ghosts.forEach(ghost => ghost.draw());
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game initially
+        gameLoop();
+    </script>
+</body>
+</html>

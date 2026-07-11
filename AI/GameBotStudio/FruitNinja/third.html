@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Hand-Tracked Fruit Ninja (Desktop Canvas)</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #111;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        /* Hidden video element used as a data source for Canvas/AI */
+        #webcam {
+            display: none;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            color: #fff;
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
+            z-index: 10;
+        }
+        #strikes {
+            color: #ff3333;
+            letter-spacing: 5px;
+        }
+        #ai-status {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #00ffcc;
+            font-size: 16px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 15px;
+            border-radius: 5px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            z-index: 20;
+        }
+        #game-over-screen.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #game-over-screen h1 {
+            font-size: 60px;
+            color: #ff3333;
+            margin-bottom: 10px;
+        }
+        #game-over-screen p {
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        #restart-btn {
+            padding: 12px 30px;
+            font-size: 20px;
+            font-weight: bold;
+            background-color: #e65100;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="score-display">SCORE: 0</div>
+        <div id="strikes"></div>
+    </div>
+    <div id="ai-status">Waiting for camera permission...</div>
+
+    <div id="game-over-screen">
+        <h1>GAME OVER</h1>
+        <p id="final-score">Final Score: 0</p>
+        <button id="restart-btn" onclick="resetGame()">Play Again</button>
+    </div>
+
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const videoElement = document.getElementById('webcam');
+        const scoreDisplay = document.getElementById('score-display');
+        const strikesDisplay = document.getElementById('strikes');
+        const aiStatus = document.getElementById('ai-status');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        let score = 0;
+        let misses = 0;
+        const maxMisses = 3;
+        let isGameOver = false;
+        let isGameStarted = false; // Flag to prevent early start before camera is ready
+        
+        let fruits = [];
+        let particles = [];
+        let bladeTrail = [];
+        let lastSpawnTime = 0;
+        const spawnInterval = 1500; 
+        const gravity = 0.25;
+
+        let fingerX = null;
+        let fingerY = null;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- Realistic Fruit Drawing Helper Methods ---
+        const FRUIT_DESIGNS = {
+            Watermelon: (ctx, r, sliced, offset) => {
+                const drawHalf = (side) => {
+                    ctx.save();
+                    if (sliced) ctx.translate(side * offset, 0);
+                    
+                    // Rind (Green)
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r, side === -1 ? Math.PI/2 : (Math.PI*3)/2, side === -1 ? (Math.PI*3)/2 : Math.PI/2);
+                    ctx.fillStyle = '#1b5e20';
+                    ctx.fill();
+                    
+                    // Light green inner rind stripe
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r * 0.9, side === -1 ? Math.PI/2 : (Math.PI*3)/2, side === -1 ? (Math.PI*3)/2 : Math.PI/2);
+                    ctx.fillStyle = '#aed581';
+                    ctx.fill();
+
+                    // Flesh (Red)
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r * 0.82, side === -1 ? Math.PI/2 : (Math.PI*3)/2, side === -1 ? (Math.PI*3)/2 : Math.PI/2);
+                    ctx.fillStyle = '#e53935';
+                    ctx.fill();
+
+                    // Seeds
+                    ctx.fillStyle = '#000';
+                    for(let i = -2; i <= 2; i++) {
+                        if(i === 0) continue;
+                        let angle = (side === -1) ? Math.PI + (i*0.3) : (i*0.3);
+                        ctx.beginPath();
+                        ctx.arc(Math.cos(angle)*r*0.4, Math.sin(angle)*r*0.4, 2.5, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                };
+                if (!sliced) { drawHalf(-1); drawHalf(1); } else { drawHalf(-1); drawHalf(1); }
+            },
+            Mango: (ctx, r, sliced, offset) => {
+                const drawHalf = (side) => {
+                    ctx.save();
+                    if (sliced) ctx.translate(side * offset, 0);
+                    ctx.scale(1.2, 0.9); // Kidney/Oval shape modification
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r*0.8, side === -1 ? Math.PI/2 : (Math.PI*3)/2, side === -1 ? (Math.PI*3)/2 : Math.PI/2);
+                    ctx.fillStyle = '#ff8f00'; // Deep Orange inside
+                    ctx.fill();
+                    // Outer skin gradient rim
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = side === -1 ? '#d84315' : '#43a047'; // Blended red/green mango blush
+                    ctx.stroke();
+                    ctx.restore();
+                };
+                drawHalf(-1); drawHalf(1);
+            },
+            Pineapple: (ctx, r, sliced, offset) => {
+                const drawHalf = (side) => {
+                    ctx.save();
+                    if (sliced) ctx.translate(side * offset, 0);
+                    // Oval body
+                    ctx.scale(0.85, 1.2);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r*0.8, side === -1 ? Math.PI/2 : (Math.PI*3)/2, side === -1 ? (Math.PI*3)/2 : Math.PI/2);
+                    ctx.fillStyle = '#fbc02d';
+                    ctx.fill();
+                    // Crosshatch texture pattern
+                    ctx.strokeStyle = '#e65100';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    // Draw a quick crown/leaves if unsliced on top
+                    if(!sliced) {
+                        ctx.fillStyle = '#2e7d32';
+                        ctx.beginPath();
+                        ctx.moveTo(-10, -r); ctx.lineTo(0, -r-20); ctx.lineTo(10, -r); ctx.fill();
+                    }
+                    ctx.restore();
+                };
+                drawHalf(-1); drawHalf(1);
+            },
+            Strawberry: (ctx, r, sliced, offset) => {
+                const drawHalf = (side) => {
+                    ctx.save();
+                    if (sliced) ctx.translate(side * offset, 0);
+                    // Tapered heart-ish shape
+                    ctx.beginPath();
+                    ctx.moveTo(0, r);
+                    ctx.bezierCurveTo(side*r, r*0.5, side*r, -r*0.5, 0, -r);
+                    ctx.fillStyle = '#d32f2f';
+                    ctx.fill();
+                    // Internal white core accent
+                    ctx.beginPath();
+                    ctx.moveTo(0, r*0.3);
+                    ctx.bezierCurveTo(side*r*0.3, r*0.1, side*r*0.3, -r*0.2, 0, -r*0.5);
+                    ctx.fillStyle = '#ffebee';
+                    ctx.fill();
+                    // Seed dots
+                    ctx.fillStyle = '#ffeb3b';
+                    ctx.fillRect(side * r * 0.4, 0, 1.5, 3);
+                    ctx.fillRect(side * r * 0.2, r * 0.4, 1.5, 3);
+                    ctx.restore();
+                };
+                drawHalf(-1); drawHalf(1);
+            },
+            Kiwi: (ctx, r, sliced, offset) => {
+                const drawHalf = (side) => {
+                    ctx.save();
+                    if (sliced) ctx.translate(side * offset, 0);
+                    // Fuzzy brown skin
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r, side === -1 ? Math.PI/2 : (Math.PI*3)/2, side === -1 ? (Math.PI*3)/2 : Math.PI/2);
+                    ctx.fillStyle = '#6d4c41';
+                    ctx.fill();
+                    // Green flesh
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r*0.88, side === -1 ? Math.PI/2 : (Math.PI*3)/2, side === -1 ? (Math.PI*3)/2 : Math.PI/2);
+                    ctx.fillStyle = '#9ccc65';
+                    ctx.fill();
+                    // White core
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r*0.3, side === -1 ? Math.PI/2 : (Math.PI*3)/2, side === -1 ? (Math.PI*3)/2 : Math.PI/2);
+                    ctx.fillStyle = '#f1f8e9';
+                    ctx.fill();
+                    // Tiny black seeds circling core
+                    ctx.fillStyle = '#212121';
+                    for(let i=0; i<6; i++) {
+                        let a = (side === -1) ? Math.PI/2 + (i*0.5) : (Math.PI * 1.5) + (i*0.5);
+                        ctx.fillRect(Math.cos(a)*r*0.45, Math.sin(a)*r*0.45, 2, 2);
+                    }
+                    ctx.restore();
+                };
+                drawHalf(-1); drawHalf(1);
+            },
+            Banana: (ctx, r, sliced, offset) => {
+                ctx.save();
+                if (sliced) ctx.translate(offset, 0);
+                ctx.lineWidth = 14;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = '#fdd835'; // Yellow
+                ctx.beginPath();
+                // Curved arc geometry path rather than a simple block circle
+                ctx.arc(-10, 0, r * 1.2, Math.PI * 1.2, Math.PI * 1.8);
+                ctx.stroke();
+                // Brown tips
+                ctx.lineWidth = 12;
+                ctx.strokeStyle = '#5d4037';
+                ctx.restore();
+            },
+            Apple: (ctx, r, sliced, offset) => {
+                const drawHalf = (side) => {
+                    ctx.save();
+                    if (sliced) ctx.translate(side * offset, 0);
+                    // Indented apple contour
+                    ctx.beginPath();
+                    ctx.arc(side*r*0.2, 0, r*0.8, 0, Math.PI*2);
+                    ctx.fillStyle = '#d32f2f'; // Crisp Red Skin
+                    ctx.fill();
+                    // Flesh
+                    ctx.beginPath();
+                    ctx.arc(side*r*0.2, 0, r*0.68, 0, Math.PI*2);
+                    ctx.fillStyle = '#fffde7'; // Cream-color interior
+                    ctx.fill();
+                    ctx.restore();
+                };
+                drawHalf(-1); drawHalf(1);
+            }
+        };
+
+        const FRUIT_NAMES = ['Watermelon', 'Mango', 'Pineapple', 'Strawberry', 'Kiwi', 'Banana', 'Apple'];
+        const FRUIT_CONFIGS = {
+            Watermelon: { radius: 52, pColor: '#e53935' },
+            Mango: { radius: 42, pColor: '#ff8f00' },
+            Pineapple: { radius: 48, pColor: '#fbc02d' },
+            Strawberry: { radius: 28, pColor: '#d32f2f' },
+            Kiwi: { radius: 34, pColor: '#9ccc65' },
+            Banana: { radius: 32, pColor: '#fdd835' },
+            Apple: { radius: 38, pColor: '#fffde7' }
+        };
+
+        class Fruit {
+            constructor() {
+                this.name = FRUIT_NAMES[Math.floor(Math.random() * FRUIT_NAMES.length)];
+                const config = FRUIT_CONFIGS[this.name];
+                this.radius = config.radius;
+                this.particleColor = config.pColor;
+                
+                this.x = Math.random() * (canvas.width * 0.6) + (canvas.width * 0.2);
+                this.y = canvas.height + this.radius;
+                
+                this.vx = (Math.random() - 0.5) * 6; 
+                this.vy = -(Math.random() * 4 + 14); 
+                
+                this.sliced = false;
+                this.halfOffset = 0;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.03;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += gravity; 
+                this.rotation += this.rotationSpeed;
+
+                if (this.sliced) {
+                    this.halfOffset += 5; // Animate separating halves
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                // Invoke customized granular geometric renders instead of generic solid circles
+                if (FRUIT_DESIGNS[this.name]) {
+                    FRUIT_DESIGNS[this.name](ctx, this.radius, this.sliced, this.halfOffset);
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = Math.random() * 5 + 2;
+                this.vx = (Math.random() - 0.5) * 14;
+                this.vy = (Math.random() - 0.5) * 14;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.04 + 0.02;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += gravity * 0.4;
+                this.alpha -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // --- Game Mechanics ---
+        function updateStrikesUI() {
+            strikesDisplay.textContent = 'X'.repeat(misses) + 'O'.repeat(maxMisses - misses);
+        }
+
+        function createJuiceExplosion(fruit) {
+            for (let i = 0; i < 30; i++) {
+                particles.push(new Particle(fruit.x, fruit.y, fruit.particleColor));
+            }
+        }
+
+        function checkSlices() {
+            if (bladeTrail.length < 2) return;
+
+            const p1 = bladeTrail[bladeTrail.length - 2];
+            const p2 = bladeTrail[bladeTrail.length - 1];
+
+            for (let fruit of fruits) {
+                if (fruit.sliced) continue;
+
+                const distToP1 = Math.hypot(fruit.x - p1.x, fruit.y - p1.y);
+                const distToP2 = Math.hypot(fruit.x - p2.x, fruit.y - p2.y);
+                const lineLength = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+                if (distToP1 < fruit.radius || distToP2 < fruit.radius || (distToP1 + distToP2 < lineLength + fruit.radius * 0.5)) {
+                    fruit.sliced = true;
+                    fruit.vx = (fruit.x - p2.x) * 0.3; 
+                    score++;
+                    scoreDisplay.textContent = `SCORE: ${score}`;
+                    createJuiceExplosion(fruit);
+                }
+            }
+        }
+
+        function handleGameOver() {
+            isGameOver = true;
+            finalScoreDisplay.textContent = `Final Score: ${score}`;
+            gameOverScreen.classList.add('visible');
+        }
+
+        function resetGame() {
+            score = 0;
+            misses = 0;
+            fruits = [];
+            particles = [];
+            bladeTrail = [];
+            isGameOver = false;
+            scoreDisplay.textContent = `SCORE: ${score}`;
+            updateStrikesUI();
+            gameOverScreen.classList.remove('visible');
+        }
+
+        // --- Core Animation and Loop Engine ---
+        function gameLoop(timestamp) {
+            // Draw Mirrored Video Background directly onto canvas frame
+            ctx.save();
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1); // Flips webcam image for correct reflection layout mapping
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            // Tint background video layer slightly so fruits pop cleanly
+            ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (!isGameOver) {
+                // Manage dynamic launching interval
+                if (timestamp - lastSpawnTime > spawnInterval) {
+                    fruits.push(new Fruit());
+                    lastSpawnTime = timestamp;
+                }
+
+                // Process Finger Coordinate Trails
+                if (fingerX !== null && fingerY !== null) {
+                    bladeTrail.push({ x: fingerX, y: fingerY });
+                    if (bladeTrail.length > 8) bladeTrail.shift();
+                    checkSlices();
+                } else {
+                    if (bladeTrail.length > 0) bladeTrail.shift();
+                }
+
+                // Render Slicing Blade Trail Graphics
+                if (bladeTrail.length > 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(bladeTrail[0].x, bladeTrail[0].y);
+                    for (let i = 1; i < bladeTrail.length; i++) {
+                        ctx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
+                    }
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 7;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ffeb3b';
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+
+                    // Neon finger tracker node
+                    ctx.beginPath();
+                    ctx.arc(fingerX, fingerY, 7, 0, Math.PI * 2);
+                    ctx.fillStyle = '#00ffcc';
+                    ctx.fill();
+                }
+
+                // Update & Render Juice Particle Splatters
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    particles[i].update();
+                    particles[i].draw();
+                    if (particles[i].alpha <= 0) particles.splice(i, 1);
+                }
+
+                // Update & Render Moving Fruit Targets
+                for (let i = fruits.length - 1; i >= 0; i--) {
+                    const f = fruits[i];
+                    f.update();
+                    f.draw();
+
+                    // Detect falling past bound limit
+                    if (f.y > canvas.height + f.radius + 10) {
+                        if (!f.sliced) {
+                            misses++;
+                            updateStrikesUI();
+                            if (misses >= maxMisses) handleGameOver();
+                        }
+                        fruits.splice(i, 1);
+                    }
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- AI Tracking Engine Setup (Mediapipe Setup) ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults((results) => {
+            // Start the gameplay loop only *after* the camera actively sends frames and gets parsed successfully
+            if (!isGameStarted) {
+                isGameStarted = true;
+                updateStrikesUI();
+                requestAnimationFrame(gameLoop);
+            }
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Landmark #8 = INDEX_FINGER_TIP
+                const indexFingerTip = landmarks[8];
+
+                // Convert tracking proportions safely over fullscreen dimensions
+                // Flipped camera calculation correction: (1 - x)
+                fingerX = (1 - indexFingerTip.x) * canvas.width;
+                fingerY = indexFingerTip.y * canvas.height;
+
+                aiStatus.textContent = "AI Status: Tracking Active (Index Finger)";
+                aiStatus.style.color = "#00ff66";
+            } else {
+                fingerX = null;
+                fingerY = null;
+                aiStatus.textContent = "AI Status: Show hand to camera...";
+                aiStatus.style.color = "#ffcc00";
+            }
+        });
+
+        // Initialize and link your webcam stream to tracking pipeline
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 1280,
+            height: 720
+        });
+
+        // The game stays on stand-by until this browser prompt resolves successfully
+        camera.start()
+            .then(() => {
+                aiStatus.textContent = "Camera authorized! Processing AI tracking framework...";
+            })
+            .catch(err => {
+                aiStatus.textContent = "Error: Camera access blocked or unlinked.";
+                aiStatus.style.color = "#ff3333";
+                alert("This game requires webcam access to track your finger slices. Please refresh and allow permissions.");
+            });
+
+    </script>
+</body>
+</html>

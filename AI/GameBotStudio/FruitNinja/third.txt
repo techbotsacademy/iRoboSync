@@ -1,0 +1,31 @@
+Create a Fruit Ninja game using HTML, CSS, and JavaScript.
+
+Requirements:
+
+
+
+Full-screen canvas.
+
+Show the video being captured on the screen so that user can see where their finger is.
+
+Fruits follow a realistic arc.
+
+Detect collisions between the cursor and fruits.
+
+Increase the score when a fruit is sliced.
+
+Show an animation when fruits are cut.
+
+End the game after three missed fruits. 
+
+Use AI to capture the hand movements and use the finger tip as the input to slice the fruit 
+
+
+
+[Desired Output] The fruits used in the game should look realistic like Watermelon, Mango, Pineapple, Strawberry, Kiwi, Bananas, and Apples.
+
+The game should start only after the video permission popup is handled.
+
+[Undesired Output] Currently the fruit used looks more like balls of various sizes and color or the looks do not match the actual fruit.
+
+The game starts even before the video permission popup is closed

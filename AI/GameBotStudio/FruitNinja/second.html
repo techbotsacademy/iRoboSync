@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Hand-Tracked Fruit Ninja</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a120b;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        /* Hidden webcam video stream used for AI processing */
+        #webcam {
+            display: none;
+            transform: scaleX(-1); /* Flip horizontally for mirror effect */
+        }
+        canvas {
+            display: block;
+            background: radial-gradient(circle, #2b1d12 0%, #0f0a07 100%);
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
+        }
+        #strikes {
+            color: #ff3333;
+            letter-spacing: 5px;
+        }
+        #ai-status {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #00ffcc;
+            font-size: 16px;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 15px;
+            border-radius: 5px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            z-index: 20;
+        }
+        #game-over-screen.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #game-over-screen h1 {
+            font-size: 60px;
+            color: #ff3333;
+            margin-bottom: 10px;
+        }
+        #game-over-screen p {
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        #restart-btn {
+            padding: 12px 30px;
+            font-size: 20px;
+            font-weight: bold;
+            background-color: #e65100;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="score-display">SCORE: 0</div>
+        <div id="strikes"></div>
+    </div>
+    <div id="ai-status">Initializing AI Camera Tracking...</div>
+
+    <div id="game-over-screen">
+        <h1>GAME OVER</h1>
+        <p id="final-score">Final Score: 0</p>
+        <button id="restart-btn" onclick="resetGame()">Play Again</button>
+    </div>
+
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const videoElement = document.getElementById('webcam');
+        const scoreDisplay = document.getElementById('score-display');
+        const strikesDisplay = document.getElementById('strikes');
+        const aiStatus = document.getElementById('ai-status');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        let score = 0;
+        let misses = 0;
+        const maxMisses = 3;
+        let isGameOver = false;
+        
+        let fruits = [];
+        let particles = [];
+        let bladeTrail = [];
+        let lastSpawnTime = 0;
+        const spawnInterval = 1200; 
+        const gravity = 0.28;
+
+        // Coordinates from AI tracking
+        let fingerX = null;
+        let fingerY = null;
+
+        // Expanded requested fruit list with distinctive colors
+        const FRUIT_TYPES = [
+            { name: 'Watermelon', color: '#1b5e20', innerColor: '#d32f2f', radius: 50 },
+            { name: 'Mango', color: '#ffb300', innerColor: '#ff8f00', radius: 40 },
+            { name: 'Pineapple', color: '#fbc02d', innerColor: '#fff59d', radius: 46 },
+            { name: 'Strawberry', color: '#b71c1c', innerColor: '#ff8a80', radius: 25 },
+            { name: 'Kiwi', color: '#5d4037', innerColor: '#8bc34a', radius: 32 },
+            { name: 'Banana', color: '#ffeb3b', innerColor: '#fffde7', radius: 28 },
+            { name: 'Apple', color: '#c62828', innerColor: '#f1f8e9', radius: 36 }
+        ];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- Classes ---
+        class Fruit {
+            constructor() {
+                const type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+                this.name = type.name;
+                this.color = type.color;
+                this.innerColor = type.innerColor;
+                this.radius = type.radius;
+                
+                this.x = Math.random() * (canvas.width * 0.6) + (canvas.width * 0.2);
+                this.y = canvas.height + this.radius;
+                
+                this.vx = (Math.random() - 0.5) * 7; 
+                this.vy = -(Math.random() * 5 + 14); 
+                
+                this.sliced = false;
+                this.halfOffset = 0;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.04;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += gravity; 
+                this.rotation += this.rotationSpeed;
+
+                if (this.sliced) {
+                    this.halfOffset += 4; 
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+
+                if (!this.sliced) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius * 0.8, 0, Math.PI * 2);
+                    ctx.fillStyle = this.innerColor;
+                    ctx.fill();
+                } else {
+                    // Left Slice
+                    ctx.save();
+                    ctx.translate(-this.halfOffset, 0);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, Math.PI/2, (Math.PI*3)/2);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius * 0.8, Math.PI/2, (Math.PI*3)/2);
+                    ctx.fillStyle = this.innerColor;
+                    ctx.fill();
+                    ctx.restore();
+
+                    // Right Slice
+                    ctx.save();
+                    ctx.translate(this.halfOffset, 0);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, (Math.PI*3)/2, Math.PI/2);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius * 0.8, (Math.PI*3)/2, Math.PI/2);
+                    ctx.fillStyle = this.innerColor;
+                    ctx.fill();
+                    ctx.restore();
+                }
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = Math.random() * 4 + 2;
+                this.vx = (Math.random() - 0.5) * 12;
+                this.vy = (Math.random() - 0.5) * 12;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.04 + 0.02;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += gravity * 0.3;
+                this.alpha -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // --- Core Logic ---
+        function updateStrikesUI() {
+            strikesDisplay.textContent = 'X'.repeat(misses) + 'O'.repeat(maxMisses - misses);
+        }
+
+        function createJuiceExplosion(fruit) {
+            for (let i = 0; i < 25; i++) {
+                particles.push(new Particle(fruit.x, fruit.y, fruit.innerColor));
+            }
+        }
+
+        function checkSlices() {
+            if (bladeTrail.length < 2) return;
+
+            const p1 = bladeTrail[bladeTrail.length - 2];
+            const p2 = bladeTrail[bladeTrail.length - 1];
+
+            for (let fruit of fruits) {
+                if (fruit.sliced) continue;
+
+                const distToP1 = Math.hypot(fruit.x - p1.x, fruit.y - p1.y);
+                const distToP2 = Math.hypot(fruit.x - p2.x, fruit.y - p2.y);
+                const lineLength = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+                if (distToP1 < fruit.radius || distToP2 < fruit.radius || (distToP1 + distToP2 < lineLength + fruit.radius * 0.6)) {
+                    fruit.sliced = true;
+                    fruit.vx = (fruit.x - p2.x) * 0.25; // Splitting impulse direction
+                    score++;
+                    scoreDisplay.textContent = `SCORE: ${score}`;
+                    createJuiceExplosion(fruit);
+                }
+            }
+        }
+
+        function handleGameOver() {
+            isGameOver = true;
+            finalScoreDisplay.textContent = `Final Score: ${score}`;
+            gameOverScreen.classList.add('visible');
+        }
+
+        function resetGame() {
+            score = 0;
+            misses = 0;
+            fruits = [];
+            particles = [];
+            bladeTrail = [];
+            isGameOver = false;
+            scoreDisplay.textContent = `SCORE: ${score}`;
+            updateStrikesUI();
+            gameOverScreen.classList.remove('visible');
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Game Loops ---
+        function gameLoop(timestamp) {
+            if (isGameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Spawning management
+            if (timestamp - lastSpawnTime > spawnInterval) {
+                fruits.push(new Fruit());
+                lastSpawnTime = timestamp;
+            }
+
+            // Track blade locations via AI index finger position
+            if (fingerX !== null && fingerY !== null) {
+                bladeTrail.push({ x: fingerX, y: fingerY });
+                if (bladeTrail.length > 7) bladeTrail.shift();
+                checkSlices();
+            } else {
+                if (bladeTrail.length > 0) bladeTrail.shift();
+            }
+
+            // Render Blade
+            if (bladeTrail.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(bladeTrail[0].x, bladeTrail[0].y);
+                for (let i = 1; i < bladeTrail.length; i++) {
+                    ctx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
+                }
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 6;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#e0f7fa';
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // Glowing tracker at the tip
+                ctx.beginPath();
+                ctx.arc(fingerX, fingerY, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffeb3b';
+                ctx.fill();
+            }
+
+            // Update & Render Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+
+            // Update & Render Fruits
+            for (let i = fruits.length - 1; i >= 0; i--) {
+                const f = fruits[i];
+                f.update();
+                f.draw();
+
+                if (f.y > canvas.height + f.radius + 10) {
+                    if (!f.sliced) {
+                        misses++;
+                        updateStrikesUI();
+                        if (misses >= maxMisses) handleGameOver();
+                    }
+                    fruits.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- AI Hand Tracking Setup (Mediapipe) ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults((results) => {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Landmark #8 is the INDEX_FINGER_TIP
+                const indexFingerTip = landmarks[8];
+
+                // Map normalized coordinates (0.0 to 1.0) to fullscreen canvas size
+                // Mediapipe coordinates are mirrored, so subtract from 1 to correct orientation
+                fingerX = (1 - indexFingerTip.x) * canvas.width;
+                fingerY = indexFingerTip.y * canvas.height;
+
+                aiStatus.textContent = "AI Status: Tracking Hand Active";
+                aiStatus.style.color = "#00ff66";
+            } else {
+                // Clear tracking data if hand leaves the camera frame
+                fingerX = null;
+                fingerY = null;
+                aiStatus.textContent = "AI Status: Looking for Hand...";
+                aiStatus.style.color = "#ffcc00";
+            }
+        });
+
+        // Initialize and link your webcam stream to the tracking pipeline
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+
+        camera.start()
+            .then(() => {
+                aiStatus.textContent = "AI Status: Camera Active. Show your hand!";
+            })
+            .catch(err => {
+                aiStatus.textContent = "AI Error: Camera blocked or unavailable.";
+                aiStatus.style.color = "#ff3333";
+                console.error(err);
+            });
+
+        // Initialization
+        updateStrikesUI();
+        requestAnimationFrame(gameLoop);
+
+    </script>
+</body>
+</html>

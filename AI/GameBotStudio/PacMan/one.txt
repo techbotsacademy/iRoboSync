@@ -1,0 +1,10 @@
+Create a Pac-Man-inspired game using a single HTML file with embedded CSS and JavaScript.
+
+The game should include:
+
+A player that moves around a maze.
+Enemies that chase the player.
+Collectible dots that increase the score.
+Arrow key controls.
+A score display.
+A Game Over screen when an enemy catches the player.
