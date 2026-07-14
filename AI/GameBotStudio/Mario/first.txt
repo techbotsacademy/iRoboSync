@@ -1,0 +1,34 @@
+Create the first stage of a Mario-inspired platform game using a single HTML file with embedded CSS and JavaScript.
+
+At this stage, implement only the following features:
+
+Player Movement
+Move left and right using the arrow keys or A/D keys.
+The character should face the direction of movement.
+Jumping Physics
+Implement realistic gravity.
+Allow the player to jump using the Spacebar or Up Arrow.
+Prevent double jumping.
+Ensure smooth jumping and falling animations.
+Platforms
+Create several platforms of different heights and widths.
+The player should be able to stand, walk, and jump between platforms.
+Implement accurate collision detection so the player cannot pass through platforms.
+
+Constraints
+
+Use only HTML, CSS, and JavaScript.
+Everything must be contained in a single HTML file.
+Do not use external libraries, frameworks, images, or assets.
+Use simple colored shapes as placeholders for the player and platforms.
+
+Do NOT implement any of the following yet:
+
+Enemies
+Coins
+Power-ups
+Scrolling camera
+Sound effects
+Score
+Lives
+Level completion

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subway Surfers Lite</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+        }
+        canvas {
+            background: linear-gradient(to bottom, #87CEEB 0%, #87CEEB 50%, #55a84a 50%, #55a84a 100%);
+            display: block;
+        }
+        /* UI Overlays */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+        }
+        #score-board {
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+            color: #ffd700;
+        }
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        #game-over-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        h1 {
+            color: #ff3333;
+            font-size: 42px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(255,0,0,0.5);
+        }
+        p {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            background-color: #ffcc00;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+        button:hover {
+            background-color: #ffdd44;
+            transform: scale(1.05);
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        
+        <div class="ui-layer">
+            <div id="score-board">SCORE: 0</div>
+        </div>
+
+        <div id="game-over-screen" class="active">
+            <h1 id="title-text">SUBWAY RUNNER</h1>
+            <p id="final-score-text">Press the button to play!</p>
+            <button id="start-btn" onclick="startGame()">START GAME</button>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreBoard = document.getElementById('score-board');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScoreText = document.getElementById('final-score-text');
+    const startBtn = document.getElementById('start-btn');
+    const titleText = document.getElementById('title-text');
+
+    // Game Config & Constants
+    const LANES = [-1, 0, 1]; // Left, Center, Right lanes expressed relative to center
+    const HORIZON_Y = 300;     // Y coordinate where the track merges (vanishing point)
+    const TRACK_BASE_WIDTH = 360; // Width of all 3 tracks combined at the bottom
+    const GRAVITY = 0.6;
+
+    // Game State variables
+    let gameActive = false;
+    let score = 0;
+    let speed = 4; // Base movement speed of obstacles
+    let maxSpeed = 12;
+
+    let player = {
+        currentLaneIndex: 1, // Start in center lane (LANES[1] = 0)
+        targetLaneIndex: 1,
+        laneX: 0,            // Interpolated X coordinate (-1 to 1 space)
+        y: 0,                // Jump height off the ground
+        vy: 0,               // Y velocity for jumping
+        isJumping: false,
+        width: 30,
+        height: 50,
+        color: '#ff5722'
+    };
+
+    let obstacles = [];
+    let obstacleSpawnTimer = 0;
+
+    // Listen for controls
+    window.addEventListener('keydown', (e) => {
+        if (!gameActive) return;
+        
+        if (e.key === 'ArrowLeft' && player.targetLaneIndex > 0) {
+            player.targetLaneIndex--;
+        }
+        if (e.key === 'ArrowRight' && player.targetLaneIndex < LANES.length - 1) {
+            player.targetLaneIndex++;
+        }
+        if ((e.key === 'ArrowUp' || e.key === ' ') && !player.isJumping) {
+            player.vy = 12; // Initial jump impulse
+            player.isJumping = true;
+        }
+    });
+
+    function startGame() {
+        // Reset state
+        score = 0;
+        speed = 5;
+        obstacles = [];
+        obstacleSpawnTimer = 0;
+        
+        player.currentLaneIndex = 1;
+        player.targetLaneIndex = 1;
+        player.laneX = 0;
+        player.y = 0;
+        player.vy = 0;
+        player.isJumping = false;
+
+        gameActive = true;
+        gameOverScreen.classList.remove('active');
+        
+        // Loop start
+        requestAnimationFrame(gameUpdate);
+    }
+
+    function triggerGameOver() {
+        gameActive = false;
+        titleText.innerText = "GAME OVER";
+        finalScoreText.innerText = `Final Score: ${Math.floor(score)}`;
+        startBtn.innerText = "PLAY AGAIN";
+        gameOverScreen.classList.add('active');
+    }
+
+    // Pseudo-3D Projection helper function
+    // Transforms a 3D space coordinate (lane offset, progress from horizon) into 2D Canvas X/Y pixels.
+    function project(laneOffset, zProgress) {
+        // zProgress goes from 0 (at the horizon) to 1 (at the screen bottom)
+        let y = HORIZON_Y + zProgress * (canvas.height - HORIZON_Y);
+        
+        // Calculate lane width dynamically based on perspective scaling
+        let currentTrackWidth = zProgress * TRACK_BASE_WIDTH;
+        let laneWidth = currentTrackWidth / 3;
+        
+        let x = (canvas.width / 2) + (laneOffset * laneWidth);
+        
+        return { x, y, scale: zProgress };
+    }
+
+    function gameUpdate() {
+        if (!gameActive) return;
+
+        // 1. Logic Update
+        score += 0.15;
+        scoreBoard.innerText = `SCORE: ${Math.floor(score)}`;
+        
+        // Dynamic Difficulty: Increase speed gradually based on score
+        speed = Math.min(maxSpeed, 5 + Math.floor(score / 200));
+
+        // Smooth lane switching interpolation
+        player.laneX += (LANES[player.targetLaneIndex] - player.laneX) * 0.25;
+
+        // Handle Jumping physics
+        if (player.isJumping) {
+            player.y += player.vy;
+            player.vy -= GRAVITY;
+            if (player.y <= 0) {
+                player.y = 0;
+                player.vy = 0;
+                player.isJumping = false;
+            }
+        }
+
+        // Handle Obstacle Spawning
+        obstacleSpawnTimer++;
+        if (obstacleSpawnTimer > Math.max(30, 80 - speed * 3)) { // Spawns faster as speed increases
+            obstacleSpawnTimer = 0;
+            let randomLane = Math.floor(Math.random() * 3) - 1; // Pick -1, 0, or 1
+            let type = Math.random() > 0.4 ? 'barrier' : 'tall-train'; // Randomize obstacle types
+            obstacles.push({
+                lane: randomLane,
+                z: 0, // Starts at horizon (0)
+                type: type,
+                color: type === 'barrier' ? '#ffcc00' : '#00bcd4'
+            });
+        }
+
+        // Clear Canvas for drawing next frame
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 2. Rendering Background (Sky & Ground)
+        ctx.fillStyle = '#87CEEB'; // Sky
+        ctx.fillRect(0, 0, canvas.width, HORIZON_Y);
+        ctx.fillStyle = '#55a84a'; // Grass Ground
+        ctx.fillRect(0, HORIZON_Y, canvas.width, canvas.height - HORIZON_Y);
+
+        // Draw 3D Tracks/Lanes
+        ctx.fillStyle = '#3a3a3a'; // Tracks color
+        ctx.beginPath();
+        let bottomL = project(-1.5, 1);
+        let bottomR = project(1.5, 1);
+        ctx.moveTo(canvas.width / 2, HORIZON_Y);
+        ctx.lineTo(bottomL.x, bottomL.y);
+        ctx.lineTo(bottomR.x, bottomR.y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw Lane dividers lines
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 2;
+        [-0.5, 0.5].forEach(divider => {
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, HORIZON_Y);
+            let pEnd = project(divider, 1);
+            ctx.lineTo(pEnd.x, pEnd.y);
+            ctx.stroke();
+        });
+
+        // 3. Process and Draw Obstacles
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            let obs = obstacles[i];
+            obs.z += (speed * 0.003); // Progress obstacle toward player
+
+            // Remove out-of-bounds obstacles safely
+            if (obs.z > 1.1) {
+                obstacles.splice(i, 1);
+                continue;
+            }
+
+            // Project obstacle position into 2D space
+            let pBase = project(obs.lane, obs.z);
+            
+            // Calculate size dynamically based on distance scaling
+            let obsWidth = 55 * pBase.scale;
+            let obsHeight = (obs.type === 'barrier' ? 40 : 90) * pBase.scale;
+
+            let obsX = pBase.x - obsWidth / 2;
+            let obsY = pBase.y - obsHeight;
+
+            // Draw Obstacle shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.beginPath();
+            ctx.ellipse(pBase.x, pBase.y, obsWidth/2, 10 * pBase.scale, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw Obstacle body
+            ctx.fillStyle = obs.color;
+            ctx.fillRect(obsX, obsY, obsWidth, obsHeight);
+
+            // Add accent details to obstacles (e.g. hazard stripes or windows)
+            ctx.fillStyle = '#000';
+            if (obs.type === 'barrier') {
+                ctx.fillRect(obsX, obsY + obsHeight * 0.3, obsWidth, 6 * pBase.scale); // stripe
+            } else {
+                ctx.fillRect(obsX + 5, obsY + 10, obsWidth - 10, obsHeight * 0.3); // Train windshield
+            }
+
+            // --- COLLISION DETECTION ---
+            // Trigger collision checks only when obstacles are near the player's focal distance (z ~ 0.85 to 0.98)
+            if (obs.z > 0.85 && obs.z < 0.98) {
+                // Check if obstacle matches player lane
+                if (Math.abs(player.laneX - obs.lane) < 0.4) {
+                    let playerBottom = 0; 
+                    let playerTop = player.height;
+                    
+                    if (obs.type === 'barrier') {
+                        // Barriers must be jumped over
+                        if (player.y < 25) { 
+                            triggerGameOver();
+                            return;
+                        }
+                    } else if (obs.type === 'tall-train') {
+                        // Trains are too high to jump over entirely
+                        triggerGameOver();
+                        return;
+                    }
+                }
+            }
+        }
+
+        // 4. Render Player
+        // The player sits locked around z = 0.9 (near screen bottom)
+        let pPlayer = project(player.laneX, 0.9);
+        let pWidth = player.width;
+        let pHeight = player.height;
+        let pX = pPlayer.x - pWidth / 2;
+        let pY = pPlayer.y - pHeight - player.y; // Subtracted jump height offsets up away from ground
+
+        // Draw Player Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        // Shadow shrinks slightly as player jumps higher
+        let shadowScale = Math.max(0.5, 1 - (player.y / 150));
+        ctx.ellipse(pPlayer.x, pPlayer.y, (pWidth / 1.5) * shadowScale, 6 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw Player Body Capsule
+        ctx.fillStyle = player.color;
+        ctx.fillRect(pX, pY, pWidth, pHeight);
+
+        // Draw Player details (e.g. "Glasses / Visor" to show running direction)
+        ctx.fillStyle = '#333';
+        ctx.fillRect(pX + 4, pY + 10, pWidth - 8, 10);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(pX + pWidth - 12, pY + 12, 6, 6); // Forward facing glint
+
+        // Loop next animation tick
+        requestAnimationFrame(gameUpdate);
+    }
+</script>
+</body>
+</html>

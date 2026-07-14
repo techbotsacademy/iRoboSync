@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Gesture Platformer Game - Hand Control</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', monospace;
+            color: white;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+            font-size: 24px;
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+        }
+
+        canvas {
+            background-color: #5c94fc; 
+            border: 4px solid #ffffff;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 1;
+        }
+
+        /* Top-right AI Debug Preview Container */
+        #ai-preview-container {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 160px;
+            height: 120px;
+            border: 2px solid white;
+            border-radius: 4px;
+            overflow: hidden;
+            z-index: 10;
+            background: #000;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+        }
+
+        #webcam-video {
+            display: none; /* Keep raw video feed invisible, drawn on overlay canvas */
+        }
+
+        #ai-canvas {
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* Mirror camera for natural interaction orientation */
+        }
+
+        /* Left-side Live AI Debug Info Dashboard overlay */
+        #debug-dashboard {
+            position: absolute;
+            top: 70px;
+            left: 20px;
+            z-index: 5;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            line-height: 1.5;
+            border: 1px solid #5c94fc;
+            pointer-events: none;
+        }
+
+        .stat-val {
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        /* Level Completion Overlay Screen */
+        #results-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 800px;
+            height: 600px;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 100;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border: 4px solid #ffffff;
+            box-sizing: border-box;
+        }
+
+        #results-overlay h2 {
+            color: #4caf50;
+            font-size: 40px;
+            margin-bottom: 20px;
+            text-shadow: 3px 3px 0px #000;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 40px;
+            width: 60%;
+            margin-bottom: 30px;
+            font-size: 18px;
+        }
+
+        .res-label { text-align: left; color: #b8d0fc; }
+        .res-val { text-align: right; color: #fff; font-weight: bold; }
+
+        #score-box {
+            font-size: 28px;
+            color: #ffd700;
+            margin-bottom: 30px;
+            border-top: 2px dashed #fff;
+            border-bottom: 2px dashed #fff;
+            padding: 10px 30px;
+        }
+
+        button {
+            background-color: #4caf50;
+            color: white;
+            border: 3px solid white;
+            padding: 10px 25px;
+            font-size: 20px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            box-shadow: 0 4px 0px #2e7d32;
+        }
+
+        button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0px #2e7d32;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>AI Gesture Controlled Super Mario</h1>
+    
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="debug-dashboard">
+            <div>GESTURE STATUS: <span id="db-status" class="stat-val">Waiting</span></div>
+            <div>JUMP DETECTED: <span id="db-jump" class="stat-val">False</span></div>
+            <div>PEDAL CYCLES: <span id="db-cycles" class="stat-val">0</span></div>
+            <div>CYCLING FREQ : <span id="db-cyc-speed" class="stat-val">0.00</span> hz</div>
+            <div>MARIO VELOCITYX: <span id="db-play-speed" class="stat-val">0.00</span> px/f</div>
+        </div>
+
+        <div id="ai-preview-container">
+            <video id="webcam-video" playsinline autoplay></video>
+            <canvas id="ai-canvas" width="160" height="120"></canvas>
+        </div>
+
+        <div id="results-overlay">
+            <h2>LEVEL COMPLETE!</h2>
+            <div class="results-grid">
+                <span class="res-label">Total Time:</span><span id="res-time" class="res-val">0s</span>
+                <span class="res-label">Distance Travelled:</span><span id="res-dist" class="res-val">0m</span>
+                <span class="res-label">Jumps Executed:</span><span id="res-jumps" class="res-val">0</span>
+                <span class="res-label">Pedal Cycles Completed:</span><span id="res-cycles" class="res-val">0</span>
+                <span class="res-label">Max Cycling Speed:</span><span id="res-max-sp" class="res-val">0.0</span>
+            </div>
+            <div id="score-box">OVERALL SCORE: <span id="res-score">000000</span></div>
+            <button onclick="resetGame()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <p>💡 Interactive Control Guide: Cycle hands up & down to run right! Thrust both hands up fast to jump!</p>
+
+    <script>
+        // =========================================================================
+        // SECTION 1: SYSTEM ARCHITECTURE FRAMEWORK INITIALIZATION SETUP & VARIABLES
+        // =========================================================================
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const videoElement = document.getElementById('webcam-video');
+        const aiCanvas = document.getElementById('ai-canvas');
+        const aiCtx = aiCanvas.getContext('2d');
+
+        // Physics Constants Config
+        const gravity = 0.5; 
+        const friction = 0.85; 
+        const levelWidth = 2000; 
+
+        // Live Telemetry Variable Counters
+        let score = 0;
+        let cameraX = 0;
+        let gameActive = true;
+        
+        // Match Metrics Statistics Properties
+        let statTimeStart = Date.now();
+        let statJumpsCount = 0;
+        let statMaxCycSpeed = 0;
+
+        // Command Buffer pipeline outputs produced by Gesture Engine consumed by physics updates loops
+        const commands = {
+            moveRight: false,
+            jump: false,
+            calculatedSpeed: 0
+        };
+
+        // Player Data Models Object Construct definitions
+        const player = {
+            x: 50, 
+            y: 400,
+            width: 32,
+            height: 48, 
+            velocityX: 0,
+            velocityY: 0,
+            speedMaxAllowed: 6.5,
+            jumpForce: 12.5,
+            grounded: false,
+            facingRight: true,
+            animFrame: 0,
+            animTimer: 0
+        };
+
+        // Layout level maps matching geometry specs
+        let platforms = [
+            { worldX: 0, worldY: 550, width: 800, height: 50, type: 'ground' },
+            { worldX: 800, worldY: 550, width: 600, height: 50, type: 'ground' },
+            { worldX: 1400, worldY: 550, width: 600, height: 50, type: 'ground' },
+            { worldX: 150, worldY: 430, width: 150, height: 32, type: 'brick' },
+            { worldX: 450, worldY: 350, width: 192, height: 32, type: 'brick' }, 
+            { worldX: 200, worldY: 240, width: 160, height: 32, type: 'brick' },
+            { worldX: 680, worldY: 430, width: 64, height: 120, type: 'pipe' },
+            { worldX: 900, worldY: 400, width: 160, height: 32, type: 'brick' },
+            { worldX: 1150, worldY: 320, width: 128, height: 32, type: 'brick' },
+            { worldX: 1350, worldY: 430, width: 64, height: 120, type: 'pipe' },
+            { worldX: 1550, worldY: 240, width: 192, height: 32, type: 'brick' },
+            // End Zone Destination Goal Flagpole Marker Struct
+            { worldX: 1880, worldY: 150, width: 10, height: 400, type: 'flagpole' }
+        ];
+
+        let coins = [
+            { worldX: 215, worldY: 380, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 },
+            { worldX: 545, worldY: 300, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 },
+            { worldX: 275, worldY: 190, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 },
+            { worldX: 970, worldY: 350, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 },
+            { worldX: 1200, worldY: 270, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 }
+        ];
+
+        // =========================================================================
+        // SECTION 2: AI COMPUTER VISION LABELS GESTURE DETECTOR ENGINE MODULE
+        // =========================================================================
+        
+        // Landmark Position History buffers for signal filtering and velocity analysis
+        let historyLeftWristY = [];
+        let historyRightWristY = [];
+        const maxHistorySize = 15;
+
+        // Cycling Motion Tracking States
+        let totalPedalCycles = 0;
+        let lastDirectionLeft = 0; // -1 = Up, 1 = Down, 0 = Unknown
+        let lastDirectionRight = 0;
+        let halfCyclesCount = 0;
+        let lastCycleTime = Date.now();
+        let currentCyclingFrequency = 0;
+        let smoothInputVelocity = 0;
+
+        // Jump Gesture States
+        let jumpCooldownActive = false;
+        let debugJumpTriggeredTime = 0;
+
+        /**
+         * Core processing pipeline parsing tracking frames emitted by MediaPipe hands engine
+         */
+        function processHandGestures(results) {
+            // Clear current debugging overlay frame window
+            aiCtx.clearRect(0, 0, aiCanvas.width, aiCanvas.height);
+            aiCtx.drawImage(results.image, 0, 0, aiCanvas.width, aiCanvas.height);
+
+            let currentLeftWrist = null;
+            let currentRightWrist = null;
+
+            if (results.multiHandLandmarks && results.multiHandedness) {
+                for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+                    let landmarks = results.multiHandLandmarks[i];
+                    let classification = results.multiHandedness[i];
+                    
+                    // Determine left vs right hand based on MediaPipe classification tags
+                    let isLeftHand = classification.label === "Left"; 
+                    let wristLandmark = landmarks[0]; // Point index 0 is the wrist root joint location
+
+                    if (isLeftHand) {
+                        currentLeftWrist = { x: wristLandmark.x, y: wristLandmark.y };
+                    } else {
+                        currentRightWrist = { x: wristLandmark.x, y: wristLandmark.y };
+                    }
+
+                    // Draw tracking debug points inside preview display module bounds
+                    ctx.save();
+                    aiCtx.fillStyle = isLeftHand ? "#ff4757" : "#2e86de";
+                    for (let pt of landmarks) {
+                        aiCtx.beginPath();
+                        aiCtx.arc(pt.x * aiCanvas.width, pt.y * aiCanvas.height, 2, 0, Math.PI * 2);
+                        aiCtx.fill();
+                    }
+                    ctx.restore();
+                }
+            }
+
+            // Route raw point records inside filtering algorithm pipes layers
+            evaluateCyclingGesture(currentLeftWrist, currentRightWrist);
+            evaluateJumpGesture(currentLeftWrist, currentRightWrist);
+            updateDebugDashboard();
+        }
+
+        /**
+         * Cycling processing algorithms track vertical wave oscillations patterns mapping hand properties
+         */
+        function evaluateCyclingGesture(leftWrist, rightWrist) {
+            let currentTime = Date.now();
+
+            // Timeout processing checks if active signals disappear or stop moving for 500ms
+            if (currentTime - lastCycleTime > 500) {
+                currentCyclingFrequency = 0;
+                commands.moveRight = false;
+                document.getElementById("db-status").innerText = "Waiting";
+                document.getElementById("db-status").style.color = "#ff4757";
+            }
+
+            if (!leftWrist || !rightWrist) return; // Requires both hands on tracking viewport bounds to calculate cycles
+
+            // Add normalized vertical coordinates to tracking histories arrays buffers
+            historyLeftWristY.push(leftWrist.y);
+            historyRightWristY.push(rightWrist.y);
+            if (historyLeftWristY.length > maxHistorySize) historyLeftWristY.shift();
+            if (historyRightWristY.length > maxHistorySize) historyRightWristY.shift();
+
+            if (historyLeftWristY.length < 5) return; // Wait until adequate frames fill buffers array
+
+            // Process moving averages changes profiles to determine current travel vector orientations
+            let deltaLeft = leftWrist.y - historyLeftWristY[historyLeftWristY.length - 4];
+            let deltaRight = rightWrist.y - historyRightWristY[historyRightWristY.length - 4];
+
+            const movementThreshold = 0.015; // Filter minor structural hand tremblings / noise
+            let dirLeft = Math.abs(deltaLeft) > movementThreshold ? Math.sign(deltaLeft) : 0; // -1 = Up (low Y value in screen coords), 1 = Down
+            let dirRight = Math.abs(deltaRight) > movementThreshold ? Math.sign(deltaRight) : 0;
+
+            // CRITICAL STEP: Verify hands move in inverse balanced opposing direction paths
+            if (dirLeft !== 0 && dirRight !== 0 && dirLeft !== dirRight) {
+                // Check if directional inversion flip happened (Half-cycle boundary match)
+                if (dirLeft !== lastDirectionLeft && dirRight !== lastDirectionRight) {
+                    halfCyclesCount++;
+                    lastDirectionLeft = dirLeft;
+                    lastDirectionRight = dirRight;
+
+                    // Two completed half cycles register as one Full Phase Pedal Cycle
+                    if (halfCyclesCount >= 2) {
+                        totalPedalCycles++;
+                        halfCyclesCount = 0;
+
+                        let timeGap = currentTime - lastCycleTime;
+                        if (timeGap > 100 && timeGap < 1000) {
+                            currentCyclingFrequency = 1000 / timeGap; // Compute temporary frequency speed rating
+                            if (currentCyclingFrequency > statMaxCycSpeed) statMaxCycSpeed = currentCyclingFrequency;
+                        }
+                        lastCycleTime = currentTime;
+                    }
+                }
+            }
+
+            // Require at least two validated base cycles counts filled before authorizing player movements updates
+            if (totalPedalCycles >= 2 && (currentTime - lastCycleTime < 500)) {
+                document.getElementById("db-status").innerText = "Cycling Detected";
+                document.getElementById("db-status").style.color = "#ffd700";
+
+                // Scale running operations map base linear translation updates proportional to speeds metrics
+                let targetSpeed = currentCyclingFrequency * 2.5; 
+                if (targetSpeed < 1.5) targetSpeed = 1.5; // Establish minimum standard creep speed threshold bounds
+                
+                // Interpolate velocities configurations mapping smoothly
+                smoothInputVelocity += (targetSpeed - smoothInputVelocity) * 0.15;
+                commands.calculatedSpeed = Math.min(smoothInputVelocity, player.speedMaxAllowed);
+                commands.moveRight = true;
+
+                document.getElementById("db-status").innerText = "Moving";
+                document.getElementById("db-status").style.color = "#4caf50";
+            } else {
+                commands.moveRight = false;
+                smoothInputVelocity *= friction;
+                commands.calculatedSpeed = 0;
+            }
+        }
+
+        /**
+         * Fast upward acceleration calculation models handle player jumping commands signals execution pipelines
+         */
+        function evaluateJumpGesture(leftWrist, rightWrist) {
+            if (!leftWrist || !rightWrist) return;
+
+            if (historyLeftWristY.length < 4) return;
+            
+            // Measure immediate frame rate acceleration delta changes properties profiles
+            let snapVelocityLeft = historyLeftWristY[historyLeftWristY.length - 1] - historyLeftWristY[historyLeftWristY.length - 3];
+            let snapVelocityRight = historyRightWristY[historyRightWristY.length - 1] - historyRightWristY[historyRightWristY.length - 3];
+
+            // Negative value represents upward vector movement in default top-down canvas space systems coordinates
+            const jumpThrustVelocityThreshold = -0.09; 
+            const highShoulderLevelLineThreshold = 0.35; // Hands rising into top 35% bounding field boxes triggers jumps independently
+
+            let isFastThrustUp = (snapVelocityLeft < jumpThrustVelocityThreshold && snapVelocityRight < jumpThrustVelocityThreshold);
+            let isHandsAboveShoulders = (leftWrist.y < highShoulderLevelLineThreshold && rightWrist.y < highShoulderLevelLineThreshold);
+
+            if ((isFastThrustUp || isHandsAboveShoulders)) {
+                if (!jumpCooldownActive && player.grounded && gameActive) {
+                    commands.jump = true;
+                    jumpCooldownActive = true;
+                    statJumpsCount++;
+                    debugJumpTriggeredTime = Date.now();
+                }
+            } else {
+                // Reset activation locks cleanly once user lowers hands down comfortably below the top line marker limit fields
+                if (leftWrist.y > 0.45 && rightWrist.y > 0.45) {
+                    jumpCooldownActive = false;
+                }
+            }
+        }
+
+        /**
+         * Propagate computed live parameters stats out onto HUD overlay dashboard elements boxes
+         */
+        function updateDebugDashboard() {
+            document.getElementById("db-jump").innerText = jumpCooldownActive ? "TRUE" : "FALSE";
+            document.getElementById("db-jump").style.color = jumpCooldownActive ? "#4caf50" : "#ff4757";
+            document.getElementById("db-cycles").innerText = totalPedalCycles;
+            document.getElementById("db-cyc-speed").innerText = currentCyclingFrequency.toFixed(2);
+            document.getElementById("db-play-speed").innerText = player.velocityX.toFixed(2);
+        }
+
+        // Initialize MediaPipe tracking pipeline structures
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults(processHandGestures);
+
+        // Direct browser webcam hardware camera stream acquisition pipelines configs blocks
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 160,
+            height: 120
+        });
+        camera.start().catch(err => {
+            alert("Webcam connection failed or permission denied! Please ensure camera authorization parameters are granted.");
+        });
+
+        // =========================================================================
+        // SECTION 3: CORE GAME ENGINE MECHANICS, INTERACTION LAWS, & COLLISONS PIPES
+        // =========================================================================
+        function checkCollision(playerObj, worldBlock) {
+            return playerObj.x < worldBlock.worldX + worldBlock.width &&
+                   playerObj.x + playerObj.width > worldBlock.worldX &&
+                   playerObj.y < worldBlock.worldY + worldBlock.height &&
+                   playerObj.y + playerObj.height > worldBlock.worldY;
+        }
+
+        function drawSkyBackground() {
+            let skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGrad.addColorStop(0, "#5c94fc");
+            skyGrad.addColorStop(1, "#b8d0fc");
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Far Mountains Layer (Parallax: 10% rate tracking)
+            let mountainCamOffset = cameraX * 0.1;
+            drawMountain(100 - mountainCamOffset, 550, 250, 300, "#4d88e0");
+            drawMountain(400 - mountainCamOffset, 550, 300, 350, "#417cd4");
+            drawMountain(900 - mountainCamOffset, 550, 280, 320, "#4d88e0");
+            drawMountain(1300 - mountainCamOffset, 550, 320, 360, "#417cd4");
+
+            // Clouds Layer (Parallax: 20% rate tracking)
+            let cloudCamOffset = cameraX * 0.2;
+            drawCloud(120 - cloudCamOffset, 120, 40);
+            drawCloud(500 - cloudCamOffset, 80, 50);
+            drawCloud(900 - cloudCamOffset, 140, 35);
+            drawCloud(1300 - cloudCamOffset, 90, 45);
+
+            // Rolling Hills Layer (Parallax: 50% rate tracking)
+            let hillCamOffset = cameraX * 0.5;
+            drawHill(0 - hillCamOffset, 550, 160, 80, "#4cb050");
+            drawHill(250 - hillCamOffset, 550, 220, 110, "#3e9c42");
+            drawHill(550 - hillCamOffset, 550, 180, 90, "#4cb050");
+            drawHill(900 - hillCamOffset, 550, 200, 100, "#3e9c42");
+
+            drawBush(80 - hillCamOffset, 530, 25, "#2e7d32");
+            drawBush(380 - hillCamOffset, 530, 30, "#2e7d32");
+            drawTree(600 - hillCamOffset, 480);
+        }
+
+        function drawMountain(screenX, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(screenX, y);
+            ctx.lineTo(screenX + width / 2, y - height);
+            ctx.lineTo(screenX + width, y);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawHill(screenX, y, radiusX, radiusY, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.ellipse(screenX + radiusX, y, radiusX, radiusY, 0, Math.PI, 0);
+            ctx.fill();
+        }
+
+        function drawCloud(screenX, y, r) {
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(screenX, y, r, 0, Math.PI * 2);
+            ctx.arc(screenX + r * 0.6, y - r * 0.4, r * 0.8, 0, Math.PI * 2);
+            ctx.arc(screenX + r * 1.3, y, r * 0.6, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawBush(screenX, y, r, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(screenX, y, r, 0, Math.PI * 2);
+            ctx.arc(screenX + r * 0.7, y - r * 0.2, r * 0.9, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawTree(screenX, y) {
+            ctx.fillStyle = "#795548";
+            ctx.fillRect(screenX + 15, y, 14, 70);
+            ctx.fillStyle = "#2e7d32";
+            ctx.beginPath();
+            ctx.arc(screenX + 22, y, 30, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawProceduralPlayer(p) {
+            ctx.save();
+            let screenX = p.x - cameraX;
+            ctx.translate(screenX + p.width / 2, p.y + p.height / 2);
+            
+            if (!p.facingRight) ctx.scale(-1, 1);
+
+            let legOffsetLeft = 0;
+            let legOffsetRight = 0;
+            if (!p.grounded) {
+                legOffsetLeft = -8;
+                legOffsetRight = 6;
+            } else if (Math.abs(p.velocityX) > 0.2) {
+                legOffsetLeft = Math.sin(p.animFrame * 1.5) * 6;
+                legOffsetRight = -Math.sin(p.animFrame * 1.5) * 6;
+            }
+
+            // Shoes & Legs Overalls
+            ctx.fillStyle = "#4e342e";
+            ctx.fillRect(-14 + legOffsetLeft, 16, 11, 8); 
+            ctx.fillRect(3 + legOffsetRight, 16, 11, 8);  
+            ctx.fillStyle = "#0d47a1";
+            ctx.fillRect(-12 + legOffsetLeft, 6, 8, 11); 
+            ctx.fillRect(4 + legOffsetRight, 6, 8, 11);  
+            ctx.fillRect(-10, -4, 20, 11); 
+
+            // Red Shirt Torso & Overalls
+            ctx.fillStyle = "#d32f2f";
+            ctx.fillRect(-11, -14, 22, 10); 
+            ctx.fillStyle = "#0d47a1";
+            ctx.fillRect(-8, -14, 4, 10);  
+            ctx.fillRect(4, -14, 4, 10);   
+            ctx.fillStyle = "#fbc02d";
+            ctx.fillRect(-8, -8, 3, 3);
+            ctx.fillRect(5, -8, 3, 3);
+
+            // Sleeves & Gloves
+            ctx.fillStyle = "#d32f2f";
+            ctx.fillRect(-15, -14, 5, 12); 
+            ctx.fillRect(10, -14, 5, 12);  
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(-16, -4, 6, 6);   
+            ctx.fillRect(10, -4, 6, 6);    
+
+            // Face Box Details & Cap Mask
+            ctx.fillStyle = "#ffccbc";
+            ctx.fillRect(-8, -26, 16, 13); 
+            ctx.fillRect(4, -22, 6, 5);    
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(3, -24, 3, 4); 
+            ctx.fillStyle = "#2d1a12";
+            ctx.fillRect(1, -18, 9, 3);  
+            ctx.fillStyle = "#d32f2f";
+            ctx.fillRect(-9, -30, 17, 5); 
+            ctx.fillRect(-3, -29, 13, 4);
+            ctx.fillRect(2, -27, 10, 2);  
+
+            ctx.restore();
+        }
+
+        /**
+         * Triggered automatically upon character body touching the level's final Flagpole object structure
+         */
+        function triggerLevelCompletion() {
+            gameActive = false;
+            commands.moveRight = false;
+            commands.jump = false;
+            
+            let timeElapsedSeconds = Math.max(1, Math.floor((Date.now() - statTimeStart) / 1000));
+            
+            // Score Calculation Rule Matrix
+            let distScore = Math.floor(player.x);
+            let flagBonus = 2500;
+            let timePenalty = timeElapsedSeconds * 15;
+            let cycleAccuracyBonus = totalPedalCycles * 50;
+            let jumpWastePenalty = Math.max(0, statJumpsCount - 4) * 200; // Penalize excessive random jumping patterns
+
+            let totalFinalCalculatedScore = distScore + flagBonus + cycleAccuracyBonus - timePenalty - jumpWastePenalty;
+            if (totalFinalCalculatedScore < 0) totalFinalCalculatedScore = 0;
+
+            // Load results values onto text panels elements
+            document.getElementById("res-time").innerText = timeElapsedSeconds + "s";
+            document.getElementById("res-dist").innerText = Math.floor(player.x) + "m";
+            document.getElementById("res-jumps").innerText = statJumpsCount;
+            document.getElementById("res-cycles").innerText = totalPedalCycles;
+            document.getElementById("res-max-sp").innerText = statMaxCycSpeed.toFixed(1) + " hz";
+            document.getElementById("res-score").innerText = String(totalFinalCalculatedScore).padStart(6, '0');
+
+            // Fade in result metrics panels layout layer smoothly
+            document.getElementById("results-overlay").style.display = "flex";
+        }
+
+        /**
+         * Resets core parameters to standard configurations allowing continuous testing runs easily
+         */
+        function resetGame() {
+            player.x = 50;
+            player.y = 400;
+            player.velocityX = 0;
+            player.velocityY = 0;
+            player.grounded = false;
+            cameraX = 0;
+            score = 0;
+            totalPedalCycles = 0;
+            statJumpsCount = 0;
+            statMaxCycSpeed = 0;
+            statTimeStart = Date.now();
+            
+            // Flush tracking history queues cleanly to eliminate residual velocity artifacts
+            historyLeftWristY = [];
+            historyRightWristY = [];
+            
+            for (let c of coins) { c.collected = false; c.sparkleTimer = 0; }
+            
+            document.getElementById("results-overlay").style.display = "none";
+            gameActive = true;
+        }
+
+        // =========================================================================
+        // SECTION 4: UNMODIFIED FLUID PLATFORM PHYSICS UPDATES TICK CYCLE ENGINE
+        // =========================================================================
+        function gameLoop() {
+            if (gameActive) {
+                // Read input signals passed from our gesture interpretation engine pipelines buffer commands
+                if (commands.moveRight) {
+                    player.velocityX = commands.calculatedSpeed;
+                    player.facingRight = true;
+                    
+                    if (player.grounded) {
+                        player.animTimer++;
+                        if (player.animTimer > 4) {
+                            player.animFrame++;
+                            player.animTimer = 0;
+                        }
+                    }
+                } else {
+                    player.velocityX *= friction;
+                    if (player.grounded && Math.abs(player.velocityX) < 0.2) {
+                        player.animFrame = 0;
+                    }
+                }
+
+                if (commands.jump && player.grounded) {
+                    player.velocityY = -player.jumpForce;
+                    player.grounded = false;
+                    commands.jump = false; // Reset command pipe latch instantly
+                }
+
+                player.velocityY += gravity;
+                player.x += player.velocityX; 
+                
+                if (player.x < 0) player.x = 0;
+                if (player.x + player.width > levelWidth) player.x = levelWidth - player.width;
+
+                player.y += player.velocityY;
+                player.grounded = false; 
+
+                // Camera Position Tracking System Calculations
+                let targetCameraX = player.x - canvas.width * 0.4;
+                if (targetCameraX < 0) targetCameraX = 0;
+                if (targetCameraX > levelWidth - canvas.width) targetCameraX = levelWidth - canvas.width;
+                cameraX += (targetCameraX - cameraX) * 0.1;
+
+                // Evaluate structural obstacle bounds maps collisions resolution rules blocks
+                for (let i = 0; i < platforms.length; i++) {
+                    let plat = platforms[i];
+                    if (checkCollision(player, plat)) {
+                        if (plat.type === 'flagpole') {
+                            triggerLevelCompletion();
+                            break;
+                        }
+
+                        if (player.velocityY > 0 && (player.y + player.height - player.velocityY) <= plat.worldY) {
+                            player.y = plat.worldY - player.height; 
+                            player.velocityY = 0;             
+                            player.grounded = true;           
+                        }
+                        else if (player.velocityY < 0 && (player.y - player.velocityY) >= plat.worldY + plat.height) {
+                            player.y = plat.worldY + plat.height;   
+                            player.velocityY = 0;             
+                        }
+                        else if (player.velocityX > 0 && (player.x + player.width - player.velocityX) <= plat.worldX) {
+                            player.x = plat.worldX - player.width;
+                        }
+                        else if (player.velocityX < 0 && (player.x - player.velocityX) >= plat.worldX + plat.width) {
+                            player.x = plat.worldX + plat.width;
+                        }
+                    }
+                }
+
+                // Coin collection evaluation routines loops updates pipelines blocks
+                for (let i = 0; i < coins.length; i++) {
+                    let coin = coins[i];
+                    coin.animFrame = (coin.animFrame + 1) % 40;
+
+                    if (!coin.collected) {
+                        if (player.x < coin.worldX + coin.width &&
+                            player.x + player.width > coin.worldX &&
+                            player.y < coin.worldY + coin.height &&
+                            player.y + player.height > coin.worldY) {
+                            coin.collected = true;
+                            score += 100;
+                        }
+                    } else if (coin.collected && coin.sparkleTimer < 20) {
+                        coin.sparkleTimer++;
+                    }
+                }
+            }
+
+            // --- CANVAS RENDERING PIPELINE BLOCKS ---
+            drawSkyBackground();
+
+            // Display Score HUD overlay text element metrics boards
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 20px 'Courier New', monospace";
+            ctx.fillText(`MARIO   SCORE: ${String(score).padStart(6, '0')}`, 30, 40);
+
+            // Draw Platforms Elements
+            for (let i = 0; i < platforms.length; i++) {
+                let plat = platforms[i];
+                let screenX = plat.worldX - cameraX;
+
+                if (screenX + plat.width < 0 || screenX > canvas.width) continue;
+
+                if (plat.type === 'ground') {
+                    ctx.fillStyle = "#4caf50";
+                    ctx.fillRect(screenX, plat.worldY, plat.width, 14); 
+                    ctx.fillStyle = "#8d6e63";
+                    ctx.fillRect(screenX, plat.worldY + 14, plat.width, plat.height - 14); 
+                } 
+                else if (plat.type === 'brick') {
+                    ctx.fillStyle = "#d84315"; 
+                    ctx.fillRect(screenX, plat.worldY, plat.width, plat.height);
+                    ctx.strokeStyle = "#4e1505"; 
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(screenX, plat.worldY, plat.width, plat.height);
+                } 
+                else if (plat.type === 'pipe') {
+                    ctx.fillStyle = "#1b5e20";
+                    ctx.fillRect(screenX + 4, plat.worldY + 28, plat.width - 8, plat.height - 28);
+                    ctx.fillRect(screenX, plat.worldY, plat.width, 28);
+                    ctx.strokeStyle = "#0d230d";
+                    ctx.strokeRect(screenX, plat.worldY, plat.width, 28);
+                }
+                else if (plat.type === 'flagpole') {
+                    // Draw Flagpole components structure stack blocks
+                    ctx.fillStyle = "#b0bec5";
+                    ctx.fillRect(screenX + 3, plat.worldY, 4, plat.height);
+                    ctx.fillStyle = "#ffd700";
+                    ctx.beginPath();
+                    ctx.arc(screenX + 5, plat.worldY, 6, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Draw classic green flag triangle attached onto the structural rod component
+                    ctx.fillStyle = "#4caf50";
+                    ctx.beginPath();
+                    ctx.moveTo(screenX + 7, plat.worldY + 20);
+                    ctx.lineTo(screenX + 35, plat.worldY + 35);
+                    ctx.lineTo(screenX + 7, plat.worldY + 50);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+
+            // Draw Active Collectible Coins array profiles maps lists structures
+            for (let i = 0; i < coins.length; i++) {
+                let coin = coins[i];
+                let screenX = coin.worldX - cameraX;
+
+                if (screenX + coin.width < 0 || screenX > canvas.width) continue;
+
+                if (!coin.collected) {
+                    ctx.save();
+                    ctx.translate(screenX + coin.width / 2, coin.worldY + coin.height / 2);
+                    let widthScale = Math.abs(Math.cos(coin.animFrame * 0.16));
+                    ctx.scale(widthScale, 1);
+                    ctx.fillStyle = "#ffd700";
+                    ctx.beginPath();
+                    ctx.arc(0, 0, coin.width / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = "#e65100";
+                    ctx.stroke();
+                    ctx.restore();
+                } else if (coin.collected && coin.sparkleTimer < 20) {
+                    ctx.save();
+                    ctx.translate(screenX + coin.width / 2, coin.worldY - 10);
+                    ctx.fillStyle = `rgba(255, 235, 59, ${(20 - coin.sparkleTimer) / 20})`;
+                    for (let r = 0; r < 4; r++) {
+                        ctx.rotate(Math.PI / 2);
+                        ctx.fillRect(-1, -4 - coin.sparkleTimer * 0.5, 2, 4);
+                    }
+                    ctx.restore();
+                }
+            }
+
+            // Draw Mario Procedural Sprite Character Model Framework block
+            drawProceduralPlayer(player);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize execution tick cycle sequence routines loops blocks instantly!
+        gameLoop();
+    </script>
+</body>
+</html>

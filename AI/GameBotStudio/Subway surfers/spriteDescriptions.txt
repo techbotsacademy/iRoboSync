@@ -1,0 +1,4 @@
+describe the subway surfer player
+describe the subway surfer train
+describe the subway surfer obstacle
+so that it can be drawn on canva

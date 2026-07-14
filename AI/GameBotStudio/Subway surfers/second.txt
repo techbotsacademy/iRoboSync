@@ -1,0 +1,20 @@
+Keep everything that currently works.
+
+Do not remove or rewrite any existing feature unless absolutely necessary.
+
+Improve the existing game by adding only the following features:
+The looks of the game needs to be improved
+The player look - A colorful 3D cartoon-style teenage runner with a cheerful expression, wearing a bright red hoodie, blue jeans, and white sneakers. The character has short brown hair, a small backpack, and is running forward with one foot in the air and arms pumping. The design is simple, vibrant, and child-friendly, with bold outlines and smooth shading. Front-facing, transparent background, game sprite style.
+The train look - A modern cartoon subway train viewed from the front. The train has a rounded nose, large blue windshield, bright headlights, silver and yellow body, and clean colorful details. The design is simple, friendly, and suitable for a children's endless runner game. Bright colors, smooth 3D cartoon style, isolated on a transparent background.
+The Barrier look - A colorful construction barrier for a cartoon endless runner game. The obstacle is rectangular with diagonal red-and-white warning stripes, orange side supports, and a small blinking yellow warning light on top. It has a playful, rounded design with bright colors, making it look safe and child-friendly rather than realistic. Front view, transparent background, game asset style.
+
+• Add collectible coins.
+• Increase the score when coins are collected.
+• Add a coin collection sound effect.
+• Add simple running animation for the player.
+• Improve the lane movement so it feels smoother.
+• Display the number of collected coins.
+• Add a Start screen with instructions.
+• Add a Restart button after Game Over.
+
+Keep everything inside one HTML file.

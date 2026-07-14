@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grade 7 Platformer Game - Camera Scrolling</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        canvas {
+            background-color: #5c94fc; 
+            border: 4px solid #ffffff;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        p {
+            margin-top: 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>My First Platformer</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <p>Controls: A/D or Left/Right Arrows to Move | Spacebar or Up Arrow to Jump</p>
+
+    <script>
+        // --- 1. SETUP GAME CANVAS ---
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // --- 2. GAME VARIABLES & PHYSICS ---
+        const gravity = 0.5; 
+        const friction = 0.8; 
+        let score = 0;
+
+        // Camera Variable to track horizontal scroll position in the world
+        let cameraX = 0;
+        // Total width of our expanded level map
+        const levelWidth = 2000; 
+
+        const keys = { right: false, left: false, up: false };
+
+        // --- 3. PLAYER OBJECT ---
+        const player = {
+            x: 50, // This now tracks the player's worldX coordinate position
+            y: 400,
+            width: 32,
+            height: 48, 
+            velocityX: 0,
+            velocityY: 0,
+            speed: 5,
+            jumpForce: 12,
+            grounded: false,
+            facingRight: true,
+            animFrame: 0,
+            animTimer: 0
+        };
+
+        // --- 4. PLATFORMS & PIPES ARRAY (World Coordinates) ---
+        // Expanded level layouts out to the right utilizing world coordinates
+        const platforms = [
+            // Expanded Ground Floors
+            { worldX: 0, worldY: 550, width: 800, height: 50, type: 'ground' },
+            { worldX: 800, worldY: 550, width: 600, height: 50, type: 'ground' },
+            { worldX: 1400, worldY: 550, width: 600, height: 50, type: 'ground' },
+            
+            // First Section Obstacles
+            { worldX: 150, worldY: 430, width: 150, height: 32, type: 'brick' },
+            { worldX: 450, worldY: 350, width: 192, height: 32, type: 'brick' }, 
+            { worldX: 200, worldY: 240, width: 160, height: 32, type: 'brick' },
+            { worldX: 680, worldY: 430, width: 64, height: 120, type: 'pipe' },
+
+            // Second Section Obstacles (Further along the path)
+            { worldX: 900, worldY: 400, width: 160, height: 32, type: 'brick' },
+            { worldX: 1150, worldY: 320, width: 128, height: 32, type: 'brick' },
+            { worldX: 1350, worldY: 430, width: 64, height: 120, type: 'pipe' },
+            { worldX: 1550, worldY: 240, width: 192, height: 32, type: 'brick' }
+        ];
+
+        // --- 5. COINS ARRAY (World Coordinates) ---
+        const coins = [
+            { worldX: 215, worldY: 380, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 },
+            { worldX: 545, worldY: 300, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 },
+            { worldX: 275, worldY: 190, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 },
+            
+            // Additional Coins in expanded areas
+            { worldX: 970, worldY: 350, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 },
+            { worldX: 1200, worldY: 270, width: 20, height: 26, collected: false, sparkleTimer: 0, animFrame: 0 }
+        ];
+
+        // --- 6. EVENT LISTENERS ---
+        window.addEventListener("keydown", function (e) {
+            if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = true;
+            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = true;
+            if (e.key === "ArrowUp" || e.key === " " || e.key === "Spacebar") keys.up = true;
+        });
+
+        window.addEventListener("keyup", function (e) {
+            if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = false;
+            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = false;
+            if (e.key === "ArrowUp" || e.key === " " || e.key === "Spacebar") keys.up = false;
+        });
+
+        // --- 7. COLLISION DETECTION ---
+        // Helper evaluates physical dimensions using absolute world coordinate models
+        function checkCollision(playerObj, worldBlock) {
+            return playerObj.x < worldBlock.worldX + worldBlock.width &&
+                   playerObj.x + playerObj.width > worldBlock.worldX &&
+                   playerObj.y < worldBlock.worldY + worldBlock.height &&
+                   playerObj.y + playerObj.height > worldBlock.worldY;
+        }
+
+        // --- 8. PROCEDURAL BACKGROUND WITH PARALLAX SCROLLING ---
+        function drawSkyBackground() {
+            // Draw Sky Base Color
+            let skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGrad.addColorStop(0, "#5c94fc");
+            skyGrad.addColorStop(1, "#b8d0fc");
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // --- A. Far Mountains (Parallax Scale: 10% of camera speed) ---
+            let mountainCamOffset = cameraX * 0.1;
+            drawMountain(100 - mountainCamOffset, 550, 250, 300, "#4d88e0");
+            drawMountain(400 - mountainCamOffset, 550, 300, 350, "#417cd4");
+            drawMountain(900 - mountainCamOffset, 550, 280, 320, "#4d88e0");
+            drawMountain(1300 - mountainCamOffset, 550, 320, 360, "#417cd4");
+
+            // --- B. Clouds (Parallax Scale: 20% of camera speed) ---
+            let cloudCamOffset = cameraX * 0.2;
+            drawCloud(120 - cloudCamOffset, 120, 40);
+            drawCloud(500 - cloudCamOffset, 80, 50);
+            drawCloud(900 - cloudCamOffset, 140, 35);
+            drawCloud(1300 - cloudCamOffset, 90, 45);
+            drawCloud(1700 - cloudCamOffset, 110, 40);
+
+            // --- C. Rolling Hills & Trees (Parallax Scale: 50% of camera speed) ---
+            let hillCamOffset = cameraX * 0.5;
+            drawHill(0 - hillCamOffset, 550, 160, 80, "#4cb050");
+            drawHill(250 - hillCamOffset, 550, 220, 110, "#3e9c42");
+            drawHill(550 - hillCamOffset, 550, 180, 90, "#4cb050");
+            drawHill(900 - hillCamOffset, 550, 200, 100, "#3e9c42");
+            drawHill(1300 - hillCamOffset, 550, 170, 85, "#4cb050");
+
+            // Small elements tied to the hill layer
+            drawBush(80 - hillCamOffset, 530, 25, "#2e7d32");
+            drawBush(380 - hillCamOffset, 530, 30, "#2e7d32");
+            drawTree(600 - hillCamOffset, 480);
+            drawTree(1100 - hillCamOffset, 480);
+        }
+
+        function drawMountain(screenX, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(screenX, y);
+            ctx.lineTo(screenX + width / 2, y - height);
+            ctx.lineTo(screenX + width, y);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.fillStyle = "rgba(255,255,255,0.4)";
+            ctx.beginPath();
+            ctx.moveTo(screenX + width / 2 - width * 0.08, y - height * 0.84);
+            ctx.lineTo(screenX + width / 2, y - height);
+            ctx.lineTo(screenX + width / 2 + width * 0.08, y - height * 0.84);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawHill(screenX, y, radiusX, radiusY, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.ellipse(screenX + radiusX, y, radiusX, radiusY, 0, Math.PI, 0);
+            ctx.fill();
+        }
+
+        function drawCloud(screenX, y, r) {
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(screenX, y, r, 0, Math.PI * 2);
+            ctx.arc(screenX + r * 0.6, y - r * 0.4, r * 0.8, 0, Math.PI * 2);
+            ctx.arc(screenX + r * 1.3, y, r * 0.6, 0, Math.PI * 2);
+            ctx.arc(screenX + r * 0.7, y + r * 0.2, r * 0.7, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawBush(screenX, y, r, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(screenX, y, r, 0, Math.PI * 2);
+            ctx.arc(screenX + r * 0.7, y - r * 0.2, r * 0.9, 0, Math.PI * 2);
+            ctx.arc(screenX + r * 1.4, y, r * 0.7, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawTree(screenX, y) {
+            ctx.fillStyle = "#795548";
+            ctx.fillRect(screenX + 15, y, 14, 70);
+            ctx.fillStyle = "#2e7d32";
+            ctx.beginPath();
+            ctx.arc(screenX + 22, y, 30, 0, Math.PI * 2);
+            ctx.arc(screenX + 22, y - 25, 25, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // --- 9. CHARACTER DRAWING FUNCTION ---
+        function drawProceduralPlayer(p) {
+            ctx.save();
+            // Convert player's world position to horizontal screen coordinate using cameraX
+            let screenX = p.x - cameraX;
+            ctx.translate(screenX + p.width / 2, p.y + p.height / 2);
+            
+            if (!p.facingRight) {
+                ctx.scale(-1, 1);
+            }
+
+            let legOffsetLeft = 0;
+            let legOffsetRight = 0;
+            if (!p.grounded) {
+                legOffsetLeft = -8;
+                legOffsetRight = 6;
+            } else if (Math.abs(p.velocityX) > 0.2) {
+                legOffsetLeft = Math.sin(p.animFrame * 1.5) * 6;
+                legOffsetRight = -Math.sin(p.animFrame * 1.5) * 6;
+            }
+
+            // Shoes
+            ctx.fillStyle = "#4e342e";
+            ctx.fillRect(-14 + legOffsetLeft, 16, 11, 8); 
+            ctx.fillRect(3 + legOffsetRight, 16, 11, 8);  
+
+            // Legs & Overalls
+            ctx.fillStyle = "#0d47a1";
+            ctx.fillRect(-12 + legOffsetLeft, 6, 8, 11); 
+            ctx.fillRect(4 + legOffsetRight, 6, 8, 11);  
+            ctx.fillRect(-10, -4, 20, 11); 
+
+            // Torso
+            ctx.fillStyle = "#d32f2f";
+            ctx.fillRect(-11, -14, 22, 10); 
+            ctx.fillStyle = "#0d47a1";
+            ctx.fillRect(-8, -14, 4, 10);  
+            ctx.fillRect(4, -14, 4, 10);   
+            ctx.fillStyle = "#fbc02d";
+            ctx.fillRect(-8, -8, 3, 3);
+            ctx.fillRect(5, -8, 3, 3);
+
+            // Arms & Gloves
+            ctx.fillStyle = "#d32f2f";
+            ctx.fillRect(-15, -14, 5, 12); 
+            ctx.fillRect(10, -14, 5, 12);  
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(-16, -4, 6, 6);   
+            ctx.fillRect(10, -4, 6, 6);    
+
+            // Face
+            ctx.fillStyle = "#ffccbc";
+            ctx.fillRect(-8, -26, 16, 13); 
+            ctx.fillRect(4, -22, 6, 5);    
+
+            // Eyes & Moustache
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(3, -24, 3, 4); 
+            ctx.fillStyle = "#2d1a12";
+            ctx.fillRect(1, -18, 9, 3);  
+
+            // Cap
+            ctx.fillStyle = "#d32f2f";
+            ctx.fillRect(-9, -30, 17, 5); 
+            ctx.fillRect(-3, -29, 13, 4);
+            ctx.fillRect(2, -27, 10, 2);  
+
+            ctx.restore();
+        }
+
+        // --- 10. THE MAIN GAME LOOP ---
+        function gameLoop() {
+            // --- STEP A: UPDATE PLAYER MOVEMENT & ANIMATION ---
+            if (keys.right) {
+                player.velocityX = player.speed;
+                player.facingRight = true;
+                if (player.grounded) {
+                    player.animTimer++;
+                    if (player.animTimer > 4) {
+                        player.animFrame++;
+                        player.animTimer = 0;
+                    }
+                }
+            } else if (keys.left) {
+                player.velocityX = -player.speed;
+                player.facingRight = false;
+                if (player.grounded) {
+                    player.animTimer++;
+                    if (player.animTimer > 4) {
+                        player.animFrame++;
+                        player.animTimer = 0;
+                    }
+                }
+            } else {
+                player.velocityX *= friction;
+                if (player.grounded && Math.abs(player.velocityX) < 0.2) {
+                    player.animFrame = 0;
+                }
+            }
+
+            if (keys.up && player.grounded) {
+                player.velocityY = -player.jumpForce;
+                player.grounded = false;
+            }
+
+            player.velocityY += gravity;
+            player.x += player.velocityX; // Updates world location position
+            
+            // Constrain player position to total size of the expanded level map
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > levelWidth) player.x = levelWidth - player.width;
+
+            player.y += player.velocityY;
+            player.grounded = false; 
+
+            // --- STEP B: CAMERA SCROLLING LOGIC (Smooth Interpolation) ---
+            // Target focus shifts screen view once player passes 40% threshold marker (320px)
+            let targetCameraX = player.x - canvas.width * 0.4;
+            
+            // Prevent camera viewport tracking from scrolling past boundary edges
+            if (targetCameraX < 0) targetCameraX = 0;
+            if (targetCameraX > levelWidth - canvas.width) targetCameraX = levelWidth - canvas.width;
+
+            // Smooth interpolation (linear easing) updates towards target positioning smoothly
+            cameraX += (targetCameraX - cameraX) * 0.1;
+
+            // --- STEP C: COLLISION RESOLUTION (PLATFORMS & PIPES) ---
+            for (let i = 0; i < platforms.length; i++) {
+                let plat = platforms[i];
+                if (checkCollision(player, plat)) {
+                    if (player.velocityY > 0 && (player.y + player.height - player.velocityY) <= plat.worldY) {
+                        player.y = plat.worldY - player.height; 
+                        player.velocityY = 0;             
+                        player.grounded = true;           
+                    }
+                    else if (player.velocityY < 0 && (player.y - player.velocityY) >= plat.worldY + plat.height) {
+                        player.y = plat.worldY + plat.height;   
+                        player.velocityY = 0;             
+                    }
+                    else if (player.velocityX > 0 && (player.x + player.width - player.velocityX) <= plat.worldX) {
+                        player.x = plat.worldX - player.width;
+                    }
+                    else if (player.velocityX < 0 && (player.x - player.velocityX) >= plat.worldX + plat.width) {
+                        player.x = plat.worldX + plat.width;
+                    }
+                }
+            }
+
+            // --- STEP D: COIN PROCESSING & COLLECTION ---
+            for (let i = 0; i < coins.length; i++) {
+                let coin = coins[i];
+                coin.animFrame = (coin.animFrame + 1) % 40;
+
+                if (!coin.collected) {
+                    if (player.x < coin.worldX + coin.width &&
+                        player.x + player.width > coin.worldX &&
+                        player.y < coin.worldY + coin.height &&
+                        player.y + player.height > coin.worldY) {
+                        coin.collected = true;
+                        score += 100;
+                    }
+                } else if (coin.collected && coin.sparkleTimer < 20) {
+                    coin.sparkleTimer++;
+                }
+            }
+
+            // --- STEP E: RENDER PLATFORMS, COINS, & PLAYER ---
+            drawSkyBackground();
+
+            // Display HUD Text UI
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 20px 'Courier New', monospace";
+            ctx.fillText(`MARIO   SCORE: ${String(score).padStart(6, '0')}`, 30, 40);
+
+            // Draw Level Platforms (using screenX transformations)
+            for (let i = 0; i < platforms.length; i++) {
+                let plat = platforms[i];
+                let screenX = plat.worldX - cameraX;
+
+                // Skip drawing objects that have scrolled completely off screen space bounds
+                if (screenX + plat.width < 0 || screenX > canvas.width) continue;
+
+                if (plat.type === 'ground') {
+                    ctx.fillStyle = "#4caf50";
+                    ctx.fillRect(screenX, plat.worldY, plat.width, 14); 
+                    ctx.fillStyle = "#388e3c";
+                    ctx.fillRect(screenX, plat.worldY + 11, plat.width, 4);  
+                    ctx.fillStyle = "#8d6e63";
+                    ctx.fillRect(screenX, plat.worldY + 15, plat.width, plat.height - 15); 
+
+                    ctx.fillStyle = "#5d4037";
+                    for (let dx = screenX + 8; dx < screenX + plat.width; dx += 32) {
+                        ctx.fillRect(dx, plat.worldY + 24, 6, 6);
+                        ctx.fillRect(dx + 14, plat.worldY + 36, 6, 6);
+                    }
+                } 
+                else if (plat.type === 'brick') {
+                    ctx.fillStyle = "#d84315"; 
+                    ctx.fillRect(screenX, plat.worldY, plat.width, plat.height);
+
+                    ctx.strokeStyle = "#4e1505"; 
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(screenX, plat.worldY, plat.width, plat.height);
+
+                    let brickW = 32;
+                    let brickH = 16;
+                    ctx.beginPath();
+                    ctx.moveTo(screenX, plat.worldY + brickH);
+                    ctx.lineTo(screenX + plat.width, plat.worldY + brickH);
+
+                    for (let bx = screenX; bx <= screenX + plat.width; bx += brickW) {
+                        ctx.moveTo(bx, plat.worldY);
+                        ctx.lineTo(bx, plat.worldY + brickH);
+                        ctx.moveTo(bx + brickW / 2, plat.worldY + brickH);
+                        ctx.lineTo(bx + brickW / 2, plat.worldY + plat.height);
+                    }
+                    ctx.stroke();
+
+                    ctx.fillStyle = "rgba(255,255,255,0.25)";
+                    for (let bx = screenX; bx < screenX + plat.width; bx += brickW) {
+                        ctx.fillRect(bx + 2, plat.worldY + 2, brickW - 4, 2);
+                        ctx.fillRect(bx + brickW/2 + 2, plat.worldY + brickH + 2, brickW - 4, 2);
+                    }
+                } 
+                else if (plat.type === 'pipe') {
+                    let rimHeight = 28;
+                    let bodyGrad = ctx.createLinearGradient(screenX, plat.worldY, screenX + plat.width, plat.worldY);
+                    bodyGrad.addColorStop(0, "#1b5e20");
+                    bodyGrad.addColorStop(0.3, "#4caf50");
+                    bodyGrad.addColorStop(0.7, "#a5d6a7");
+                    bodyGrad.addColorStop(1, "#1b5e20");
+                    
+                    ctx.fillStyle = bodyGrad;
+                    ctx.fillRect(screenX + 4, plat.worldY + rimHeight, plat.width - 8, plat.height - rimHeight);
+                    ctx.strokeStyle = "#0d230d";
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(screenX + 4, plat.worldY + rimHeight, plat.width - 8, plat.height - rimHeight);
+
+                    let rimGrad = ctx.createLinearGradient(screenX, plat.worldY, screenX + plat.width, plat.worldY);
+                    rimGrad.addColorStop(0, "#1b5e20");
+                    rimGrad.addColorStop(0.2, "#4caf50");
+                    rimGrad.addColorStop(0.6, "#a5d6a7");
+                    rimGrad.addColorStop(1, "#1b5e20");
+
+                    ctx.fillStyle = rimGrad;
+                    ctx.fillRect(screenX, plat.worldY, plat.width, rimHeight);
+                    ctx.strokeRect(screenX, plat.worldY, plat.width, rimHeight);
+                }
+            }
+
+            // Draw Coins (using screenX transformations)
+            for (let i = 0; i < coins.length; i++) {
+                let coin = coins[i];
+                let screenX = coin.worldX - cameraX;
+
+                if (screenX + coin.width < 0 || screenX > canvas.width) continue;
+
+                if (!coin.collected) {
+                    ctx.save();
+                    ctx.translate(screenX + coin.width / 2, coin.worldY + coin.height / 2);
+
+                    let widthScale = Math.abs(Math.cos(coin.animFrame * 0.16));
+                    if (widthScale < 0.1) widthScale = 0.1; 
+                    ctx.scale(widthScale, 1);
+
+                    let goldGrad = ctx.createRadialGradient(-2, -2, 2, 0, 0, coin.width / 2);
+                    goldGrad.addColorStop(0, "#fffde7");
+                    goldGrad.addColorStop(0.4, "#fbc02d");
+                    goldGrad.addColorStop(1, "#f57f17");
+
+                    ctx.fillStyle = goldGrad;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, coin.width / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = "#e65100";
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(0, 0, coin.width / 4, 0, Math.PI * 2);
+                    ctx.strokeStyle = "#f57f17";
+                    ctx.stroke();
+
+                    ctx.restore();
+                } else if (coin.collected && coin.sparkleTimer < 20) {
+                    ctx.save();
+                    ctx.translate(screenX + coin.width / 2, coin.worldY - 10);
+                    ctx.fillStyle = `rgba(255, 235, 59, ${(20 - coin.sparkleTimer) / 20})`;
+                    
+                    for (let r = 0; r < 4; r++) {
+                        ctx.rotate(Math.PI / 2);
+                        ctx.beginPath();
+                        ctx.moveTo(0, -4 - coin.sparkleTimer * 0.6);
+                        ctx.lineTo(3, 0);
+                        ctx.lineTo(0, 4 + coin.sparkleTimer * 0.6);
+                        ctx.lineTo(-3, 0);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                }
+            }
+
+            // Draw Mario Character Model
+            drawProceduralPlayer(player);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start running immediately!
+        gameLoop();
+    </script>
+</body>
+</html>

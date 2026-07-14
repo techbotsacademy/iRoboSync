@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platformer Game</title>
+    <style>
+        /* Center the game on the screen and style the background */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+            flex-direction: column;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        /* Style the game canvas board */
+        canvas {
+            background-color: #5c94fc; /* Mario-style sky blue */
+            border: 4px solid #ffffff;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        p {
+            margin-top: 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>My First Platformer</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <p>Controls: A/D or Left/Right Arrows to Move | Spacebar or Up Arrow to Jump</p>
+
+    <script>
+        // --- 1. SETUP GAME CANVAS ---
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // --- 2. GAME VARIABLES & PHYSICS ---
+        const gravity = 0.5; // Pulls the player down every frame
+        const friction = 0.8; // Slows the player down smoothly when stopping
+
+        // --- 3. KEYBOARD INPUT TRACKER ---
+        // Keeps track of which keys are currently being pressed down
+        const keys = {
+            right: false,
+            left: false,
+            up: false
+        };
+
+        // --- 4. PLAYER OBJECT ---
+        const player = {
+            x: 50,
+            y: 400,
+            width: 30,
+            height: 40,
+            velocityX: 0,
+            velocityY: 0,
+            speed: 5,
+            jumpForce: 12,
+            grounded: false, // True if standing on a platform
+            facingRight: true // Keeps track of direction for visuals
+        };
+
+        // --- 5. PLATFORMS ARRAY ---
+        // A list of all platforms the player can stand on
+        const platforms = [
+            // The Main Floor
+            { x: 0, y: 550, width: 800, height: 50, color: "#73cd4b" },
+            // Floating Platform 1 (Low Left)
+            { x: 150, y: 430, width: 150, height: 20, color: "#e88017" },
+            // Floating Platform 2 (Middle Right)
+            { x: 450, y: 350, width: 200, height: 20, color: "#e88017" },
+            // Floating Platform 3 (High Left)
+            { x: 200, y: 240, width: 180, height: 20, color: "#e88017" }
+        ];
+
+        // --- 6. EVENT LISTENERS (KEYBOARD DETECTION) ---
+        // When a key is pressed down
+        window.addEventListener("keydown", function (e) {
+            if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = true;
+            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = true;
+            if (e.key === "ArrowUp" || e.key === " " || e.key === "Spacebar") keys.up = true;
+        });
+
+        // When a key is released
+        window.addEventListener("keyup", function (e) {
+            if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = false;
+            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = false;
+            if (e.key === "ArrowUp" || e.key === " " || e.key === "Spacebar") keys.up = false;
+        });
+
+        // --- 7. COLLISION DETECTION FUNCTION ---
+        // Check if the player is hitting a platform
+        function checkCollision(player, plat) {
+            return player.x < plat.x + plat.width &&
+                   player.x + player.width > plat.x &&
+                   player.y < plat.y + plat.height &&
+                   player.y + player.height > plat.y;
+        }
+
+        // --- 8. THE MAIN GAME LOOP ---
+        // This function runs roughly 60 times per second to update and draw the game
+        function gameLoop() {
+            // --- STEP A: UPDATE PLAYER MOVEMENT ---
+            
+            // Apply horizontal movement based on inputs
+            if (keys.right) {
+                player.velocityX = player.speed;
+                player.facingRight = true;
+            } else if (keys.left) {
+                player.velocityX = -player.speed;
+                player.facingRight = false;
+            } else {
+                // Apply friction so the player doesn't instantly snap to a stop
+                player.velocityX *= friction;
+            }
+
+            // Apply Jumping (Only if the player is standing on solid ground!)
+            if (keys.up && player.grounded) {
+                player.velocityY = -player.jumpForce;
+                player.grounded = false; // Player is now in the air
+            }
+
+            // Always apply gravity to pull the player down
+            player.velocityY += gravity;
+
+            // Move the player horizontally
+            player.x += player.velocityX;
+            
+            // Screen boundaries (Stop player from walking off the left or right edge)
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+            // Move the player vertically (this happens right before checking collisions)
+            player.y += player.velocityY;
+            player.grounded = false; // Assume they are falling until proven otherwise
+
+            // --- STEP B: COLLISION DETECTION AND RESOLUTION ---
+            for (let i = 0; i < platforms.length; i++) {
+                let plat = platforms[i];
+
+                if (checkCollision(player, plat)) {
+                    // Check if player hit the top of a platform while falling down
+                    if (player.velocityY > 0 && (player.y + player.height - player.velocityY) <= plat.y) {
+                        player.y = plat.y - player.height; // Put player exactly on top of platform
+                        player.velocityY = 0;             // Stop falling speed
+                        player.grounded = true;           // Player is safely on the ground
+                    }
+                    // Check if player hit the bottom of a platform while jumping up
+                    else if (player.velocityY < 0 && (player.y - player.velocityY) >= plat.y + plat.height) {
+                        player.y = plat.y + plat.height;   // Put player exactly below platform
+                        player.velocityY = 0;             // Stop upward momentum (bump head)
+                    }
+                    // Check if player ran into the left side of a platform
+                    else if (player.velocityX > 0 && (player.x + player.width - player.velocityX) <= plat.x) {
+                        player.x = plat.x - player.width;
+                    }
+                    // Check if player ran into the right side of a platform
+                    else if (player.velocityX < 0 && (player.x - player.velocityX) >= plat.x + plat.width) {
+                        player.x = plat.x + plat.width;
+                    }
+                }
+            }
+
+            // --- STEP C: DRAWING EVERYTHING ---
+            
+            // 1. Clear the canvas so we can draw the new frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Draw all the platforms
+            for (let i = 0; i < platforms.length; i++) {
+                let plat = platforms[i];
+                ctx.fillStyle = plat.color;
+                ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+            }
+
+            // 3. Draw the Player
+            ctx.fillStyle = "#ff4757"; // Red color for our Mario-like character
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // Draw an "eye" detail so we can see which way the player is facing!
+            ctx.fillStyle = "#ffffff";
+            if (player.facingRight) {
+                // Draw eye on the right side of the face
+                ctx.fillRect(player.x + player.width - 10, player.y + 8, 6, 6);
+            } else {
+                // Draw eye on the left side of the face
+                ctx.fillRect(player.x + 4, player.y + 8, 6, 6);
+            }
+
+            // Keep the loop going continuously
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- 9. START THE GAME ---
+        gameLoop();
+    </script>
+</body>
+</html>

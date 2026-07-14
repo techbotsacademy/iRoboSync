@@ -1,0 +1,188 @@
+Keep everything that currently works.
+
+Do NOT remove, rewrite, or modify any existing game mechanics unless absolutely necessary to support the new input method.
+
+The following features must continue to work exactly as before:
+
+- Player movement physics
+- Gravity
+- Jumping physics
+- Platform collision detection
+- Camera scrolling
+- Parallax background
+- Platform layout
+- Game loop
+- Rendering
+- Flagpole
+- Any existing animations
+
+Only replace the player input system.
+
+--------------------------------------------------
+New Input Method – AI Hand Gesture Control
+--------------------------------------------------
+
+Instead of using the keyboard, control the player using the computer's webcam.
+
+Use MediaPipe Hands (or an equivalent browser-based hand-tracking solution) to detect the user's hand landmarks in real time.
+
+Request camera permission when the game starts.
+
+Display a small webcam preview in the top-right corner of the screen so the player can see what the AI is detecting.
+
+Display the detected hand landmarks on the webcam preview for debugging.
+
+Use smoothing to reduce jitter and make gesture recognition stable.
+
+--------------------------------------------------
+Movement Gesture – Cycling Motion
+--------------------------------------------------
+
+The player should move forward only when the user performs a continuous cycling motion using BOTH hands.
+
+Define one complete cycling cycle as follows:
+
+1. The left hand moves upward while the right hand moves downward.
+2. The left hand then moves downward while the right hand moves upward.
+3. This completes one full pedal cycle.
+
+Requirements:
+
+- Detect the vertical movement of both wrists.
+- The two hands should move in opposite directions.
+- Ignore small accidental movements using a minimum movement threshold.
+- Require at least TWO consecutive valid pedal cycles before starting player movement.
+- Continue moving the player while valid cycling cycles continue.
+- Stop moving if no valid cycling cycle is detected for approximately 500 ms.
+- The faster the cycling motion, the faster the player moves.
+- Clamp the player's speed between a minimum and maximum value so movement remains controllable.
+- Smooth the calculated speed over several frames to prevent sudden jumps.
+- Ignore random waving or unrelated hand movements.
+
+Display the following debug information on screen:
+
+- Pedal cycles detected
+- Current cycling speed
+- Player movement speed
+- Gesture status:
+  - Waiting
+  - Cycling Detected
+  - Moving
+
+--------------------------------------------------
+Jump Gesture
+--------------------------------------------------
+
+Detect a jump gesture independently of the cycling gesture.
+
+A jump should be triggered when:
+
+- Both hands move upward rapidly together.
+OR
+- Both wrists rise above shoulder level within a short time interval.
+
+Requirements:
+
+- Trigger exactly ONE jump for each gesture.
+- Do not repeatedly trigger jumps while the hands remain raised.
+- Require the hands to return below shoulder level before another jump can occur.
+- Respect the existing jumping physics.
+- Do not allow double jumping.
+- Ignore slow upward movements.
+
+Display the jump detection status for debugging.
+
+--------------------------------------------------
+Gesture Recognition
+--------------------------------------------------
+
+Implement gesture recognition as a separate module.
+
+Separate the code into:
+
+- Webcam setup
+- Hand tracking
+- Landmark smoothing
+- Cycling gesture detection
+- Jump gesture detection
+- Player input generation
+
+The gesture detector should output simple commands such as:
+
+Move Right = true / false
+
+Jump = true / false
+
+The game mechanics should consume these commands exactly as if they came from the keyboard.
+
+--------------------------------------------------
+Game Mechanics
+--------------------------------------------------
+
+Do NOT modify:
+
+- Gravity
+- Jump height
+- Platform collisions
+- Camera scrolling
+- Parallax background
+- Level layout
+- Physics
+- Rendering
+
+The ONLY difference should be how movement commands are generated.
+
+--------------------------------------------------
+Flagpole and Level Completion
+--------------------------------------------------
+
+Keep the existing flagpole at the end of the level.
+
+When the player reaches the flagpole:
+
+- Stop player movement.
+- Play the existing flag animation if available.
+- Display a "Level Complete!" overlay.
+
+The overlay should show:
+
+- Total Time
+- Distance Travelled
+- Number of Jumps
+- Pedal Cycles Completed
+- Average Cycling Speed
+- Maximum Cycling Speed
+- Overall Score
+
+Example scoring:
+
+Score =
++ Distance Travelled
++ Flag Bonus
+- Time Penalty
++ Cycling Accuracy Bonus
+- Unnecessary Jumps
+
+Display the score in a clean, game-style results screen with a "Play Again" button.
+
+--------------------------------------------------
+Code Quality
+--------------------------------------------------
+
+Keep everything inside a single HTML file.
+
+Write clear comments explaining:
+
+- Webcam setup
+- MediaPipe Hands
+- Hand landmark detection
+- Cycling detection algorithm
+- Jump detection algorithm
+- Physics
+- Camera system
+- Rendering
+- Game loop
+
+Organize the code into clearly labelled sections.
+
+Return only the complete updated HTML.

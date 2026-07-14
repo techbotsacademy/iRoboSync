@@ -1,0 +1,18 @@
+Create the First Playable Version
+Act as an expert HTML5 game developer.
+
+Create a Subway Surfers inspired endless runner using a SINGLE HTML file with embedded CSS and JavaScript.
+
+Requirements:
+
+• The player continuously runs forward automatically.
+• The player can move left and right between 3 lanes using the Left and Right Arrow keys.
+• The player can jump using the Up Arrow.
+• Obstacles appear randomly in the lanes.
+• Hitting an obstacle ends the game.
+• Show the current score that increases over time.
+• The game should become slightly faster as the score increases.
+• Display a Game Over screen with the final score.
+• Use simple coloured shapes drawn using Canvas.
+• Keep the code clean and well commented.
+• Everything must be contained inside one HTML file.

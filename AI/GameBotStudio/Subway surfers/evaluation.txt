@@ -1,0 +1,12 @@
+Evaluation Sheet
+Feature	Yes	Needs Improvement	Comments
+Player runs automatically	☐	☐	
+Player changes lanes correctly	☐	☐	
+Jump works smoothly	☐	☐	
+Obstacles appear properly	☐	☐	
+Collision detection works	☐	☐	
+Score increases	☐	☐	
+Speed increases	☐	☐	
+Game Over works	☐	☐	
+Looks exciting	☐	☐	
+Easy to play	☐	☐
