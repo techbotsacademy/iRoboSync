@@ -8,8 +8,7 @@ int currentAngle = 90;
 int targetAngle = 90;
 
 void setup() {
-  Serial.begin(115200);
-
+  Serial.begin(9600);
   elbowServo.attach(elbowPin);
   elbowServo.write(currentAngle);
 
@@ -21,12 +20,12 @@ void loop() {
   // Receive Y value from HTML over Web Serial
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n'); // Read full line
-    int y = input.toInt(); // Convert to number    
+    int y = input.toInt(); // Convert to number 
 
     if (y >= 0 && y <= 380) {
 
       targetAngle = map(y, 0, 380, 10, 150);
-      targetAngle = 150 - targetAngle;
+      targetAngle = targetAngle;
     }
     Serial.print("Target Y: ");
     Serial.print(y);

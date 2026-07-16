@@ -9,7 +9,7 @@ WebServer server(80);
 
 Servo elbowServo;
 
-const int elbowPin = 14;
+const int elbowPin = 6;
 
 int currentAngle = 90;
 int targetAngle = 90;
