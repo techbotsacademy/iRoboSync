@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sign Language Detector - Part 1</title>
+
+<style>
+body{
+    margin:0;
+    background:#202124;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+
+h1{
+    margin:15px;
+}
+
+.container{
+    position:relative;
+    width:640px;
+    margin:auto;
+}
+
+video{
+    width:640px;
+    border-radius:10px;
+}
+
+canvas{
+    position:absolute;
+    left:0;
+    top:0;
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+</head>
+
+<body>
+
+<h1>Sign Language Recognition</h1>
+
+<div class="container">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+</div>
+
+<h2 id="status">Waiting for hand...</h2>
+<div id="fingerStatus" style="font-size:22px;margin-top:20px;"></div>
+<h2 id="countDisplay">Raised Fingers : 0</h2>
+<h1 id="gestureDisplay" style="color:#00ff88;">
+    Gesture : -
+</h1>
+
+<h2 id="progressDisplay">
+Holding Gesture : 0%
+</h2>
+
+<h2>
+Sentence
+</h2>
+
+<div id="sentenceBox"
+style="
+width:80%;
+margin:auto;
+padding:15px;
+font-size:28px;
+background:white;
+color:black;
+border-radius:10px;
+min-height:50px;
+">
+</div>
+
+<br>
+
+<button onclick="clearSentence()">
+Clear Sentence
+</button>
+
+<script>
+let currentGesture = "";
+let gestureStartTime = 0;
+
+let lastAcceptedGesture = "";
+
+let sentence = "";
+
+const HOLD_TIME = 1000; // milliseconds
+const video=document.getElementById("video");
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
+
+const hands=new Hands({
+    locateFile:(file)=>{
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+    }
+});
+
+hands.setOptions({
+    maxNumHands:1,
+    modelComplexity:1,
+    minDetectionConfidence:0.7,
+    minTrackingConfidence:0.7
+});
+
+hands.onResults(results => {
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
+    if(results.multiHandLandmarks.length > 0){
+
+        document.getElementById("status").innerHTML="Hand Detected";
+
+        const landmarks = results.multiHandLandmarks[0];
+        const handedness = results.multiHandedness[0].label;
+
+        drawConnectors(ctx, landmarks, HAND_CONNECTIONS,{
+            color:"#00FF00",
+            lineWidth:4
+        });
+
+        drawLandmarks(ctx, landmarks,{
+            color:"#FF0000",
+            radius:5
+        });
+
+        detectFingers(landmarks, handedness);
+
+    }
+    else{
+
+        document.getElementById("status").innerHTML="Waiting for hand...";
+        clearFingerStatus();
+        document.getElementById("countDisplay").innerHTML="Raised Fingers : 0";
+
+    }
+});
+
+const camera=new Camera(video,{
+    onFrame:async()=>{
+        await hands.send({image:video});
+    },
+    width:640,
+    height:480
+});
+
+camera.start();
+
+function countRaisedFingers(fingers){
+
+    let count = 0;
+
+    if(fingers.thumb) count++;
+    if(fingers.index) count++;
+    if(fingers.middle) count++;
+    if(fingers.ring) count++;
+    if(fingers.pinky) count++;
+
+    document.getElementById("countDisplay").innerHTML =
+        "Raised Fingers : " + count;
+
+    recognizeGesture(fingers);
+}
+
+function recognizeGesture(f){
+
+    let gesture="Unknown";
+
+    if(
+        !f.thumb &&
+        !f.index &&
+        !f.middle &&
+        !f.ring &&
+        !f.pinky
+    ){
+        gesture="STOP";
+    }
+
+    else if(
+        f.thumb &&
+        f.index &&
+        f.middle &&
+        f.ring &&
+        f.pinky
+    ){
+        gesture="HELLO";
+    }
+
+    else if(
+        f.thumb &&
+        !f.index &&
+        !f.middle &&
+        !f.ring &&
+        !f.pinky
+    ){
+        gesture="YES";
+    }
+
+    else if(
+        !f.thumb &&
+        f.index &&
+        !f.middle &&
+        !f.ring &&
+        !f.pinky
+    ){
+        gesture="ONE";
+    }
+
+    else if(
+        !f.thumb &&
+        f.index &&
+        f.middle &&
+        !f.ring &&
+        !f.pinky
+    ){
+        gesture="TWO";
+    }
+
+    document.getElementById("gestureDisplay").innerHTML =
+        "Gesture : " + gesture;
+
+    processStableGesture(gesture);
+}
+
+function processStableGesture(gesture){
+
+    if(gesture==="Unknown"){
+        currentGesture="";
+        gestureStartTime=0;
+
+        document.getElementById("progressDisplay").innerHTML =
+            "Holding Gesture : 0%";
+
+        return;
+    }
+
+    if(currentGesture!==gesture){
+
+        currentGesture=gesture;
+        gestureStartTime=Date.now();
+
+        return;
+
+    }
+
+    let elapsed=Date.now()-gestureStartTime;
+
+    let percent=Math.min(
+        100,
+        Math.floor(elapsed/HOLD_TIME*100)
+    );
+
+    document.getElementById("progressDisplay").innerHTML=
+        "Holding Gesture : "+percent+"%";
+
+    if(elapsed>HOLD_TIME){
+
+        if(lastAcceptedGesture!==gesture){
+
+            addWord(gesture);
+
+            lastAcceptedGesture=gesture;
+
+        }
+
+    }
+
+}
+
+function addWord(word){
+
+    sentence += word + " ";
+
+    document.getElementById("sentenceBox").innerHTML =
+        sentence;
+
+}
+
+function clearSentence(){
+
+    sentence="";
+
+    currentGesture="";
+    lastAcceptedGesture="";
+
+    document.getElementById("sentenceBox").innerHTML="";
+
+    document.getElementById("progressDisplay").innerHTML=
+        "Holding Gesture : 0%";
+
+}
+
+function detectFingers(lm, handedness){
+
+    let thumbOpen;
+
+    if(handedness==="Right")
+        thumbOpen = lm[4].x < lm[3].x;
+    else
+        thumbOpen = lm[4].x > lm[3].x;
+
+    const fingers = {
+
+        thumb : thumbOpen,
+        index : lm[8].y < lm[6].y,
+        middle : lm[12].y < lm[10].y,
+        ring : lm[16].y < lm[14].y,
+        pinky : lm[20].y < lm[18].y
+
+    };
+
+    document.getElementById("fingerStatus").innerHTML=`
+
+        👍 Thumb : ${fingers.thumb ? "Open":"Closed"}<br>
+        ☝ Index : ${fingers.index ? "Open":"Closed"}<br>
+        🖕 Middle : ${fingers.middle ? "Open":"Closed"}<br>
+        💍 Ring : ${fingers.ring ? "Open":"Closed"}<br>
+        🤏 Pinky : ${fingers.pinky ? "Open":"Closed"}
+
+    `;
+    countRaisedFingers(fingers);
+}
+
+function clearFingerStatus(){
+
+    document.getElementById("fingerStatus").innerHTML="";
+
+}
+
+</script>
+
+</body>
+</html>

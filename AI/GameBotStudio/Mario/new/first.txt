@@ -1,0 +1,1 @@
+Can you give me a prompt to make a simple Mario game in one HTML file? I want to move the player, jump on a few platforms, use simple shapes instead of pictures. Keep the prompt crisp. Do not add any unnecessary details.

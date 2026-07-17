@@ -1,0 +1,91 @@
+Use the HTML file you generated earlier in this conversation as the source code.
+PRESERVATION RULES:
+Do not remove, rewrite, or break any existing gameplay functionality.
+
+Keep exactly working:
+- player movement
+- left/right controls
+- jumping
+- gravity
+- friction
+- velocity system
+- collision detection
+- platform collision behavior
+- keyboard controls
+- game loop structure
+- canvas setup
+
+TASK:
+Only replace the current player rendering system.
+
+Remove the existing rectangle player drawing code and replace it with a fully procedural Canvas drawing system.
+
+PLAYER CHARACTER REQUIREMENTS:
+Create a Mario-inspired cartoon platform character using ONLY HTML5 Canvas drawing API methods.
+
+Allowed drawing methods:
+- fillRect
+- strokeRect
+- beginPath
+- arc
+- ellipse
+- lineTo
+- moveTo
+- polygons
+- gradients
+- shadows
+
+Do NOT use:
+- images
+- sprite sheets
+- SVG
+- external assets
+- external files
+- fonts
+- libraries
+
+The character must visually include:
+- red cap
+- cap brim
+- face
+- ears
+- eyes
+- moustache
+- blue overalls
+- shirt
+- white gloves
+- brown shoes
+
+ANIMATION:
+Add procedural animation:
+- walking leg animation while moving left or right
+- idle animation while standing still
+- subtle movement/bobbing while idle
+- animated legs should be controlled by player movement state
+
+DIRECTION:
+Use the existing player.facingRight variable.
+
+When moving right:
+- draw the character facing right
+
+When moving left:
+- horizontally flip the character automatically
+
+Do not create a new movement system.
+
+IMPLEMENTATION REQUIREMENTS:
+- Create a dedicated function such as drawPlayer() for the character.
+- Replace only the old player rectangle drawing call with drawPlayer().
+- Keep player coordinates, width, height, velocity, and collision box unchanged.
+- The collision rectangle can remain invisible while the new character is drawn on top.
+- Ensure the character stays aligned with the existing collision box.
+
+VISUAL QUALITY:
+Add:
+- simple shadows
+- highlights
+- smooth colors
+- clean cartoon proportions
+
+The final result must still be a single self-contained HTML file artifact.

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subway Surfers 3D - Ultimate Engine</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #05050a;
+            color: #fff;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            box-shadow: 0 30px 70px rgba(0, 0, 0, 0.9);
+            border-radius: 24px;
+            overflow: hidden;
+            border: 4px solid #1a1a2e;
+        }
+        canvas {
+            display: block;
+            background: #0d0e15;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            padding: 25px;
+            z-index: 5;
+        }
+        .hud-element {
+            font-size: 24px;
+            font-weight: 900;
+            text-shadow: 2px 2px 0px #000, -1px -1px 0px #000, 1px -1px 0px #000, -1px 1px 0px #000;
+            letter-spacing: 1px;
+        }
+        #score-board { color: #ffd700; }
+        #coin-board { color: #fff200; }
+
+        .menu-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(8, 9, 23, 0.96);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            padding: 30px;
+            text-align: center;
+            z-index: 10;
+        }
+        .menu-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        h1 {
+            color: #FF4500;
+            font-size: 38px;
+            margin-bottom: 5px;
+            font-weight: 900;
+            text-shadow: 2px 2px 0px #fff;
+        }
+        .instructions {
+            background: rgba(255, 255, 255, 0.04);
+            padding: 20px;
+            border-radius: 16px;
+            margin: 20px 0;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #dfe4ea;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: left;
+        }
+        .instructions strong { color: #fff200; }
+        
+        p {
+            font-size: 16px;
+            margin-bottom: 25px;
+            color: #a4b0be;
+        }
+        
+        button {
+            padding: 16px 45px;
+            font-size: 20px;
+            font-weight: 900;
+            background: linear-gradient(to bottom, #fffa65, #FF4500);
+            color: #fff;
+            border: 2px solid #fff;
+            border-radius: 40px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #b33600;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 0 #b33600;
+        }
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #b33600;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        
+        <div class="ui-layer">
+            <div id="score-board" class="hud-element">SCORE: 0</div>
+            <div id="coin-board" class="hud-element">🪙 0</div>
+        </div>
+
+        <div id="start-screen" class="menu-screen active">
+            <h1>SUBWAY 3D ENGINE</h1>
+            <p>Pseudo-3D Procedural Runner Blueprint</p>
+            <div class="instructions">
+                <strong>← / → Keys</strong> : Switch lanes smoothly<br>
+                <strong>↑ Key</strong> : Jump onto trains or high platforms<br>
+                <strong>Ramps</strong> : Run smoothly up onto elevated tracks<br>
+                <strong>Dynamic View</strong> : Full 3D camera depth with active skeletal back-view animation mechanics.
+            </div>
+            <button onclick="setupAndStart()">LAUNCH RUN</button>
+        </div>
+
+        <div id="game-over-screen" class="menu-screen">
+            <h1>CRASHED!</h1>
+            <p id="final-score-text">Final Score: 0</p>
+            <p id="final-coins-text" style="color: #fff200; font-weight: bold; margin-top: -15px;">Coins: 0</p>
+            <button onclick="setupAndStart()">RETRY RUN</button>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreBoard = document.getElementById('score-board');
+    const coinBoard = document.getElementById('coin-board');
+    const startScreen = document.getElementById('start-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScoreText = document.getElementById('final-score-text');
+    const finalCoinsText = document.getElementById('final-coins-text');
+
+    let audioCtx = null;
+
+    // Camera Configuration & Perspectives
+    const LANES = [-1, 0, 1]; 
+    const HORIZON_Y = 240;     
+    const TRACK_BASE_WIDTH = 500; 
+    const GRAVITY = 0.5;
+
+    let gameActive = false;
+    let score = 0;
+    let coinsCollected = 0;
+    let speed = 6; 
+    const maxSpeed = 16;
+    let worldOffset = 0; 
+
+    // Character State Machine
+    let player = {
+        currentLaneIndex: 1, 
+        targetLaneIndex: 1,
+        laneX: 0,            
+        y: 0,                
+        vy: 0,               
+        isJumping: false,
+        width: 36,
+        height: 66,
+        runCycle: 0,
+        elevation: 0 
+    };
+
+    // Game Entities collections
+    let obstacles = [];
+    let collectibles = [];
+    let platforms = []; 
+    let sceneryArches = [];
+    
+    let obstacleSpawnTimer = 0;
+    let coinSpawnTimer = 0;
+    let platformSpawnTimer = 0;
+    let archSpawnTimer = 0;
+
+    // Palette specifications 
+    const SKIN = '#F5C399';
+    const ORANGE = '#FF4500';
+    const WHITE = '#FFFFFF';
+    const BROWN = '#4A2E1B';
+    const DENIM = '#3C71A3';
+    const DENIM_DARK = '#29527A';
+    const HOODIE = '#E5E8EB';
+    const LIME = '#4CAF50';
+    const SOLES = '#FF8A80';
+
+    window.addEventListener('keydown', (e) => {
+        if (!gameActive) return;
+        if (e.key === 'ArrowLeft' && player.targetLaneIndex > 0) player.targetLaneIndex--;
+        if (e.key === 'ArrowRight' && player.targetLaneIndex < LANES.length - 1) player.targetLaneIndex++;
+        if (e.key === 'ArrowUp' && !player.isJumping) {
+            player.vy = 11; 
+            player.isJumping = true;
+        }
+    });
+
+    function initAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    function playCoinSound() {
+        if (!audioCtx) return;
+        let now = audioCtx.currentTime;
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); 
+        osc.frequency.setValueAtTime(783.99, now + 0.07); 
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now); osc.stop(now + 0.2);
+    }
+
+    function setupAndStart() {
+        initAudio();
+        startScreen.classList.remove('active');
+        gameOverScreen.classList.remove('active');
+
+        score = 0; coinsCollected = 0; speed = 6; worldOffset = 0;
+        obstacles = []; collectibles = []; platforms = []; sceneryArches = [];
+        obstacleSpawnTimer = 0; coinSpawnTimer = 0; platformSpawnTimer = 0; archSpawnTimer = 0;
+        
+        player.currentLaneIndex = 1; player.targetLaneIndex = 1; player.laneX = 0;
+        player.y = 0; player.vy = 0; player.isJumping = false; player.runCycle = 0; player.elevation = 0;
+
+        coinBoard.innerText = `🪙 ${coinsCollected}`;
+        gameActive = true;
+        requestAnimationFrame(gameUpdate);
+    }
+
+    // Mathematical Perspective Projection Function
+    function project(laneOffset, zProgress, elementElevation = 0) {
+        let y = HORIZON_Y + zProgress * (canvas.height - HORIZON_Y);
+        let currentTrackWidth = zProgress * TRACK_BASE_WIDTH;
+        let laneWidth = currentTrackWidth / 3;
+        let x = (canvas.width / 2) + (laneOffset * laneWidth);
+        let elevatedY = y - (elementElevation * zProgress);
+        return { x, y: elevatedY, scale: zProgress };
+    }
+
+    function gameUpdate() {
+        if (!gameActive) return;
+
+        // Mechanics Adjusters
+        score += 0.25;
+        scoreBoard.innerText = `SCORE: ${Math.floor(score)}`;
+        speed = Math.min(maxSpeed, 6 + Math.floor(score / 400));
+        worldOffset = (worldOffset + speed * 0.2) % 100;
+
+        // Smooth X Interpolation for Lane Changing
+        player.laneX += (LANES[player.targetLaneIndex] - player.laneX) * 0.2;
+
+        // Jump physics loop
+        if (player.isJumping) {
+            player.y += player.vy;
+            player.vy -= GRAVITY;
+            if (player.y <= 0) {
+                player.y = 0; player.vy = 0; player.isJumping = false;
+            }
+        }
+
+        // Check platform tracking
+        let currentPlatform = null;
+        platforms.forEach(plat => {
+            if (plat.lane === player.targetLaneIndex && plat.startZ <= 0.92 && plat.endZ >= 0.82) {
+                currentPlatform = plat;
+            }
+        });
+
+        if (currentPlatform) {
+            let relativeZ = (0.88 - currentPlatform.startZ) / (currentPlatform.endZ - currentPlatform.startZ);
+            let targetElev = 120;
+            if (relativeZ < 0.15) targetElev = (relativeZ / 0.15) * 120; // Up-ramp handling
+            else if (relativeZ > 0.85) targetElev = ((1 - relativeZ) / 0.15) * 120; // Down-ramp handling
+            player.elevation += (targetElev - player.elevation) * 0.25;
+        } else {
+            player.elevation += (0 - player.elevation) * 0.2;
+        }
+
+        // Drive structural running velocity calculation loops
+        player.runCycle += speed * 0.06;
+
+        // Spawners Management
+        archSpawnTimer++;
+        if (archSpawnTimer > 60) {
+            archSpawnTimer = 0;
+            sceneryArches.push({ z: 0.01 });
+        }
+
+        platformSpawnTimer++;
+        if (platformSpawnTimer > 380) {
+            platformSpawnTimer = 0;
+            let platLane = Math.floor(Math.random() * 3) - 1;
+            platforms.push({ lane: platLane, startZ: -0.1, endZ: 0.9, height: 120 });
+            // Populate coins on platform top
+            for (let cz = 0.0; cz <= 0.8; cz += 0.15) {
+                collectibles.push({ lane: platLane, z: cz, elevation: 155, collected: false });
+            }
+        }
+
+        obstacleSpawnTimer++;
+        if (obstacleSpawnTimer > Math.max(35, 90 - speed * 3.5)) {
+            obstacleSpawnTimer = 0;
+            let pickLane = Math.floor(Math.random() * 3) - 1;
+            if (!platforms.some(p => p.lane === pickLane && p.startZ < 0.3)) {
+                obstacles.push({ lane: pickLane, z: 0.01, type: Math.random() > 0.4 ? 'train' : 'barrier' });
+            }
+        }
+
+        coinSpawnTimer++;
+        if (coinSpawnTimer > 50) {
+            coinSpawnTimer = 0;
+            let coinLane = Math.floor(Math.random() * 3) - 1;
+            if (!platforms.some(p => p.lane === coinLane && p.startZ < 0.3)) {
+                for (let k = 0; k < 3; k++) {
+                    collectibles.push({ lane: coinLane, z: -0.04 * k, elevation: 0, collected: false });
+                }
+            }
+        }
+
+        // --- Render Stage ---
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Environment Gradients
+        let skyGrd = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
+        skyGrd.addColorStop(0, '#04050d'); skyGrd.addColorStop(1, '#111324');
+        ctx.fillStyle = skyGrd; ctx.fillRect(0, 0, canvas.width, HORIZON_Y);
+
+        let floorGrd = ctx.createLinearGradient(0, HORIZON_Y, 0, canvas.height);
+        floorGrd.addColorStop(0, '#090a14'); floorGrd.addColorStop(1, '#020305');
+        ctx.fillStyle = floorGrd; ctx.fillRect(0, HORIZON_Y, canvas.width, canvas.height - HORIZON_Y);
+
+        // Center Ballasted Track Bed Fill
+        ctx.fillStyle = '#161824';
+        ctx.beginPath();
+        let baseL = project(-1.6, 1); let baseR = project(1.6, 1);
+        ctx.moveTo(canvas.width / 2, HORIZON_Y); ctx.lineTo(baseL.x, baseL.y); ctx.lineTo(baseR.x, baseR.y);
+        ctx.closePath(); ctx.fill();
+
+        // High Speed Moving Sleepers Line Setup
+        ctx.fillStyle = '#26293c';
+        for (let sz = 0.01; sz <= 1.0; sz += 0.07) {
+            let shiftedZ = ((sz * 100 + worldOffset) % 100) / 100;
+            let tieL = project(-1.5, shiftedZ); let tieR = project(1.5, shiftedZ);
+            ctx.fillRect(tieL.x, tieL.y, tieR.x - tieL.x, 3.5 * shiftedZ);
+        }
+
+        // Dynamic Rails Drawing
+        ctx.strokeStyle = '#4b506d'; ctx.lineWidth = 3;
+        [-1.5, -0.5, 0.5, 1.5].forEach(lPos => {
+            ctx.beginPath(); ctx.moveTo(canvas.width / 2, HORIZON_Y);
+            let pLineEnd = project(lPos, 1); ctx.lineTo(pLineEnd.x, pLineEnd.y); ctx.stroke();
+        });
+
+        // Background Atmospheric Concrete Arches Update & Draw
+        for (let i = sceneryArches.length - 1; i >= 0; i--) {
+            let arch = sceneryArches[i]; arch.z += (speed * 0.0035);
+            if (arch.z > 1.0) { sceneryArches.splice(i, 1); continue; }
+            
+            let pArchL = project(-1.9, arch.z, 0);
+            let pArchR = project(1.9, arch.z, 0);
+            let archHeight = 220 * arch.z;
+            
+            ctx.strokeStyle = `rgba(40, 44, 68, ${arch.z})`;
+            ctx.lineWidth = Math.max(2, 12 * arch.z);
+            ctx.beginPath();
+            ctx.moveTo(pArchL.x, pArchL.y);
+            ctx.lineTo(pArchL.x, pArchL.y - archHeight);
+            ctx.quadraticCurveTo(canvas.width / 2, pArchL.y - archHeight - 50 * arch.z, pArchR.x, pArchR.y - archHeight);
+            ctx.lineTo(pArchR.x, pArchR.y);
+            ctx.stroke();
+        }
+
+        // Render Ramps & Elevated Walkways
+        for (let i = platforms.length - 1; i >= 0; i--) {
+            let p = platforms[i]; p.startZ += (speed * 0.0035); p.endZ += (speed * 0.0035);
+            if (p.startZ > 1.1) { platforms.splice(i, 1); continue; }
+
+            let slices = 8;
+            for (let j = 0; j < slices; j++) {
+                let sz0 = p.startZ + (p.endZ - p.startZ) * (j / slices);
+                let sz1 = p.startZ + (p.endZ - p.startZ) * ((j + 1) / slices);
+                if (sz1 < 0 || sz0 > 1) continue;
+
+                function getSegmentHeight(zVal) {
+                    let ratio = (zVal - p.startZ) / (p.endZ - p.startZ);
+                    if (ratio < 0.15) return (ratio / 0.15) * p.height;
+                    if (ratio > 0.85) return ((1 - ratio) / 0.15) * p.height;
+                    return p.height;
+                }
+
+                let h0 = getSegmentHeight(sz0); let h1 = getSegmentHeight(sz1);
+                let l0 = project(p.lane - 0.45, sz0, h0); let r0 = project(p.lane + 0.45, sz0, h0);
+                let l1 = project(p.lane - 0.45, sz1, h1); let r1 = project(p.lane + 0.45, sz1, h1);
+
+                // Platform Upper Face Deck Walkway
+                ctx.fillStyle = '#2d3347';
+                ctx.beginPath(); ctx.moveTo(l0.x, l0.y); ctx.lineTo(r0.x, r0.y);
+                ctx.lineTo(r1.x, r1.y); ctx.lineTo(l1.x, l1.y); ctx.closePath(); ctx.fill();
+
+                // Side wall depth structure
+                let gl0 = project(p.lane - 0.45, sz0, 0); let gl1 = project(p.lane - 0.45, sz1, 0);
+                ctx.fillStyle = '#1c1f2e';
+                ctx.beginPath(); ctx.moveTo(l0.x, l0.y); ctx.lineTo(l1.x, l1.y);
+                ctx.lineTo(gl1.x, gl1.y); ctx.lineTo(gl0.x, gl0.y); ctx.closePath(); ctx.fill();
+            }
+        }
+
+        // Collectibles / Gold Coins Renderer
+        for (let i = collectibles.length - 1; i >= 0; i--) {
+            let coin = collectibles[i]; coin.z += (speed * 0.0035);
+            if (coin.z > 1.1) { collectibles.splice(i, 1); continue; }
+            if (coin.z < 0 || coin.collected) continue;
+
+            let pCoin = project(coin.lane, coin.z, coin.elevation);
+            let cSize = 13 * pCoin.scale;
+            if (cSize < 0.5) continue;
+
+            // Shadows
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.beginPath(); ctx.ellipse(pCoin.x, HORIZON_Y + coin.z * (canvas.height - HORIZON_Y), cSize, cSize * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+
+            // Coin Shape
+            let goldGrad = ctx.createRadialGradient(pCoin.x, pCoin.y - 15 * pCoin.scale, 1, pCoin.x, pCoin.y - 15 * pCoin.scale, cSize);
+            goldGrad.addColorStop(0, '#ffffa3'); goldGrad.addColorStop(1, '#ffcc00');
+            ctx.fillStyle = goldGrad;
+            ctx.strokeStyle = '#cc6600'; ctx.lineWidth = Math.max(1, 2 * pCoin.scale);
+            ctx.beginPath(); ctx.arc(pCoin.x, pCoin.y - 15 * pCoin.scale, cSize, 0, Math.PI * 2);
+            ctx.fill(); ctx.stroke();
+
+            // Core inner circle
+            ctx.fillStyle = '#ffea00';
+            ctx.beginPath(); ctx.arc(pCoin.x, pCoin.y - 15 * pCoin.scale, cSize * 0.4, 0, Math.PI * 2); ctx.fill();
+
+            // Collision Evaluation
+            if (coin.z > 0.82 && coin.z < 0.95) {
+                let deltaY = Math.abs((player.y + player.elevation) - coin.elevation);
+                if (Math.abs(player.laneX - coin.lane) < 0.38 && deltaY < 48) {
+                    coin.collected = true; coinsCollected++; score += 40;
+                    coinBoard.innerText = `🪙 ${coinsCollected}`; playCoinSound();
+                }
+            }
+        }
+
+        // --- Extruded 3D Subway Trains & Static Obstacles ---
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            let obs = obstacles[i]; obs.z += (speed * 0.0035);
+            if (obs.z > 1.4) { obstacles.splice(i, 1); continue; }
+            if (obs.z < 0) continue;
+
+            if (obs.type === 'barrier') {
+                let pBar = project(obs.lane, obs.z, 0);
+                let bw = 64 * pBar.scale; let bh = 40 * pBar.scale;
+                let bx = pBar.x - bw / 2; let by = pBar.y - bh;
+
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.fillRect(bx, pBar.y - 3, bw, 6 * pBar.scale);
+
+                // Scaffold feet
+                ctx.fillStyle = '#ff5e00';
+                ctx.fillRect(bx, by, 6 * pBar.scale, bh);
+                ctx.fillRect(bx + bw - 6 * pBar.scale, by, 6 * pBar.scale, bh);
+
+                // Warning Boards (Orange/White Strips)
+                let bH = 16 * pBar.scale; let bY = by + 8 * pBar.scale;
+                ctx.fillStyle = WHITE; ctx.fillRect(bx, bY, bw, bH);
+                ctx.fillStyle = ORANGE;
+                ctx.save(); ctx.beginPath(); ctx.rect(bx, bY, bw, bH); ctx.clip();
+                for (let sx = -20; sx < bw + 20; sx += 14 * pBar.scale) {
+                    ctx.beginPath(); ctx.moveTo(bx + sx, bY); ctx.lineTo(bx + sx + 8 * pBar.scale, bY);
+                    ctx.lineTo(bx + sx, bY + bH); ctx.lineTo(bx + sx - 8 * pBar.scale, bY + bH); ctx.fill();
+                }
+                ctx.restore();
+
+                // Collision
+                if (obs.z > 0.84 && obs.z < 0.96 && Math.abs(player.laneX - obs.lane) < 0.4) {
+                    if ((player.y + player.elevation) < 36) { triggerGameOver(); return; }
+                }
+
+            } else if (obs.type === 'train') {
+                // EXTRUDED CONTINUOUS 3D BOX MATRIX
+                let trainLength = -0.65; // Fixed extension into depth matrices
+                let frontZ = obs.z;
+                let backZ = obs.z + trainLength;
+
+                let pFront = project(obs.lane, frontZ, 0);
+                let pBack = project(obs.lane, backZ, 0);
+
+                // Structural Front dimensional parameters
+                let wf = 94 * pFront.scale; let hf = 140 * pFront.scale;
+                let xf = pFront.x - wf / 2; let yf = pFront.y - hf;
+
+                // Structural Back dimensional parameters
+                let wb = 94 * pBack.scale; let hb = 140 * pBack.scale;
+                let xb = pBack.x - wb / 2; let yb = pBack.y - hb;
+
+                // Render Back to Front to ensure painter's occlusion logic
+                
+                // 1. Top Roof Plane (Metallic Highlight Matrix)
+                ctx.fillStyle = '#8E9EAB';
+                ctx.beginPath();
+                ctx.moveTo(xf, yf); ctx.lineTo(xf + wf, yf);
+                ctx.lineTo(xb + wb, yb); ctx.lineTo(xb, yb);
+                ctx.closePath(); ctx.fill();
+
+                // Ribbed reinforcement roof design lines
+                ctx.strokeStyle = '#5a6370'; ctx.lineWidth = Math.max(0.5, 1.5 * pFront.scale);
+                ctx.beginPath();
+                ctx.moveTo(xf + wf * 0.3, yf); ctx.lineTo(xb + wb * 0.3, yb);
+                ctx.moveTo(xf + wf * 0.5, yf); ctx.lineTo(xb + wb * 0.5, yb);
+                ctx.moveTo(xf + wf * 0.7, yf); ctx.lineTo(xb + wb * 0.7, yb);
+                ctx.stroke();
+
+                // 2. Lateral Depth Side Walls Profile Panel
+                // Detect side profile exposure via perspective matrix lane positioning
+                let renderRightSide = obs.lane <= 0; 
+                ctx.fillStyle = '#29527A'; // Deep side shaded tone
+                ctx.beginPath();
+                if (renderRightSide) {
+                    ctx.moveTo(xf + wf, yf); ctx.lineTo(xb + wb, yb);
+                    ctx.lineTo(xb + wb, pBack.y); ctx.lineTo(xf + wf, pFront.y);
+                } else {
+                    ctx.moveTo(xf, yf); ctx.lineTo(xb, yb);
+                    ctx.lineTo(xb, pBack.y); ctx.lineTo(xf, pFront.y);
+                }
+                ctx.closePath(); ctx.fill();
+
+                // Extruded side yellow panel stripe windows
+                ctx.fillStyle = '#f1c40f';
+                ctx.beginPath();
+                if (renderRightSide) {
+                    ctx.moveTo(xf + wf, yf + hf * 0.45); ctx.lineTo(xb + wb, yb + hb * 0.45);
+                    ctx.lineTo(xb + wb, yb + hb * 0.65); ctx.lineTo(xf + wf, yf + hf * 0.65);
+                } else {
+                    ctx.moveTo(xf, yf + hf * 0.45); ctx.lineTo(xb, yb + hb * 0.45);
+                    ctx.lineTo(xb, yb + hb * 0.65); ctx.lineTo(xf, yf + hf * 0.65);
+                }
+                ctx.closePath(); ctx.fill();
+
+                // 3. Front Cabin Face Plate (Always layered over back coordinates)
+                if (frontZ > 0.05 && frontZ < 1.3) {
+                    ctx.fillStyle = '#ccd1d1'; // Polished silver frame
+                    ctx.beginPath();
+                    ctx.roundRect(xf, yf, wf, hf, Math.max(2, 18 * pFront.scale));
+                    ctx.fill();
+
+                    // Bold Yellow Accent Striping
+                    ctx.fillStyle = '#ffcc00';
+                    ctx.fillRect(xf, yf + hf * 0.55, wf, hf * 0.25);
+
+                    // Sky Blue Windshield Pane
+                    ctx.fillStyle = '#3498db';
+                    ctx.strokeStyle = '#1c2833'; ctx.lineWidth = Math.max(1, 3 * pFront.scale);
+                    ctx.beginPath();
+                    ctx.roundRect(xf + wf * 0.12, yf + hf * 0.1, wf * 0.76, hf * 0.35, Math.max(1, 8 * pFront.scale));
+                    ctx.fill(); ctx.stroke();
+
+                    // Dual Bright White Headlamp Orbs
+                    ctx.fillStyle = WHITE;
+                    ctx.shadowColor = WHITE; ctx.shadowBlur = Math.max(2, 20 * pFront.scale);
+                    ctx.beginPath();
+                    ctx.arc(xf + wf * 0.22, yf + hf * 0.72, Math.max(1, 8 * pFront.scale), 0, Math.PI * 2);
+                    ctx.arc(xf + wf * 0.78, yf + hf * 0.72, Math.max(1, 8 * pFront.scale), 0, Math.PI * 2);
+                    ctx.fill(); ctx.shadowBlur = 0; // Flash reset shadow buffer
+                }
+
+                // Front Surface Impact Detection Core Box
+                if (frontZ > 0.84 && frontZ < 0.98 && Math.abs(player.laneX - obs.lane) < 0.42) {
+                    if ((player.y + player.elevation) < 130) { triggerGameOver(); return; }
+                }
+            }
+        }
+
+        // --- 3D Character Renderer (POLISHED PRO SKELETAL RUN CYCLE) ---
+        let pPlayer = project(player.laneX, 0.9, player.elevation);
+        let pW = player.width; let pH = player.height;
+        let pX = pPlayer.x - pW / 2; let pY = pPlayer.y - pH - player.y;
+
+        // Kinematic Wave Oscillators
+        let stridePhase = player.runCycle;
+        let motionSway = player.isJumping ? 0 : Math.sin(stridePhase);
+        let verticalBob = player.isJumping ? 0 : Math.abs(motionSway) * 4.5;
+        let pyMod = pY + verticalBob;
+
+        // Cast Ambient Drop Shadows
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+        ctx.beginPath();
+        let shadowScale = Math.max(0.3, 1 - (player.y / 150));
+        ctx.ellipse(pPlayer.x, pPlayer.y, (pW / 1) * shadowScale, 9 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 1. SNEAKERS & THICK PINK SOLES (Ordered Back-to-Front Layering)
+        let leftLegOsc = Math.sin(stridePhase);
+        let rightLegOsc = -Math.sin(stridePhase);
+
+        let leftShoeY = pyMod + pH - 9 + (leftLegOsc > 0 ? -6 : 0);
+        let rightShoeY = pyMod + pH - 9 + (rightLegOsc > 0 ? -6 : 0);
+
+        // Left Heel Core
+        ctx.fillStyle = WHITE; ctx.beginPath();
+        ctx.roundRect(pX - 1, leftShoeY, 13, 9, 3); ctx.fill();
+        ctx.fillStyle = SOLES; ctx.fillRect(pX - 1, leftShoeY + 7, 13, 2.5); // Thick Coral Sole Layer
+
+        // Right Heel Core
+        ctx.fillStyle = WHITE; ctx.beginPath();
+        ctx.roundRect(pX + pW - 12, rightShoeY, 13, 9, 3); ctx.fill();
+        ctx.fillStyle = SOLES; ctx.fillRect(pX + pW - 12, rightShoeY + 7, 13, 2.5);
+
+        // 2. DENIM JEANS & CUFFS LOWER BASE
+        ctx.fillStyle = DENIM;
+        ctx.fillRect(pX + 2, pyMod + pH - 24 + leftLegOsc * 1.5, 11, 15);
+        ctx.fillRect(pX + pW - 13, pyMod + pH - 24 + rightLegOsc * 1.5, 11, 15);
+        
+        // Light Blue Rolled Cuffs
+        ctx.fillStyle = '#6593c2';
+        ctx.fillRect(pX + 1, pyMod + pH - 13 + leftLegOsc * 1.5, 13, 3.5);
+        ctx.fillRect(pX + pW - 14, pyMod + pH - 13 + rightLegOsc * 1.5, 13, 3.5);
+
+        // Waist Connection Plate
+        ctx.fillStyle = DENIM_DARK;
+        ctx.fillRect(pX + 2, pyMod + pH - 27, pW - 4, 5);
+
+        // 3. UPPER TORSO (Vibrant Hooded Vest & Pumping Arm Sleeves)
+        ctx.fillStyle = DENIM_DARK; // Flare base back panels
+        ctx.beginPath(); ctx.roundRect(pX - 2, pyMod + 16, pW + 4, 25, 4); ctx.fill();
+        ctx.fillStyle = DENIM;
+        ctx.beginPath(); ctx.roundRect(pX - 1, pyMod + 16, pW + 2, 24, 4); ctx.fill();
+
+        // Dark Blue Vertical Panel Tailor Stitches
+        ctx.strokeStyle = DENIM_DARK; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(pX + pW * 0.3, pyMod + 16); ctx.lineTo(pX + pW * 0.3, pyMod + 39);
+        ctx.moveTo(pX + pW * 0.7, pyMod + 16); ctx.lineTo(pX + pW * 0.7, pyMod + 39);
+        ctx.stroke();
+
+        // Active Pumping Arms (Sleeves swing inversely out of phase to stride loops)
+        ctx.fillStyle = HOODIE;
+        let lArmSwingY = pyMod + 21 + leftLegOsc * 2.5;
+        let rArmSwingY = pyMod + 21 + rightLegOsc * 2.5;
+        ctx.beginPath();
+        ctx.roundRect(pX - 6, lArmSwingY, 6, 16, 3); // Left hanging arm sleeve
+        ctx.roundRect(pX + pW, rArmSwingY, 6, 16, 3); // Right hanging arm sleeve
+        ctx.fill();
+
+        // White Rounded Semi-Circle Glove Nodes
+        ctx.fillStyle = WHITE; ctx.beginPath();
+        ctx.arc(pX - 3, lArmSwingY + 15, 3.5, 0, Math.PI * 2);
+        ctx.arc(pX + pW + 3, rArmSwingY + 15, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Gray Utility Backpack Rigged Accessory
+        ctx.fillStyle = '#747D8C'; ctx.beginPath();
+        ctx.roundRect(pPlayer.x - 11, pyMod + 20, 22, 15, 5); ctx.fill();
+        ctx.fillStyle = '#57606f'; ctx.fillRect(pPlayer.x - 11, pyMod + 25, 22, 3); // Compartment zip seam
+
+        // 4. SKELETAL COLLAR FRAME (HOODIE RING, CAPS, STRAPS, HAIR)
+        ctx.fillStyle = HOODIE; // Dominant solid grey outer hood grouping ring frame
+        ctx.beginPath(); ctx.arc(pPlayer.x, pyMod + 7, 14.5, 0, Math.PI * 2); ctx.fill();
+
+        // Dark Brown Nape Hair Spikes
+        ctx.fillStyle = BROWN;
+        ctx.fillRect(pPlayer.x - 5, pyMod + 11, 10, 4);
+
+        // Cap Backside Profile dome
+        ctx.fillStyle = ORANGE; ctx.beginPath();
+        ctx.arc(pPlayer.x, pyMod + 2.5, 9.5, Math.PI, 0); ctx.fill();
+
+        // White adjustable plastic lock strap
+        ctx.fillStyle = WHITE; ctx.fillRect(pPlayer.x - 3.5, pyMod + 1, 7, 2);
+
+        requestAnimationFrame(gameUpdate);
+    }
+
+    function triggerGameOver() {
+        gameActive = false;
+        finalScoreText.innerText = `Final Score: ${Math.floor(score)}`;
+        finalCoinsText.innerText = `Coins Collected: 🪙 ${coinsCollected}`;
+        gameOverScreen.classList.add('active');
+    }
+</script>
+</body>
+</html>

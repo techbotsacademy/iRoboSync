@@ -1,0 +1,2 @@
+Give an incremental update in prompt to 
+Use geometric shapes to add collectable coins, score, mountains, clouds, bushes, trees. 

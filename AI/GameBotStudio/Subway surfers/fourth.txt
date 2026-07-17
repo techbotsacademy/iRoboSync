@@ -1,0 +1,53 @@
+1. Overall Camera & World Perspective
+Camera Angle: A true pseudo-3D third-person camera positioned slightly above and behind the player character, looking down the tracks toward a single horizon point ($Y \approx 240$ on a $400 \times 600$ canvas).
+Forward Velocity: To create an intense feeling of forward movement, the tracks must feature dynamically scaling, moving ground sleepers (railroad ties) and passing side-scenery pillars that expand as they travel from the horizon ($z = 0$) to the foreground ($z = 1$).
+2. Player Character (Back Pose & Active Running Animation)
+During gameplay, the player must be viewed from the back, moving dynamically with a realistic, high-quality cartoon running cycle rather than looking like a static "gliding" figure.
+Color Palette Reference
+Skin: #F5C399 (Light peach)
+Cap/Accents: #FF4500 (Vibrant orange) & #FFFFFF (White)
+Hair & Eyebrows: #4A2E1B (Dark brown)
+Denim Vest & Jeans: #3C71A3 (Medium blue) / #29527A (Darker blue shadows)
+Hoodie: #E5E8EB (Light grey/off-white)
+Laces: #4CAF50 (Bright lime green)
+Shoe Soles: #FF8A80 (Coral/pinkish-red)
+👤 Back Pose Anatomy
+Head & Hood: A large, solid, light-grey circle/oval (#E5E8EB) represents the fabric hood framing the back of the head. Underneath, a few dark brown hair spikes peek out at the nape of the neck. The back of the orange cap dome is visible with a small white plastic adjustment strap at the base.
+Upper Body: A slightly flared blue trapezoid representing the back of the denim vest, styled with darker blue vertical stitching lines.
+Arms: Light-grey sleeves (#E5E8EB) ending in rounded white gloves (#FFFFFF).
+Lower Body & Backpack: A gray utility backpack (#747D8C) sits squarely on the player's back. Tapered blue jeans with light-blue rolled cuffs rest on the shoes.
+Shoes: Large, oversized, chunky white sneakers showing the back heels and a thick coral-pink (#FF8A80) bottom sole layer.
+🏃 Dynamic Run-Cycle Animation Mechanics
+To replace the static "gliding" movement, animate the body parts using a time-based sinusoidal ($sin$) cycle:
+Legs & Feet: Alternately lift, swing, and drop. One shoe should compress and rise towards the horizon while the other plant-steps lower down, shifting vertically and horizontally relative to the stride.
+Shoulders & Arms: Swing out of phase with the legs. When the left leg moves forward, the right arm swings back, and vice-versa.
+Torso Bounce & Sway: The entire character model must gently bob up and down (Y-axis bounce) and sway side-to-side (X-axis tilt) in sync with the stride cycle.
+3. Realistic 3D Subway Trains (Extruded Depth)
+To prevent trains from looking like flat, 2D planes that lose their 3D illusion as they approach, they must be rendered as fully extruded 3D boxes.
+            [Back Roof Face]
+             .-------------.
+            /             /|
+           /   TOP ROOF  / | [Side Face Panel]
+          /             /  |
+         .-------------.   |
+         |             |   |
+         | FRONT CABIN |  /
+         |             | /
+         '-------------'/
+Continuous Projection Matrix: Define each train with a Front Z and a Back Z coordinate (e.g., Back Z is offset behind Front Z by a length of $-0.65$). Both coordinates must project through the perspective matrix.
+Visible Faces:
+Front Face Cabin: A polished silver and yellow rounded-rectangle panel featuring a sky-blue windshield and glowing white 3D headlamps.
+Top Roof Plane: A trapezoid connecting the top of the Front Face to the top of the Back Face. Filled with a light grey metallic highlight (#8E9EAB).
+Side Depth Face: A side panel connecting the side edges of the Front Face to the Back Face.
+Perspective Logic: If a train is in the Left Lane, its right side wall is highly visible to the camera. If in the Right Lane, its left side wall is visible.
+The side wall must feature moving yellow panel stripes and dark metallic window cuts.
+No Disappearing Depth: As the train approaches the foreground ($z \rightarrow 1$), the distance between the Front Z and Back Z must scale proportionally. The back plane must stay projected in the distance, preserving a highly-visible 3D depth side profile until the train completely exits the screen.
+4. Terrain & Elevation (Ramps & Platforms)
+Elevated Platforms: Spawn concrete or metallic walkways above specific lanes (usually $120\text{px}$ higher than ground tracks).
+Natural Transition Ramps: Connect ground level to these high platforms using smooth inclined ramps.
+Player Physics Alignment: When the player switches to a lane containing a platform, they must smoothly run up the ramp, adapting their visual baseline height ($Y$) to the elevation curve of the platform.
+Bonus Coins: Place gold coins suspended directly above the elevated platforms, rewarding players for climbing high.
+5. Environment & Atmospheric Polish
+Layered Scenery: The distant horizon must fade into dark gradients, while passing concrete structural arches scale up and slide past the side walls of the screen.
+Cast Shadows: Draw translucent black elliptical shadows directly beneath the player, coins, and obstacles. The player's shadow must shrink and grow fainter as they jump higher into the air.
+Glow & Lighting Effects: Add neon light trails and illuminated hazard lights on top of construction barriers.

@@ -1,0 +1,4 @@
+✅ Game mechanics (movement, gravity, platforms, goal)
+✅ Visuals & collectibles (coins, score, mountains, clouds, bushes, trees, parallax)
+✅ Polish (animations, moving platforms, enemies, etc.)
+✅ World expansion (camera, larger level, pipes)

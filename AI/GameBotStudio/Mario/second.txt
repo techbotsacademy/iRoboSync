@@ -1,43 +1,24 @@
-Keep everything that currently works.
-Do not remove, rewrite, or break any existing functionality.
-Remove all external image references and replace them with graphics created entirely using the HTML5 Canvas drawing API.
+Can you make it more like a fun Mario-style game? 
+Please keep everything in one HTML file and don't use any pictures. 
+Draw the player using simple shapes like rectangles and circles. 
+Add more platforms, green pipes, and coins that I can collect. 
+Make the level much bigger so the screen moves along when the player walks. 
+Put mountains, hills, clouds, bushes, and trees in the background so it looks nice. 
+Make the player walk and jump with simple animations, make the coins spin, and keep track of the score when I collect them. 
+Please keep using only JavaScript and the HTML5 canvas.
 
-Player
-Draw a Mario-inspired cartoon character using simple shapes (circles, rectangles, arcs, and polygons).
-Include a red cap, face, moustache, blue overalls, brown shoes, and white gloves.
-Animate the legs while walking.
-Flip the character automatically based on the movement direction.
+Create a prompt to make fun Mario-style game to an existing HTML 
 
-Coins
-Draw bright gold coins using gradients.
-Add a spinning animation by changing the coin's width and highlights.
-Add a sparkle effect when collected.
+Please keep everything in one HTML file and don't use any pictures. 
 
-Pipes
-Draw classic green pipes with darker outlines and a wider top rim.
-Support multiple heights while maintaining collision detection.
+Draw the player using simple shapes like rectangles and circles. 
 
-Platforms
-Draw grass-topped ground blocks.
-Create brick platforms using repeated brick patterns.
-Add subtle shading for a more polished appearance.
+Add more platforms, green pipes, and coins that I can collect. 
 
-Background
-Draw a bright blue sky.
-Add cartoon-style clouds, rolling hills, mountains, bushes, and small trees.
-Keep the existing parallax scrolling effect.
+Make the level much bigger so the screen moves along when the player walks. 
 
-Visual Style
-Use vibrant colours similar to classic platform games.
-Add simple shadows and highlights to create depth.
+Put mountains, hills, clouds, bushes, and trees in the background so it looks nice. 
 
-Ensure all graphics are crisp and scalable on different screen sizes.
-Constraints
-Do not use any external images, SVG files, fonts, sprite sheets, or libraries.
-Draw everything procedurally using the HTML5 Canvas API.
-Keep all existing gameplay mechanics unchanged.
-Continue using a single HTML file.
-Before returning the code:
+Make the player walk and jump with simple animations, make the coins spin, and keep track of the score when I collect them. 
 
-Verify that movement, jumping, scrolling, platforms, coin collection, and scoring all continue to work correctly.
-Return only the complete updated HTML file.
+Please keep using only JavaScript and the HTML5 canvas.

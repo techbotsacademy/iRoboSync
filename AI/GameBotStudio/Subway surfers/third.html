@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subway Surfers 3D - Ultimate Edition</title>
+    <title>Subway Surfers 3D - Pro Edition</title>
     <style>
         * {
             box-sizing: border-box;
@@ -11,7 +11,7 @@
             padding: 0;
         }
         body {
-            background-color: #0c0c14;
+            background-color: #080810;
             color: #fff;
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             display: flex;
@@ -27,11 +27,11 @@
             box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95);
             border-radius: 20px;
             overflow: hidden;
-            border: 4px solid #2d3436;
+            border: 4px solid #222;
         }
         canvas {
             display: block;
-            background: linear-gradient(to bottom, #1e3799 0%, #3c6382 35%, #22a6b3 48%, #130f40 50%, #1e1e24 100%);
+            background: linear-gradient(to bottom, #111424 0%, #1d213a 40%, #0a3d62 48%, #0f1123 50%, #111 100%);
         }
         /* UI Layers */
         .ui-layer {
@@ -63,7 +63,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(8, 10, 24, 0.9);
+            background: rgba(5, 6, 15, 0.95);
             backdrop-filter: blur(8px);
             display: flex;
             flex-direction: column;
@@ -83,7 +83,7 @@
         
         h1 {
             color: #ff4757;
-            font-size: 42px;
+            font-size: 40px;
             margin-bottom: 5px;
             font-weight: 900;
             text-shadow: 3px 3px 0px #fff;
@@ -186,6 +186,7 @@
     let coinsCollected = 0;
     let speed = 5.5; 
     const maxSpeed = 15;
+    let worldOffset = 0; // Cycles to render moving tracks/ground sleepers
 
     // Entities
     let player = {
@@ -195,18 +196,29 @@
         y: 0,                
         vy: 0,               
         isJumping: false,
-        width: 40,
+        width: 38,
         height: 68,
         runCycle: 0,
-        elevation: 0 // Used to smoothly follow ramps up and down
+        elevation: 0 
     };
 
     let obstacles = [];
     let collectibles = [];
-    let platforms = []; // Elevated tracks/ramps
+    let platforms = []; 
     let obstacleSpawnTimer = 0;
     let coinSpawnPatternTimer = 0;
     let platformSpawnTimer = 0;
+
+    // Color Palette Definitions
+    const SKIN = '#F5C399';
+    const ORANGE = '#FF4500';
+    const WHITE = '#FFFFFF';
+    const BROWN = '#4A2E1B';
+    const DENIM = '#3C71A3';
+    const DENIM_DARK = '#29527A';
+    const GREY = '#E5E8EB';
+    const LIME = '#4CAF50';
+    const CORAL = '#FF8A80';
 
     // Input Management
     window.addEventListener('keydown', (e) => {
@@ -224,7 +236,6 @@
         }
     });
 
-    // Synthesized Sound Effects Engine
     function initAudio() {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -241,7 +252,7 @@
         osc.frequency.setValueAtTime(587.33, now); 
         osc.frequency.setValueAtTime(880, now + 0.08); 
         
-        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.setValueAtTime(0.12, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
         
         osc.connect(gain);
@@ -256,10 +267,10 @@
         startScreen.classList.remove('active');
         gameOverScreen.classList.remove('active');
 
-        // Reset game parameters
         score = 0;
         coinsCollected = 0;
         speed = 5.5;
+        worldOffset = 0;
         obstacles = [];
         collectibles = [];
         platforms = [];
@@ -289,16 +300,13 @@
         gameOverScreen.classList.add('active');
     }
 
-    // Advanced 3D projection utility with elevation support (Y offset)
+    // 3D Perspective projection utility
     function project(laneOffset, zProgress, elementElevation = 0) {
         let y = HORIZON_Y + zProgress * (canvas.height - HORIZON_Y);
         let currentTrackWidth = zProgress * TRACK_BASE_WIDTH;
         let laneWidth = currentTrackWidth / 3;
         let x = (canvas.width / 2) + (laneOffset * laneWidth);
-        
-        // Scale vertical depth 3D perspective offsets relative to progress
         let elevatedY = y - (elementElevation * zProgress);
-
         return { x, y: elevatedY, rawY: y, scale: zProgress };
     }
 
@@ -309,9 +317,10 @@
         score += 0.2;
         scoreBoard.innerText = `SCORE: ${Math.floor(score)}`;
         speed = Math.min(maxSpeed, 5.5 + Math.floor(score / 350));
+        worldOffset = (worldOffset + speed * 0.15) % 100;
 
-        // Smooth Lane Transition Interpolation
-        player.laneX += (LANES[player.targetLaneIndex] - player.laneX) * 0.22;
+        // Smooth Lane Transition
+        player.laneX += (LANES[player.targetLaneIndex] - player.laneX) * 0.18;
 
         // Handle Jump Logic
         if (player.isJumping) {
@@ -324,11 +333,10 @@
             }
         }
 
-        // --- Handle Platforms & Ramps ---
-        // Smoothly interpolate player elevation based on running on platforms
+        // Handle Platforms & Ramps
         let activePlatform = null;
         platforms.forEach(plat => {
-            if (plat.lane === player.targetLaneIndex && plat.startZ <= 0.9 && plat.endZ >= 0.9) {
+            if (plat.lane === player.targetLaneIndex && plat.startZ <= 0.95 && plat.endZ >= 0.85) {
                 activePlatform = plat;
             }
         });
@@ -337,28 +345,23 @@
             let zRatio = (0.9 - activePlatform.startZ) / (activePlatform.endZ - activePlatform.startZ);
             let targetElevation = 0;
             if (zRatio < 0.2) {
-                // Ramp Up
                 targetElevation = (zRatio / 0.2) * 120;
             } else if (zRatio > 0.8) {
-                // Ramp Down
                 targetElevation = ((1 - zRatio) / 0.2) * 120;
             } else {
-                // High Flat Platform
                 targetElevation = 120;
             }
             player.elevation += (targetElevation - player.elevation) * 0.2;
         } else {
-            // Fall back to ground level smoothly
             player.elevation += (0 - player.elevation) * 0.25;
         }
 
-        player.runCycle += speed * 0.045;
+        // Run cycle loop for limb and joint mechanics
+        player.runCycle += speed * 0.055;
 
-        // --- Entity Spawn Managers ---
-        
-        // Spawn Platforms/Ramps
+        // --- Spawners ---
         platformSpawnTimer++;
-        if (platformSpawnTimer > 300) {
+        if (platformSpawnTimer > 350) {
             platformSpawnTimer = 0;
             let pLane = Math.floor(Math.random() * 3) - 1;
             platforms.push({
@@ -367,26 +370,20 @@
                 endZ: 0.8,
                 height: 120
             });
-            
-            // Spawn Coins along the elevation profile of the platform!
             for (let cZ = -0.1; cZ <= 0.7; cZ += 0.1) {
-                let coinElevation = 140; // Positioned perfectly hovering above platform
                 collectibles.push({ 
                     lane: pLane, 
                     z: cZ, 
-                    elevation: coinElevation, 
+                    elevation: 140, 
                     collected: false 
                 });
             }
         }
 
-        // Spawn Obstacles
         obstacleSpawnTimer++;
-        if (obstacleSpawnTimer > Math.max(30, 80 - speed * 3)) {
+        if (obstacleSpawnTimer > Math.max(30, 85 - speed * 3.2)) {
             obstacleSpawnTimer = 0;
             let targetLane = Math.floor(Math.random() * 3) - 1;
-            
-            // Do not spawn overlapping obstacles on a high active platform lane
             let overlapsPlatform = platforms.some(p => p.lane === targetLane && p.startZ < 0.2);
             if (!overlapsPlatform) {
                 let type = Math.random() > 0.45 ? 'barrier' : 'train';
@@ -394,9 +391,8 @@
             }
         }
 
-        // Spawn Ground Coins
         coinSpawnPatternTimer++;
-        if (coinSpawnPatternTimer > 40) {
+        if (coinSpawnPatternTimer > 45) {
             coinSpawnPatternTimer = 0;
             let targetLane = Math.floor(Math.random() * 3) - 1;
             let overlapsPlatform = platforms.some(p => p.lane === targetLane && p.startZ < 0.2);
@@ -410,33 +406,35 @@
         // --- Render Steps ---
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 1. Environmental Backdrop
-        ctx.fillStyle = '#0f172a'; // Deep sky blue
+        // Sky & Ground Backdrop
+        ctx.fillStyle = '#0a0d1a'; 
         ctx.fillRect(0, 0, canvas.width, HORIZON_Y);
-        ctx.fillStyle = '#1e293b'; // Ground gravel field
+        ctx.fillStyle = '#151821'; 
         ctx.fillRect(0, HORIZON_Y, canvas.width, canvas.height - HORIZON_Y);
 
-        // Sky & Environment Details (Subway structural beams)
-        ctx.fillStyle = '#334155';
-        for (let i = 0; i < 6; i++) {
-            let offset = (i * 100 + (score * 5)) % 600;
-            ctx.fillRect(15, offset, 5, 80);
-            ctx.fillRect(canvas.width - 20, offset, 5, 80);
-        }
-
-        // 3D Perspective Track Beds
-        ctx.fillStyle = '#1e293b';
+        // 3D Perspective Track Bed base
+        ctx.fillStyle = '#1d222f';
         ctx.beginPath();
-        let bL = project(-1.5, 1);
-        let bR = project(1.5, 1);
+        let bL = project(-1.6, 1);
+        let bR = project(1.6, 1);
         ctx.moveTo(canvas.width / 2, HORIZON_Y);
         ctx.lineTo(bL.x, bL.y);
         ctx.lineTo(bR.x, bR.y);
         ctx.closePath();
         ctx.fill();
 
-        // 3D Lane Track Rails
-        ctx.strokeStyle = '#64748b';
+        // Moving Ground Sleepers (Tie bars) for speed depth
+        ctx.fillStyle = '#2d3345';
+        for (let sz = 0.01; sz <= 1.0; sz += 0.08) {
+            let relativeZ = ((sz * 100 + worldOffset) % 100) / 100;
+            let pTieL = project(-1.5, relativeZ);
+            let pTieR = project(1.5, relativeZ);
+            let thickness = 4 * relativeZ;
+            ctx.fillRect(pTieL.x, pTieL.y, pTieR.x - pTieL.x, thickness);
+        }
+
+        // Track boundary lines
+        ctx.strokeStyle = '#576574';
         ctx.lineWidth = 4;
         [-1.5, -0.5, 0.5, 1.5].forEach(div => {
             ctx.beginPath();
@@ -446,7 +444,7 @@
             ctx.stroke();
         });
 
-        // 2. Render Platforms & Ramps
+        // Platforms & Ramps Render
         for (let i = platforms.length - 1; i >= 0; i--) {
             let plat = platforms[i];
             plat.startZ += (speed * 0.003);
@@ -457,7 +455,6 @@
                 continue;
             }
 
-            // Draw elevated platform rails and panels
             let resolution = 10;
             for (let j = 0; j < resolution; j++) {
                 let z0 = plat.startZ + (plat.endZ - plat.startZ) * (j / resolution);
@@ -465,7 +462,6 @@
 
                 if (z1 < 0 || z0 > 1) continue;
 
-                // Helper to get platform elevation height map
                 function getPlatElev(zVal) {
                     let r = (zVal - plat.startZ) / (plat.endZ - plat.startZ);
                     if (r < 0.2) return (r / 0.2) * plat.height;
@@ -478,8 +474,8 @@
                 let p1_L = project(plat.lane - 0.45, z1, getPlatElev(z1));
                 let p1_R = project(plat.lane + 0.45, z1, getPlatElev(z1));
 
-                // 3D Platform Top Face
-                ctx.fillStyle = '#475569';
+                // Roof Face
+                ctx.fillStyle = '#485460';
                 ctx.beginPath();
                 ctx.moveTo(p0_L.x, p0_L.y);
                 ctx.lineTo(p0_R.x, p0_R.y);
@@ -488,21 +484,21 @@
                 ctx.closePath();
                 ctx.fill();
 
-                // 3D Platform Side Face (Shaded to convey 3D Depth)
-                ctx.fillStyle = '#334155';
-                let p0_L_Ground = project(plat.lane - 0.45, z0, 0);
-                let p1_L_Ground = project(plat.lane - 0.45, z1, 0);
+                // Left Depth Wall
+                ctx.fillStyle = '#2d3436';
+                let p0_L_G = project(plat.lane - 0.45, z0, 0);
+                let p1_L_G = project(plat.lane - 0.45, z1, 0);
                 ctx.beginPath();
                 ctx.moveTo(p0_L.x, p0_L.y);
                 ctx.lineTo(p1_L.x, p1_L.y);
-                ctx.lineTo(p1_L_Ground.x, p1_L_Ground.y);
-                ctx.lineTo(p0_L_Ground.x, p0_L_Ground.y);
+                ctx.lineTo(p1_L_G.x, p1_L_G.y);
+                ctx.lineTo(p0_L_G.x, p0_L_G.y);
                 ctx.closePath();
                 ctx.fill();
             }
         }
 
-        // 3. Render Coins
+        // Coins Render
         for (let i = collectibles.length - 1; i >= 0; i--) {
             let coin = collectibles[i];
             coin.z += (speed * 0.003);
@@ -517,23 +513,21 @@
             let radius = 14 * pPos.scale;
 
             if (radius > 1) {
-                // Gold outer 3D rings
                 ctx.fillStyle = '#ffd700';
-                ctx.strokeStyle = '#e67e22';
+                ctx.strokeStyle = '#d35400';
                 ctx.lineWidth = Math.max(1, 3 * pPos.scale);
                 ctx.beginPath();
                 ctx.arc(pPos.x, pPos.y - 20 * pPos.scale, radius, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
 
-                // Inner core shine
                 ctx.fillStyle = '#fff200';
                 ctx.beginPath();
                 ctx.arc(pPos.x, pPos.y - 20 * pPos.scale, radius * 0.45, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // Coin Collision check (Matches current elevations as well)
+            // Coin collision
             if (coin.z > 0.82 && coin.z < 0.96) {
                 let dElev = Math.abs((player.y + player.elevation) - coin.elevation);
                 if (Math.abs(player.laneX - coin.lane) < 0.35 && dElev < 45) {
@@ -546,7 +540,7 @@
             }
         }
 
-        // 4. Render 3D Obstacles & 3D Depth Trains
+        // Obstacles & Dynamic Real-3D Deep Subway Trains Render
         for (let i = obstacles.length - 1; i >= 0; i--) {
             let obs = obstacles[i];
             obs.z += (speed * 0.003);
@@ -559,22 +553,19 @@
             let pBase = project(obs.lane, obs.z, 0);
             
             if (obs.type === 'barrier') {
-                // --- DESIGN: Playful Construction Barrier (as requested) ---
+                // Construction Barrier (Playful design)
                 let w = 65 * pBase.scale;
                 let h = 42 * pBase.scale;
                 let x = pBase.x - w / 2;
                 let y = pBase.y - h;
 
-                // Shadows
                 ctx.fillStyle = 'rgba(0,0,0,0.2)';
                 ctx.fillRect(x, pBase.y - 4, w, 8 * pBase.scale);
 
-                // Orange support posts
                 ctx.fillStyle = '#ff7f50';
                 ctx.fillRect(x, y, 8 * pBase.scale, h);
                 ctx.fillRect(x + w - 8 * pBase.scale, y, 8 * pBase.scale, h);
 
-                // Red and white striped warning board
                 let boardH = 18 * pBase.scale;
                 let boardY = y + 8 * pBase.scale;
                 ctx.fillStyle = '#ffffff';
@@ -595,7 +586,6 @@
                 }
                 ctx.restore();
 
-                // Blinking yellow warning light
                 let lightOn = Math.floor(Date.now() / 150) % 2 === 0;
                 ctx.fillStyle = lightOn ? '#fffa65' : '#ccae00';
                 ctx.beginPath();
@@ -603,98 +593,98 @@
                 ctx.fill();
 
             } else if (obs.type === 'train') {
-                // --- DESIGN: Realistic Front + Side 3D Subway Train (3-10 inches deep) ---
-                // We use back-projection logic to construct a 3D bounding box for depth effect
-                let depthOffset = -0.15; // Z depth projection
+                // --- UN-FLATTENED REAL 3D TRAIN ENGINE ---
+                // We construct a fully extruded front cabinet face, side face, and top roof plane
+                let trainLength = -0.65; // Extrusion depth factor
                 let pFront = project(obs.lane, obs.z, 0);
-                let pBack = project(obs.lane, obs.z + depthOffset, 0);
+                let pBack = project(obs.lane, obs.z + trainLength, 0);
 
-                let wFront = 92 * pFront.scale;
-                let hFront = 140 * pFront.scale;
-                let xFront = pFront.x - wFront / 2;
-                let yFront = pFront.y - hFront;
+                let wf = 100 * pFront.scale;
+                let hf = 145 * pFront.scale;
+                let xf = pFront.x - wf / 2;
+                let yf = pFront.y - hf;
 
-                let wBack = 92 * pBack.scale;
-                let hBack = 140 * pBack.scale;
-                let xBack = pBack.x - wBack / 2;
-                let yBack = pBack.y - hBack;
+                let wb = 100 * pBack.scale;
+                let hb = 145 * pBack.scale;
+                let xb = pBack.x - wb / 2;
+                let yb = pBack.y - hb;
 
-                // Draw Ground Projection shadow 3D silhouette
-                ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                // 1. Train Body Roof Plane
+                ctx.fillStyle = '#8e9eab'; // Light grey roof metallic highlight
                 ctx.beginPath();
-                ctx.moveTo(xFront, pFront.y);
-                ctx.lineTo(xFront + wFront, pFront.y);
-                ctx.lineTo(xBack + wBack, pBack.y);
-                ctx.lineTo(xBack, pBack.y);
+                ctx.moveTo(xf, yf);
+                ctx.lineTo(xf + wf, yf);
+                ctx.lineTo(xb + wb, yb);
+                ctx.lineTo(xb, yb);
                 ctx.closePath();
                 ctx.fill();
 
-                // Draw Train Side 3D Faces (depending on which lane the train is in relative to camera view)
-                let sideFaceIndex = obs.lane <= 0 ? 1 : -1; // Determine left/right visibility
-                ctx.fillStyle = '#7f8c8d'; // Medium grey dark side face
+                // 2. Train Body Side Wall Planes (Shaded accordingly)
+                let showRightSide = obs.lane <= 0; // Visual perspective logic based on camera lane view
+                ctx.fillStyle = '#2c3e50'; // Deep dark metallic shadows
                 ctx.beginPath();
-                if (sideFaceIndex === 1) {
-                    ctx.moveTo(xFront + wFront, yFront);
-                    ctx.lineTo(xBack + wBack, yBack);
-                    ctx.lineTo(xBack + wBack, pBack.y);
-                    ctx.lineTo(xFront + wFront, pFront.y);
+                if (showRightSide) {
+                    ctx.moveTo(xf + wf, yf);
+                    ctx.lineTo(xb + wb, yb);
+                    ctx.lineTo(xb + wb, pBack.y);
+                    ctx.lineTo(xf + wf, pFront.y);
                 } else {
-                    ctx.moveTo(xFront, yFront);
-                    ctx.lineTo(xBack, yBack);
-                    ctx.lineTo(xBack, pBack.y);
-                    ctx.lineTo(xFront, pFront.y);
+                    ctx.moveTo(xf, yf);
+                    ctx.lineTo(xb, yb);
+                    ctx.lineTo(xb, pBack.y);
+                    ctx.lineTo(xf, pFront.y);
                 }
                 ctx.closePath();
                 ctx.fill();
 
-                // Side face decoration stripes (silver and yellow body side details)
-                ctx.fillStyle = '#f1c40f';
+                // Side windows and paneling accents
+                ctx.fillStyle = '#eccc68';
                 ctx.beginPath();
-                if (sideFaceIndex === 1) {
-                    ctx.moveTo(xFront + wFront, yFront + hFront * 0.6);
-                    ctx.lineTo(xBack + wBack, yBack + hBack * 0.6);
-                    ctx.lineTo(xBack + wBack, yBack + hBack * 0.85);
-                    ctx.lineTo(xFront + wFront, yFront + hFront * 0.85);
+                if (showRightSide) {
+                    ctx.moveTo(xf + wf, yf + hf * 0.45);
+                    ctx.lineTo(xb + wb, yb + hb * 0.45);
+                    ctx.lineTo(xb + wb, yb + hb * 0.7);
+                    ctx.lineTo(xf + wf, yf + hf * 0.7);
                 } else {
-                    ctx.moveTo(xFront, yFront + hFront * 0.6);
-                    ctx.lineTo(xBack, yBack + hBack * 0.6);
-                    ctx.lineTo(xBack, yBack + hBack * 0.85);
-                    ctx.lineTo(xFront, yFront + hFront * 0.85);
+                    ctx.moveTo(xf, yf + hf * 0.45);
+                    ctx.lineTo(xb, yb + hb * 0.45);
+                    ctx.lineTo(xb, yb + hb * 0.7);
+                    ctx.lineTo(xf, yf + hf * 0.7);
                 }
                 ctx.closePath();
                 ctx.fill();
 
-                // Front Rounded nose and face
-                ctx.fillStyle = '#b2bec3'; // Silver grey front panel
+                // 3. Train Front Face Cabin (The bright, stylized locomotive plate)
+                ctx.fillStyle = '#ccd1d1'; // Polished silver-yellow frame
                 ctx.beginPath();
-                ctx.roundRect(xFront, yFront, wFront, hFront, [22 * pFront.scale, 22 * pFront.scale, 5, 5]);
+                ctx.roundRect(xf, yf, wf, hf, [25 * pFront.scale, 25 * pFront.scale, 8, 8]);
                 ctx.fill();
 
-                // Yellow aesthetic nose striping
+                // Front yellow and steel details
                 ctx.fillStyle = '#f1c40f';
-                ctx.fillRect(xFront, yFront + hFront * 0.62, wFront, hFront * 0.23);
+                ctx.fillRect(xf, yf + hf * 0.55, wf, hf * 0.28);
 
-                // Blue Front Windshield
+                // Rounded Blue windshield
                 ctx.fillStyle = '#2980b9';
-                ctx.strokeStyle = '#2c3e50';
-                ctx.lineWidth = Math.max(1, 3 * pFront.scale);
+                ctx.strokeStyle = '#1e272e';
+                ctx.lineWidth = Math.max(1, 3.5 * pFront.scale);
                 ctx.beginPath();
-                ctx.roundRect(xFront + wFront * 0.1, yFront + hFront * 0.1, wFront * 0.8, hFront * 0.35, [12 * pFront.scale]);
+                ctx.roundRect(xf + wf * 0.1, yf + hf * 0.1, wf * 0.8, hf * 0.35, [12 * pFront.scale]);
                 ctx.fill();
                 ctx.stroke();
 
-                // Glow Headlights
+                // Glowing Headlamps
                 ctx.fillStyle = '#fff';
                 ctx.shadowColor = '#fff';
-                ctx.shadowBlur = 15 * pFront.scale;
+                ctx.shadowBlur = 18 * pFront.scale;
                 ctx.beginPath();
-                ctx.arc(xFront + wFront * 0.22, yFront + hFront * 0.73, 9 * pFront.scale, 0, Math.PI * 2);
-                ctx.arc(xFront + wFront * 0.78, yFront + hFront * 0.73, 9 * pFront.scale, 0, Math.PI * 2);
+                ctx.arc(xf + wf * 0.22, yf + hf * 0.72, 10 * pFront.scale, 0, Math.PI * 2);
+                ctx.arc(xf + wf * 0.78, yf + hf * 0.72, 10 * pFront.scale, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.shadowBlur = 0; 
             }
 
-            // --- Collision Evaluation ---
+            // Collision
             if (obs.z > 0.84 && obs.z < 0.98) {
                 if (Math.abs(player.laneX - obs.lane) < 0.42) {
                     let pTotalY = player.y + player.elevation;
@@ -709,187 +699,122 @@
             }
         }
 
-        // 5. Render Polished 3D-Style Player (Teenage Runner with details)
+        // 5. Render Polished 3D-Style Player (BACK POSE WITH ACTIVE MOTION RUN CYCLE)
         let pPlayer = project(player.laneX, 0.9, player.elevation);
         let pW = player.width;
         let pH = player.height;
         let pX = pPlayer.x - pW / 2;
         let pY = pPlayer.y - pH - player.y;
 
-        // Animated runners bounce logic
-        let runAmp = player.isJumping ? 0 : Math.abs(Math.sin(player.runCycle)) * 3.5;
-        let pyAd = pY + runAmp;
+        // Animated run-bounce modifier
+        let runSpeedAdjust = player.isJumping ? 0 : Math.sin(player.runCycle);
+        let bounce = player.isJumping ? 0 : Math.abs(runSpeedAdjust) * 4;
+        let pyAd = pY + bounce;
 
-        // Draw Player Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        // Left/Right dynamic run leg coordinates
+        let leftLegOffset = Math.sin(player.runCycle) * 8;
+        let rightLegOffset = -Math.sin(player.runCycle) * 8;
+
+        // Player shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
         ctx.beginPath();
         let shadowRatio = Math.max(0.4, 1 - (player.y / 160));
-        ctx.ellipse(pPlayer.x, pPlayer.y, (pW / 1.3) * shadowRatio, 8 * shadowRatio, 0, 0, Math.PI * 2);
+        ctx.ellipse(pPlayer.x, pPlayer.y, (pW / 1.1) * shadowRatio, 8 * shadowRatio, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Color Palette Definitions
-        const SKIN = '#F5C399';
-        const ORANGE = '#FF4500';
-        const WHITE = '#FFFFFF';
-        const BROWN = '#4A2E1B';
-        const DENIM = '#3C71A3';
-        const GREY = '#E5E8EB';
-        const LIME = '#4CAF50';
-        const CORAL = '#FF8A80';
+        // --- BACK VIEW MODEL GROUPING (Z-Index Ordered: Back to Front) ---
 
-        // --- LAYER GROUP: Shoes (Coral soles + Chunky white base + Green laces) ---
+        // 1. Chunky White Sneakers & Pink Soles (Back Heels Visible)
         ctx.fillStyle = WHITE;
-        let leftAir = Math.sin(player.runCycle) > 0;
-        let shoY1 = pyAd + pH - 11;
-        let shoY2 = pyAd + pH - 7;
-        if (leftAir) {
-            // Left shoe
-            ctx.roundRect(pX - 1, shoY1, 16, 10, [3, 3, 2, 2]); ctx.fill();
-            ctx.fillStyle = CORAL; ctx.fillRect(pX - 1, shoY1 + 8, 16, 2.5); ctx.fillStyle = WHITE;
-            // Right shoe
-            ctx.roundRect(pX + pW - 15, shoY2, 16, 10, [3, 3, 2, 2]); ctx.fill();
-            ctx.fillStyle = CORAL; ctx.fillRect(pX + pW - 15, shoY2 + 8, 16, 2.5); ctx.fillStyle = WHITE;
-        } else {
-            // Left shoe
-            ctx.roundRect(pX - 1, shoY2, 16, 10, [3, 3, 2, 2]); ctx.fill();
-            ctx.fillStyle = CORAL; ctx.fillRect(pX - 1, shoY2 + 8, 16, 2.5); ctx.fillStyle = WHITE;
-            // Right shoe
-            ctx.roundRect(pX + pW - 15, shoY1, 16, 10, [3, 3, 2, 2]); ctx.fill();
-            ctx.fillStyle = CORAL; ctx.fillRect(pX + pW - 15, shoY1 + 8, 16, 2.5); ctx.fillStyle = WHITE;
-        }
+        let shoeY_L = pyAd + pH - 10 + (leftLegOffset > 0 ? -4 : 0);
+        let shoeY_R = pyAd + pH - 10 + (rightLegOffset > 0 ? -4 : 0);
         
-        // Lime Laces bows
-        ctx.fillStyle = LIME;
-        ctx.fillRect(pX + 3, shoY1 - 2, 7, 3);
-        ctx.fillRect(pX + pW - 11, shoY2 - 2, 7, 3);
-
-        // --- LAYER GROUP: Lower Body (Denim Jeans + Cuffs) ---
-        ctx.fillStyle = DENIM;
-        // Legs
-        ctx.fillRect(pX + 3, pyAd + pH - 24, 11, 14);
-        ctx.fillRect(pX + pW - 14, pyAd + pH - 24, 11, 14);
-        // Light Blue Cuffs
-        ctx.fillStyle = '#5dade2';
-        ctx.fillRect(pX + 2, pyAd + pH - 14, 13, 3.5);
-        ctx.fillRect(pX + pW - 15, pyAd + pH - 14, 13, 3.5);
-
-        // Ripped hole cutout on Right knee
-        ctx.fillStyle = SKIN;
-        ctx.fillRect(pX + 5, pyAd + pH - 21, 6, 4);
-
-        // --- LAYER GROUP: Upper Body (Grey Hoodie, Denim Vest, Crossed Arms) ---
-        // Inner grey hoodie torso
-        ctx.fillStyle = GREY;
+        // Left Sneaker Heel
         ctx.beginPath();
-        ctx.roundRect(pX + 2, pyAd + 18, pW - 4, 28, [5]);
+        ctx.roundRect(pX - 1, shoeY_L, 14, 9, 3);
         ctx.fill();
-        // Zipper detail line
-        ctx.strokeStyle = '#4a4b4d';
+        ctx.fillStyle = CORAL; // Slabs of coral soles visible under heels
+        ctx.fillRect(pX - 1, shoeY_L + 7, 14, 2.5);
+
+        // Right Sneaker Heel
+        ctx.fillStyle = WHITE;
+        ctx.beginPath();
+        ctx.roundRect(pX + pW - 13, shoeY_R, 14, 9, 3);
+        ctx.fill();
+        ctx.fillStyle = CORAL;
+        ctx.fillRect(pX + pW - 13, shoeY_R + 7, 14, 2.5);
+
+        // 2. Denim Jeans & Cuffs (Back)
+        ctx.fillStyle = DENIM;
+        ctx.fillRect(pX + 2, pyAd + pH - 24 + leftLegOffset * 0.2, 11, 14);
+        ctx.fillRect(pX + pW - 13, pyAd + pH - 24 + rightLegOffset * 0.2, 11, 14);
+        
+        ctx.fillStyle = '#5dade2'; // Light-blue cuffs
+        ctx.fillRect(pX + 1, pyAd + pH - 14 + leftLegOffset * 0.2, 13, 4);
+        ctx.fillRect(pX + pW - 14, pyAd + pH - 14 + rightLegOffset * 0.2, 13, 4);
+
+        ctx.fillStyle = DENIM_DARK; // Join hips
+        ctx.fillRect(pX + 2, pyAd + pH - 28, pW - 4, 6);
+
+        // 3. Torso (Solid Grey Hoodie & Denim Vest Back panels)
+        ctx.fillStyle = '#1e3799'; // Deep shadow denim vest base
+        ctx.beginPath();
+        ctx.roundRect(pX - 2, pyAd + 16, pW + 4, 26, [6, 6, 2, 2]);
+        ctx.fill();
+        
+        ctx.fillStyle = DENIM;
+        ctx.beginPath();
+        ctx.roundRect(pX - 1, pyAd + 17, pW + 2, 24, [5, 5, 2, 2]);
+        ctx.fill();
+
+        // Dark Blue Vertical panel stitch lines for back vest definition
+        ctx.strokeStyle = DENIM_DARK;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(pPlayer.x, pyAd + 24);
-        ctx.lineTo(pPlayer.x, pyAd + 44);
+        ctx.moveTo(pX + pW * 0.3, pyAd + 18);
+        ctx.lineTo(pX + pW * 0.3, pyAd + 40);
+        ctx.moveTo(pX + pW * 0.7, pyAd + 18);
+        ctx.lineTo(pX + pW * 0.7, pyAd + 40);
         ctx.stroke();
 
-        // Denim Overlapping Vest
-        ctx.fillStyle = '#29527A'; // Darker blue shadow base
-        ctx.beginPath();
-        ctx.roundRect(pX - 1, pyAd + 19, pW + 2, 25, [4]);
-        ctx.fill();
-        ctx.fillStyle = DENIM;
-        ctx.beginPath();
-        ctx.moveTo(pX + 3, pyAd + 19);
-        ctx.lineTo(pPlayer.x - 5, pyAd + 32);
-        ctx.lineTo(pX + 3, pyAd + 44);
-        ctx.closePath(); ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(pX + pW - 3, pyAd + 19);
-        ctx.lineTo(pPlayer.x + 5, pyAd + 32);
-        ctx.lineTo(pX + pW - 3, pyAd + 44);
-        ctx.closePath(); ctx.fill();
-
-        // Crossed Arms (Z-Index High)
+        // Active Pumping Arms (Grey sleeves swinging along with strides)
         ctx.fillStyle = GREY;
-        // Left Arm (capsule angled across chest)
+        let leftArmY = pyAd + 22 + leftLegOffset * 0.8;
+        let rightArmY = pyAd + 22 + rightLegOffset * 0.8;
         ctx.beginPath();
-        ctx.roundRect(pX + 1, pyAd + 28, pW - 5, 9, [4]);
-        ctx.fill();
-        // Right Arm (overlapping angle)
-        ctx.beginPath();
-        ctx.roundRect(pX + 4, pyAd + 27, pW - 5, 9, [4]);
+        ctx.roundRect(pX - 5, leftArmY, 6, 15, 3); // Left arm back swing
+        ctx.roundRect(pX + pW - 1, rightArmY, 6, 15, 3); // Right arm back swing
         ctx.fill();
 
-        // White glove fists tucked in
-        ctx.fillStyle = WHITE;
+        ctx.fillStyle = WHITE; // White-glove hands hanging down
         ctx.beginPath();
-        ctx.arc(pX + 5, pyAd + 31, 5, 0, Math.PI * 2);
-        ctx.arc(pX + pW - 5, pyAd + 32, 5, 0, Math.PI * 2);
+        ctx.arc(pX - 2, leftArmY + 14, 3.5, 0, Math.PI * 2);
+        ctx.arc(pX + pW + 2, rightArmY + 14, 3.5, 0, Math.PI * 2);
         ctx.fill();
 
-        // --- LAYER GROUP: Head & Face (Cap/Brim + Hood Ring + Eyes + Smirk) ---
-        // Framing Hood Ring behind head
-        ctx.fillStyle = GREY;
+        // Grey backpack accessory strapped on back
+        ctx.fillStyle = '#747d8c'; 
+        ctx.beginPath();
+        ctx.roundRect(pPlayer.x - 11, pyAd + 20, 22, 16, 5);
+        ctx.fill();
+
+        // 4. Back Head, Large Grey Hood Ring, and Cap back straps
+        ctx.fillStyle = GREY; // The prominent back hoodie oval wrapping
         ctx.beginPath();
         ctx.arc(pPlayer.x, pyAd + 7, 15, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#b2bec3'; // Hollow shadow of hood
-        ctx.beginPath();
-        ctx.arc(pPlayer.x, pyAd + 7, 11, 0, Math.PI * 2);
-        ctx.fill();
 
-        // Head Base Skin
-        ctx.fillStyle = SKIN;
-        ctx.beginPath();
-        ctx.arc(pPlayer.x, pyAd + 7, 10, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = BROWN; // Hair strands creeping down the nape of the neck
+        ctx.fillRect(pPlayer.x - 6, pyAd + 11, 12, 5);
 
-        // Hair spikes peeking out under cap
-        ctx.fillStyle = BROWN;
-        ctx.fillRect(pX + 6, pyAd + 6, 4, 6);
-        ctx.fillRect(pX + pW - 10, pyAd + 6, 4, 6);
-
-        // Rotating White Dome Cap
-        ctx.fillStyle = WHITE;
-        ctx.beginPath();
-        ctx.arc(pPlayer.x + 1, pyAd, 10, Math.PI, 0);
-        ctx.fill();
-
-        // Curved crescent orange brim projected down
+        // Reverse side of the rotated cap (Only orange dome with white adjustments strap seen)
         ctx.fillStyle = ORANGE;
         ctx.beginPath();
-        ctx.ellipse(pPlayer.x + 3, pyAd + 1, 12, 4, Math.PI * 0.08, 0, Math.PI * 2);
+        ctx.arc(pPlayer.x, pyAd + 3, 10, Math.PI, 0);
         ctx.fill();
 
-        // Tiny green graffiti cap logo
-        ctx.fillStyle = LIME;
-        ctx.fillRect(pPlayer.x - 2, pyAd - 5, 4, 4);
-
-        // Mischievous thick brown blocky eyebrows
-        ctx.fillStyle = BROWN;
-        ctx.save();
-        ctx.translate(pPlayer.x, pyAd + 4);
-        ctx.rotate(0.08);
-        ctx.fillRect(-6, -2, 5, 2.5); // L eyebrow slanted down
-        ctx.rotate(-0.16);
-        ctx.fillRect(1, -2, 5, 2.5); // R eyebrow slanted down
-        ctx.restore();
-
-        // Cartoon eyes (Rounded rectangles, looking slightly left)
-        ctx.fillStyle = WHITE;
-        ctx.roundRect(pPlayer.x - 6, pyAd + 4, 5, 6, 1.5);
-        ctx.roundRect(pPlayer.x + 1, pyAd + 4, 5, 6, 1.5);
-        ctx.fill();
-        // Brown pupils looking left
-        ctx.fillStyle = BROWN;
-        ctx.fillRect(pPlayer.x - 5.5, pyAd + 6, 2.5, 3);
-        ctx.fillRect(pPlayer.x + 1.5, pyAd + 6, 2.5, 3);
-
-        // Confident Cocky asymmetrical smirk shifted to his left
-        ctx.strokeStyle = '#573719';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(pPlayer.x + 2, pyAd + 10, 3.5, 0.1, Math.PI - 0.2);
-        ctx.stroke();
+        ctx.fillStyle = WHITE; // Adjustable strap/opening of cap back
+        ctx.fillRect(pPlayer.x - 4, pyAd + 1, 8, 2.5);
 
         requestAnimationFrame(gameUpdate);
     }

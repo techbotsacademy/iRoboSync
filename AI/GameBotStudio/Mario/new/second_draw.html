@@ -1,0 +1,85 @@
+/*==================================================
+    DRAW
+==================================================*/
+function draw(){
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Sky
+    ctx.fillStyle="#87CEEB";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Background scenery
+    drawMountains();
+
+    drawCloud(90,70);
+    drawCloud(300,110);
+    drawCloud(600,80);
+    drawCloud(780,120);
+
+    drawBush(40,430);
+    drawBush(280,430);
+    drawBush(560,430);
+    drawBush(800,430);
+
+    drawTree(120,390);
+    drawTree(420,390);
+    drawTree(700,390);
+
+    // Platforms
+    ctx.fillStyle="#5E8C31";
+
+    for(const p of platforms){
+        ctx.fillRect(p.x,p.y,p.w,p.h);
+    }
+
+    // Coins
+    drawCoins();
+
+    // Goal pole
+    ctx.fillStyle="#555";
+    ctx.fillRect(goal.x,goal.y,goal.w,goal.h);
+
+    // Flag
+    ctx.fillStyle="red";
+
+    ctx.beginPath();
+    ctx.moveTo(goal.x+goal.w,goal.y);
+    ctx.lineTo(goal.x+goal.w+30,goal.y+10);
+    ctx.lineTo(goal.x+goal.w,goal.y+20);
+    ctx.closePath();
+    ctx.fill();
+
+    // Player body
+    ctx.fillStyle="#E53935";
+    ctx.fillRect(player.x,player.y,player.w,player.h);
+
+    // Head
+    ctx.fillStyle="#FFD39B";
+    ctx.beginPath();
+    ctx.arc(
+        player.x+player.w/2,
+        player.y+10,
+        8,
+        0,
+        Math.PI*2
+    );
+    ctx.fill();
+
+    // Hat
+    ctx.fillStyle="#C62828";
+    ctx.fillRect(
+        player.x+4,
+        player.y+1,
+        player.w-8,
+        6
+    );
+
+    // Eyes
+    ctx.fillStyle="black";
+    ctx.fillRect(player.x+10,player.y+10,2,2);
+    ctx.fillRect(player.x+18,player.y+10,2,2);
+
+    // Score
+    drawScore();
+}

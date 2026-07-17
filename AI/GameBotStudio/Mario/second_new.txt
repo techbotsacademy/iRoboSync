@@ -1,0 +1,43 @@
+Keep everything that currently works.
+Do not remove, rewrite, or break any existing functionality.
+Remove all external image references and replace them with graphics created entirely using the HTML5 Canvas drawing API.
+
+Player
+Draw a Mario-inspired cartoon character using simple shapes (circles, rectangles, arcs, and polygons).
+Include a red cap, face, moustache, blue overalls, brown shoes, and white gloves.
+Animate the legs while walking.
+Flip the character automatically based on the movement direction.
+
+Coins
+Draw bright gold coins using gradients.
+Add a spinning animation by changing the coin's width and highlights.
+Add a sparkle effect when collected.
+
+Pipes
+Draw classic green pipes with darker outlines and a wider top rim.
+Support multiple heights while maintaining collision detection.
+
+Platforms
+Draw grass-topped ground blocks.
+Create brick platforms using repeated brick patterns.
+Add subtle shading for a more polished appearance.
+
+Background
+Draw a bright blue sky.
+Add cartoon-style clouds, rolling hills, mountains, bushes, and small trees.
+Keep the existing parallax scrolling effect.
+
+Visual Style
+Use vibrant colours similar to classic platform games.
+Add simple shadows and highlights to create depth.
+
+Ensure all graphics are crisp and scalable on different screen sizes.
+Constraints
+Do not use any external images, SVG files, fonts, sprite sheets, or libraries.
+Draw everything procedurally using the HTML5 Canvas API.
+Keep all existing gameplay mechanics unchanged.
+Continue using a single HTML file.
+Before returning the code:
+
+Verify that movement, jumping, scrolling, platforms, coin collection, and scoring all continue to work correctly.
+Return only the complete updated HTML file.
