@@ -46,7 +46,7 @@ const unsigned long ALARM_DURATION_MS = 5000;
 
 WebServer server(80);
 WiFiClientSecure secureClient;
-UniversalTelegramBot bot(BOT_TOKEN, secureClient);
+UniversalTelegramBot* bot = nullptr;
 
 // =====================================================================================
 // GLOBAL VARIABLES
@@ -289,6 +289,13 @@ String getSystemState()
 bool sendTelegramAlert(const String &phrase)
 {
     secureClient.setInsecure();
+    if (bot == nullptr)
+    {
+        bot = new UniversalTelegramBot(
+            BOT_TOKEN,
+            secureClient
+        );
+    }
 
     String message;
 
@@ -316,7 +323,7 @@ bool sendTelegramAlert(const String &phrase)
 
     for (uint8_t i = 0; i < MAX_RETRIES; i++)
     {
-        if (bot.sendMessage(CHAT_ID, message, "Markdown"))
+        if (bot->sendMessage(CHAT_ID, message, "Markdown"))
         {
             Serial.println("Telegram Alert Sent.");
             return true;
