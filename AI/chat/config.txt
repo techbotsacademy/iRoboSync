@@ -1,0 +1,47 @@
+[
+  {
+    "title": "Wire to Wireless",
+    "children": [
+      {
+        "title": "Introduction to ESP32",
+        "children": [
+          {
+            "title": "Introduction",
+            "prompt": "prompts/m1_intro.txt",
+            "response": "responses/m1_intro.html"
+          },
+          {
+            "title": "History of AI",
+            "prompt": "prompts/history.txt",
+            "response": "responses/history.html"
+          }
+        ]
+      },
+      {
+        "title": "Topic 2",
+        "children": [
+          {
+            "title": "Machine Learning",
+            "prompt": "prompts/ml.txt",
+            "response": "responses/ml.html"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Module 2",
+    "children": [
+      {
+        "title": "Topic 1",
+        "children": [
+          {
+            "title": "Computer Vision",
+            "prompt": "prompts/cv.txt",
+            "response": "responses/cv.html"
+          }
+        ]
+      }
+    ]
+  }
+]

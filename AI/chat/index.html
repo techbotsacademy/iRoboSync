@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline ChatGPT</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Syntax Highlighting -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+</head>
+
+<body>
+
+<div id="app">
+
+    <!-- ========================= -->
+    <!-- Sidebar -->
+    <!-- ========================= -->
+
+    <aside id="sidebar">
+
+        <div class="sidebar-header">
+
+            <button id="newChatBtn">
+                ＋ New Chat
+            </button>
+
+        </div>
+
+        <div class="searchBox">
+
+            <input
+                    type="text"
+                    id="searchBox"
+                    placeholder="Search Prompt Library...">
+
+        </div>
+
+        <div class="libraryTitle">
+
+            Prompt Library
+
+        </div>
+
+        <div id="treeView">
+
+            <!-- Generated from config.json -->
+
+        </div>
+
+    </aside>
+
+
+
+    <!-- ========================= -->
+    <!-- Main -->
+    <!-- ========================= -->
+
+    <main id="mainPanel">
+
+        <!-- Top -->
+
+        <header id="topBar">
+
+            <button id="toggleSidebar">
+
+                ☰
+
+            </button>
+
+            <h2>
+
+                Offline ChatGPT
+
+            </h2>
+
+        </header>
+
+
+
+        <!-- Chat -->
+
+        <section id="chatWindow">
+
+            <div id="messages">
+
+                <div class="assistantMessage welcome">
+
+                    <div class="avatar">
+
+                        🤖
+
+                    </div>
+
+                    <div class="bubble">
+
+                        <h2>Welcome</h2>
+
+                        <p>
+
+                            Select a prompt from the Prompt Library on the left,
+                            or type your own message.
+
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- Typing indicator -->
+
+        <div id="typingIndicator">
+
+            <span></span>
+
+            <span></span>
+
+            <span></span>
+
+        </div>
+
+
+
+        <!-- Input Area -->
+
+        <footer id="inputArea">
+
+            <div id="inputContainer">
+
+                <textarea
+
+                        id="promptInput"
+
+                        placeholder="Message Offline ChatGPT..."
+
+                        rows="3"></textarea>
+
+                <button id="sendButton">
+
+                    ➤
+
+                </button>
+
+            </div>
+
+        </footer>
+
+    </main>
+
+</div>
+
+
+
+<!-- ========================= -->
+<!-- Templates -->
+<!-- ========================= -->
+
+<template id="userTemplate">
+
+    <div class="userMessage">
+
+        <div class="bubble"></div>
+
+    </div>
+
+</template>
+
+
+
+<template id="assistantTemplate">
+
+    <div class="assistantMessage">
+
+        <div class="avatar">
+
+            🤖
+
+        </div>
+
+        <div class="bubble"></div>
+
+    </div>
+
+</template>
+
+
+
+<template id="treeNodeTemplate">
+
+    <div class="treeNode">
+
+        <div class="treeTitle">
+
+            <span class="arrow">▶</span>
+
+            <span class="icon">📁</span>
+
+            <span class="title"></span>
+
+        </div>
+
+        <div class="children"></div>
+
+    </div>
+
+</template>
+
+
+
+<template id="leafTemplate">
+
+    <div class="leafNode">
+
+        <span class="icon">
+
+            📄
+
+        </span>
+
+        <span class="title"></span>
+
+    </div>
+
+</template>
+
+
+
+<script src="app.js"></script>
+
+</body>
+</html>

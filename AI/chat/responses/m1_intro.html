@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ESP32 LED Control</title>
+
+<style>
+
+body{
+    margin:0;
+    background:#0f172a;
+    font-family:Arial;
+    color:white;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+
+.card{
+    width:420px;
+    background:#1e293b;
+    border-radius:20px;
+    padding:30px;
+    text-align:center;
+    box-shadow:0 0 30px rgba(0,0,0,.4);
+}
+
+h1{
+    margin-top:0;
+}
+
+button{
+
+    width:140px;
+    padding:15px;
+    margin:10px;
+    font-size:18px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    transition:.3s;
+}
+
+#connect{
+    background:#3b82f6;
+    color:white;
+    width:300px;
+}
+
+#on{
+    background:#16a34a;
+    color:white;
+}
+
+#off{
+    background:#dc2626;
+    color:white;
+}
+
+button:hover{
+    transform:scale(1.05);
+}
+
+#status{
+    margin-top:20px;
+    font-size:18px;
+}
+
+#led{
+    width:90px;
+    height:90px;
+    border-radius:50%;
+    background:#444;
+    margin:25px auto;
+    transition:.4s;
+}
+
+.on{
+    background:#00ff00!important;
+    box-shadow:0 0 40px lime;
+}
+
+.off{
+    background:#555!important;
+}
+
+</style>
+</head>
+<body>
+
+<div class="card">
+
+<h1>ESP32 LED Control</h1>
+
+<button id="connect">Connect ESP32</button>
+
+<div id="led" class="off"></div>
+
+<button id="on">LED ON</button>
+
+<button id="off">LED OFF</button>
+
+<div id="status">
+Disconnected
+</div>
+
+</div>
+
+<script>
+
+let port;
+let writer;
+
+const status=document.getElementById("status");
+const led=document.getElementById("led");
+
+async function connect(){
+
+    try{
+
+        port=await navigator.serial.requestPort();
+
+        await port.open({
+            baudRate:115200
+        });
+
+        const encoder=new TextEncoderStream();
+
+        encoder.readable.pipeTo(port.writable);
+
+        writer=encoder.writable.getWriter();
+
+        status.innerHTML="Connected";
+
+    }
+
+    catch(e){
+
+        status.innerHTML="Connection Failed";
+
+        console.log(e);
+
+    }
+
+}
+
+async function send(data){
+
+    if(!writer){
+
+        alert("Connect ESP32 first");
+
+        return;
+
+    }
+
+    await writer.write(data);
+
+}
+
+document.getElementById("connect").onclick=connect;
+
+document.getElementById("on").onclick=async()=>{
+
+    await send("1");
+
+    led.className="on";
+
+}
+
+document.getElementById("off").onclick=async()=>{
+
+    await send("0");
+
+    led.className="off";
+
+}
+
+</script>
+
+</body>
+</html>
