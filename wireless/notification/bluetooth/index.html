@@ -1,0 +1,389 @@
+
+Essa Shaik
+10:22 AM (0 minutes ago)
+to TechBots
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI ESP32 BLE Dashboard</title>
+
+    <style>
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+            font-family:Segoe UI,Arial,sans-serif;
+        }
+
+        body{
+            height:100vh;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            background:
+            radial-gradient(circle at top,#1f4eff,#0d1b2a 40%,#050b16);
+            color:white;
+        }
+
+        .card{
+
+            width:420px;
+
+            background:rgba(255,255,255,.06);
+
+            backdrop-filter:blur(18px);
+
+            border:1px solid rgba(255,255,255,.15);
+
+            border-radius:20px;
+
+            padding:35px;
+
+            text-align:center;
+
+            box-shadow:0 0 40px rgba(0,153,255,.35);
+
+        }
+
+        h1{
+
+            font-size:30px;
+
+            margin-bottom:8px;
+
+            color:#4dd0ff;
+
+        }
+
+        h3{
+
+            font-weight:400;
+
+            color:#b6d8ff;
+
+            margin-bottom:30px;
+
+        }
+
+        button{
+
+            width:220px;
+
+            padding:14px;
+
+            margin:10px;
+
+            border:none;
+
+            border-radius:50px;
+
+            font-size:16px;
+
+            cursor:pointer;
+
+            transition:.35s;
+
+            color:white;
+
+        }
+
+        button:hover{
+
+            transform:translateY(-3px);
+
+            box-shadow:0 0 20px rgba(0,255,255,.5);
+
+        }
+
+        .connect{
+
+            background:linear-gradient(45deg,#0099ff,#00d4ff);
+
+        }
+
+        .disconnect{
+
+            background:linear-gradient(45deg,#ff3d71,#ff5f5f);
+
+        }
+
+        .on{
+
+            background:linear-gradient(45deg,#00c853,#64dd17);
+
+        }
+
+        .off{
+
+            background:linear-gradient(45deg,#ff1744,#ff5252);
+
+        }
+
+        button:disabled{
+
+            opacity:.45;
+
+            cursor:not-allowed;
+
+        }
+
+        .status{
+
+            margin-top:25px;
+
+            padding:14px;
+
+            border-radius:12px;
+
+            background:rgba(255,255,255,.08);
+
+        }
+
+        .dot{
+
+            width:12px;
+
+            height:12px;
+
+            display:inline-block;
+
+            border-radius:50%;
+
+            margin-right:10px;
+
+            background:red;
+
+        }
+
+        .connected{
+
+            background:#00ff80;
+
+            box-shadow:0 0 15px #00ff80;
+
+        }
+
+        .disconnected{
+
+            background:#ff3d3d;
+
+            box-shadow:0 0 15px red;
+
+        }
+
+        .loading{
+
+            animation:pulse .8s infinite;
+
+        }
+
+        @keyframes pulse{
+
+            0%{transform:scale(1);opacity:.5;}
+
+            50%{transform:scale(1.4);opacity:1;}
+
+            100%{transform:scale(1);opacity:.5;}
+
+        }
+
+        footer{
+
+            margin-top:25px;
+
+            color:#8faecc;
+
+            font-size:13px;
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="card">
+
+<h1>AI ESP32 Dashboard</h1>
+
+<h3>Bluetooth Low Energy Controller</h3>
+
+<button class="connect" id="connectBtn" onclick="connectBLE()">
+
+🔗 Connect ESP32
+
+</button>
+
+<button class="disconnect" id="disconnectBtn" onclick="disconnectBLE()" disabled>
+
+❌ Disconnect
+
+</button>
+
+<br>
+
+<button class="on" id="onBtn" onclick="sendCommand('1')" disabled>
+
+💡 Turn LED ON
+
+</button>
+
+<button class="off" id="offBtn" onclick="sendCommand('0')" disabled>
+
+🌙 Turn LED OFF
+
+</button>
+
+<div class="status">
+
+<span class="dot disconnected" id="dot"></span>
+
+<span id="statusText">
+
+Disconnected
+
+</span>
+
+</div>
+
+<footer>
+
+AI Powered BLE Interface
+
+</footer>
+
+</div>
+
+<script>
+
+const SERVICE_UUID="4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+
+const CHARACTERISTIC_UUID="beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+let device=null;
+
+let server=null;
+
+let characteristic=null;
+
+const statusText=document.getElementById("statusText");
+
+const dot=document.getElementById("dot");
+
+function updateStatus(text,color){
+
+statusText.innerHTML=text;
+
+dot.className="dot "+color;
+
+}
+
+async function connectBLE(){
+
+try{
+
+updateStatus("Searching Device...","loading");
+
+device=await navigator.bluetooth.requestDevice({
+
+filters:[{name:"ESP32_Web_Control"}],
+
+optionalServices:[SERVICE_UUID]
+
+});
+
+device.addEventListener('gattserverdisconnected',onDisconnected);
+
+server=await device.gatt.connect();
+
+const service=await server.getPrimaryService(SERVICE_UUID);
+
+characteristic=await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+updateStatus("Connected Successfully","connected");
+
+document.getElementById("connectBtn").disabled=true;
+
+document.getElementById("disconnectBtn").disabled=false;
+
+document.getElementById("onBtn").disabled=false;
+
+document.getElementById("offBtn").disabled=false;
+
+}
+
+catch(err){
+
+console.error(err);
+
+updateStatus("Connection Failed","disconnected");
+
+}
+
+}
+
+async function disconnectBLE(){
+
+if(device && device.gatt.connected){
+
+device.gatt.disconnect();
+
+}
+
+}
+
+function onDisconnected(){
+
+updateStatus("Disconnected","disconnected");
+
+document.getElementById("connectBtn").disabled=false;
+
+document.getElementById("disconnectBtn").disabled=true;
+
+document.getElementById("onBtn").disabled=true;
+
+document.getElementById("offBtn").disabled=true;
+
+}
+
+async function sendCommand(command){
+
+if(!characteristic){
+
+alert("Please connect to ESP32 first.");
+
+return;
+
+}
+
+try{
+
+const encoder=new TextEncoder();
+
+await characteristic.writeValue(encoder.encode(command));
+
+console.log("Command Sent:",command);
+
+}
+
+catch(err){
+
+console.log(err);
+
+alert("Failed to send command.");
+
+}
+
+}
+
+</script>
+
+</body>
+
+</html>
