@@ -1,0 +1,2 @@
+Install library
+Tools -> Manage Library -> install IRremote by shirriff, z3t0, ArminJo

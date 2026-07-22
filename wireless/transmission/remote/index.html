@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>IR Remote Mapping</title>
+
+<style>
+
+body{
+    font-family:Arial;
+    margin:30px;
+}
+
+textarea{
+    width:500px;
+    height:180px;
+    font-family:monospace;
+    font-size:16px;
+}
+
+button{
+    margin-top:10px;
+    padding:10px 25px;
+    font-size:16px;
+}
+
+table{
+    margin-top:20px;
+    border-collapse:collapse;
+}
+
+td,th{
+    border:1px solid #999;
+    padding:8px 15px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>Paste the Training Output</h2>
+
+<textarea id="mapping"></textarea>
+
+<br>
+
+<button onclick="loadMapping()">
+Load Mapping
+</button>
+
+<h2>Parsed Mapping</h2>
+
+<table id="table">
+
+<tr>
+<th>Action</th>
+<th>IR Code</th>
+</tr>
+
+</table>
+
+<script>
+
+const irMap = {};
+
+function loadMapping(){
+
+    Object.keys(irMap).forEach(k=>delete irMap[k]);
+
+    document.querySelectorAll("#table tr:not(:first-child)")
+        .forEach(r=>r.remove());
+
+    const lines=document.getElementById("mapping")
+        .value
+        .split("\n");
+
+    lines.forEach(line=>{
+
+        line=line.trim();
+
+        if(!line.includes("="))
+            return;
+
+        const parts=line.split("=");
+
+        const action=parts[0].trim();
+
+        const code=parts[1]
+            .trim()
+            .toUpperCase();
+
+        irMap[code]=action;
+
+        const row=document.createElement("tr");
+
+        row.innerHTML=
+        "<td>"+action+"</td>"+
+        "<td>0x"+code+"</td>";
+
+        document
+        .getElementById("table")
+        .appendChild(row);
+
+    });
+
+    console.log(irMap);
+
+}
+
+</script>
+
+</body>
+</html>

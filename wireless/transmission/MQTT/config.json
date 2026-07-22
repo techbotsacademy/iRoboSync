@@ -1,0 +1,46 @@
+{
+    "dashboard": {
+        "schoolName": "TechBots Academy",
+        "classroomName": "AI & Robotics Lab",
+        "teacherName": "Soumya Gupta",
+        "theme": "light",
+        "refreshInterval": 1000,
+        "heartbeatTimeout": 15000,
+        "maxStudents": 100,
+        "activityLogLimit": 500,
+        "autoReconnect": true,
+        "reconnectInterval": 2000
+    },
+
+    "mqtt": {
+        "host": "71e8c8d00fbc4c338e79c381b7031231.s1.eu.hivemq.cloud",
+        "port": 8884,
+        "protocol": "wss",
+        "username": "teacher",
+        "password": "Te@cher@123",
+        "topicRoot": "classroom"
+    },
+
+    "topics": {
+        "status": "status",
+        "ir": "ir",
+        "led": "led",
+        "command": "cmd",
+        "battery": "battery",
+        "rssi": "rssi",
+        "uptime": "uptime",
+        "firmware": "firmware",
+        "heartbeat": "heartbeat"
+    },
+
+    "features": {
+        "darkMode": true,
+        "charts": true,
+        "battery": true,
+        "rssi": true,
+        "uptime": true,
+        "firmware": true,
+        "csvExport": true,
+        "broadcast": true
+    }
+}

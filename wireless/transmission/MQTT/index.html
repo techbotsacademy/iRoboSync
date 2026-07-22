@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Smart Classroom Dashboard</title>
+
+<!-- MQTT -->
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:"Roboto",sans-serif;
+}
+
+body{
+    background:#f4f7fb;
+    color:#2c3e50;
+}
+
+/************************************************
+HEADER
+************************************************/
+
+header{
+    background:linear-gradient(90deg,#0f4c81,#1f6fb2);
+    color:white;
+    padding:18px 30px;
+
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    box-shadow:0 3px 12px rgba(0,0,0,.18);
+}
+
+header h1{
+    font-size:30px;
+    font-weight:500;
+}
+
+#brokerStatus{
+    padding:10px 18px;
+    border-radius:25px;
+    font-weight:bold;
+    background:#e74c3c;
+    transition:.3s;
+}
+
+#brokerStatus.online{
+    background:#2ecc71;
+}
+
+/************************************************
+CARDS
+************************************************/
+
+#cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:18px;
+    padding:20px;
+}
+
+.card{
+
+    background:white;
+
+    border-radius:15px;
+
+    padding:22px;
+
+    box-shadow:0 4px 12px rgba(0,0,0,.08);
+
+    transition:.25s;
+
+    position:relative;
+
+    overflow:hidden;
+}
+
+.card:hover{
+
+    transform:translateY(-4px);
+
+    box-shadow:0 10px 18px rgba(0,0,0,.15);
+
+}
+
+.card::before{
+
+    content:"";
+
+    position:absolute;
+
+    left:0;
+
+    top:0;
+
+    width:6px;
+
+    height:100%;
+
+    background:#3498db;
+
+}
+
+.cardTitle{
+
+    color:#7f8c8d;
+
+    font-size:14px;
+
+    margin-bottom:8px;
+
+}
+
+.cardValue{
+
+    font-size:40px;
+
+    font-weight:bold;
+
+}
+
+/************************************************
+TOOLBAR
+************************************************/
+
+#toolbar{
+
+    padding:10px 20px 20px;
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:12px;
+
+}
+
+#search{
+
+    flex:1;
+
+    min-width:220px;
+
+    padding:11px 14px;
+
+    border:1px solid #d0d7de;
+
+    border-radius:8px;
+
+    outline:none;
+
+}
+
+#search:focus{
+
+    border-color:#3498db;
+
+}
+
+select{
+
+    padding:10px;
+
+    border-radius:8px;
+
+    border:1px solid #d0d7de;
+
+}
+
+button{
+
+    padding:8px 14px;
+
+    border:none;
+
+    border-radius:6px;
+
+    cursor:pointer;
+
+    transition:.25s;
+
+}
+
+button:hover{
+
+    transform:scale(1.05);
+
+}
+
+/************************************************
+BUTTONS
+************************************************/
+
+.onBtn{
+
+    background:#27ae60;
+
+    color:white;
+
+}
+
+.offBtn{
+
+    background:#e74c3c;
+
+    color:white;
+
+}
+
+.blinkBtn{
+
+    background:#f39c12;
+
+    color:white;
+
+}
+
+/************************************************
+LAYOUT
+************************************************/
+
+#main{
+
+    display:grid;
+
+    grid-template-columns:3fr 1fr;
+
+    gap:20px;
+
+    padding:20px;
+
+}
+
+/************************************************
+TABLE
+************************************************/
+
+table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+    background:white;
+
+    border-radius:12px;
+
+    overflow:hidden;
+
+    box-shadow:0 4px 10px rgba(0,0,0,.08);
+
+}
+
+thead{
+
+    background:#1565c0;
+
+    color:white;
+
+}
+
+th{
+
+    padding:15px;
+
+    font-weight:500;
+
+}
+
+td{
+
+    padding:13px;
+
+    text-align:center;
+
+    border-bottom:1px solid #edf1f5;
+
+}
+
+tbody tr{
+
+    transition:.25s;
+
+}
+
+tbody tr:hover{
+
+    background:#f5fbff;
+
+}
+
+/************************************************
+STATUS BADGES
+************************************************/
+
+.badge{
+
+    display:inline-block;
+
+    padding:6px 14px;
+
+    border-radius:20px;
+
+    color:white;
+
+    font-size:13px;
+
+    font-weight:bold;
+
+}
+
+.online{
+
+    background:#2ecc71;
+
+}
+
+.offline{
+
+    background:#e74c3c;
+
+}
+
+.ledon{
+
+    background:#27ae60;
+
+}
+
+.ledoff{
+
+    background:#95a5a6;
+
+}
+
+.irhigh{
+
+    background:#f39c12;
+
+}
+
+.irlow{
+
+    background:#3498db;
+
+}
+
+/************************************************
+PULSE DOT
+************************************************/
+
+.dot{
+
+    display:inline-block;
+
+    width:12px;
+
+    height:12px;
+
+    border-radius:50%;
+
+    margin-right:6px;
+
+    animation:pulse 1.5s infinite;
+
+}
+
+.green{
+
+    background:#2ecc71;
+
+}
+
+.red{
+
+    background:#e74c3c;
+
+}
+
+@keyframes pulse{
+
+0%{transform:scale(.8);opacity:1;}
+
+50%{transform:scale(1.3);opacity:.5;}
+
+100%{transform:scale(.8);opacity:1;}
+
+}
+
+/************************************************
+ACTIVITY
+************************************************/
+
+#activity{
+
+    background:white;
+
+    border-radius:12px;
+
+    box-shadow:0 4px 10px rgba(0,0,0,.08);
+
+    display:flex;
+
+    flex-direction:column;
+
+    height:650px;
+
+}
+
+#activity h2{
+
+    background:#1565c0;
+
+    color:white;
+
+    padding:16px;
+
+}
+
+#activityLog{
+
+    overflow:auto;
+
+    flex:1;
+
+    padding:15px;
+
+}
+
+.logItem{
+
+    border-left:4px solid #3498db;
+
+    padding-left:12px;
+
+    margin-bottom:16px;
+
+}
+
+/************************************************
+FOOTER
+************************************************/
+
+footer{
+
+    background:#1565c0;
+
+    color:white;
+
+    text-align:center;
+
+    padding:15px;
+
+    margin-top:20px;
+
+}
+
+/************************************************
+RESPONSIVE
+************************************************/
+
+@media(max-width:1000px){
+
+#main{
+
+grid-template-columns:1fr;
+
+}
+
+header{
+
+flex-direction:column;
+
+gap:15px;
+
+}
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+
+<h1>🏫 Smart Classroom Dashboard</h1>
+
+<div id="brokerStatus">
+
+Broker Offline
+
+</div>
+
+</header>
+
+<!-- SUMMARY -->
+
+<div id="cards">
+
+<div class="card">
+<div class="cardTitle">Students</div>
+<div class="cardValue" id="studentCount">0</div>
+</div>
+
+<div class="card">
+<div class="cardTitle">Online</div>
+<div class="cardValue" id="onlineCount">0</div>
+</div>
+
+<div class="card">
+<div class="cardTitle">Offline</div>
+<div class="cardValue" id="offlineCount">0</div>
+</div>
+
+<div class="card">
+<div class="cardTitle">LED ON</div>
+<div class="cardValue" id="ledCount">0</div>
+</div>
+
+<div class="card">
+<div class="cardTitle">IR Active</div>
+<div class="cardValue" id="irCount">0</div>
+</div>
+
+</div>
+
+<!-- TOOLBAR -->
+
+<div id="toolbar">
+
+<input
+id="search"
+placeholder="Search Student">
+
+<select id="filter">
+
+<option value="all">All Students</option>
+
+<option value="online">Online</option>
+
+<option value="offline">Offline</option>
+
+<option value="ledon">LED ON</option>
+
+<option value="iractive">IR Active</option>
+
+</select>
+
+<button class="onBtn" id="allOn">
+
+Turn ALL LEDs ON
+
+</button>
+
+<button class="offBtn" id="allOff">
+
+Turn ALL LEDs OFF
+
+</button>
+
+</div>
+
+<!-- MAIN -->
+
+<div id="main">
+
+<!-- TABLE -->
+
+<div>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>Student</th>
+
+<th>Status</th>
+
+<th>IR Sensor</th>
+
+<th>LED</th>
+
+<th>Last Seen</th>
+
+<th>Control</th>
+
+</tr>
+
+</thead>
+
+<tbody id="studentTable">
+
+<!-- Filled automatically -->
+
+</tbody>
+
+</table>
+
+</div>
+
+<!-- ACTIVITY -->
+
+<div id="activity">
+
+<h2>
+
+Live Activity
+
+</h2>
+
+<div id="activityLog">
+
+</div>
+
+</div>
+
+</div>
+
+<footer>
+
+ESP32 Classroom Dashboard • MQTT Powered • TechBots Academy
+
+</footer>
+
+<script>
+let CONFIG = null;
+
+function initializeDashboard(){
+
+    document.title =
+        CONFIG.dashboard.schoolName;
+
+    document.querySelector("header h1").innerHTML =
+        "🏫 " +
+        CONFIG.dashboard.schoolName +
+        " - " +
+        CONFIG.dashboard.classroomName;
+
+    connectMQTT();
+
+}
+
+async function loadConfiguration() {
+
+    try {
+
+        const response = await fetch("config.json");
+
+        if (!response.ok)
+            throw new Error("Unable to read config.json");
+
+        CONFIG = await response.json();
+
+        console.log("Configuration Loaded");
+
+        console.log(CONFIG);
+
+        initializeDashboard();
+
+    }
+    catch(err){
+
+        alert("Cannot load config.json");
+
+        console.error(err);
+
+    }
+
+}
+
+/****************************************************
+    SMART CLASSROOM DASHBOARD
+    PART 3 - MQTT CONNECTION
+****************************************************/
+
+//========================
+// MQTT SETTINGS
+//========================
+
+// CHANGE THESE
+
+const MQTT_HOST="HOST_KEY";
+
+const MQTT_PORT=8883;
+
+// Use 8000 if using ws://
+// Use 8884 if using wss://
+
+const MQTT_USERNAME="teacher";
+
+const MQTT_PASSWORD="password";
+
+const CLASSROOM="classroom";
+
+//========================
+
+let client;
+
+const students={};
+
+const brokerStatus=document.getElementById("brokerStatus");
+
+const activityLog=document.getElementById("activityLog");
+
+//--------------------------------
+
+function connectMQTT()
+{
+console.log("CONFIG =", CONFIG);
+console.log("Host =", CONFIG.mqtt.host);
+console.log("Port =", CONFIG.mqtt.port);
+
+const mqttUrl =
+    `${CONFIG.mqtt.protocol}://${CONFIG.mqtt.host}:${CONFIG.mqtt.port}/mqtt`;
+
+    console.log("Connecting to:", mqttUrl);
+    client = mqtt.connect(
+
+    CONFIG.mqtt.protocol +
+    "://" +
+    CONFIG.mqtt.host +
+    ":" +
+    CONFIG.mqtt.port +
+    "/mqtt",
+
+    {
+
+        username:
+            CONFIG.mqtt.username,
+
+        password:
+            CONFIG.mqtt.password,
+
+        reconnectPeriod:
+            CONFIG.dashboard.reconnectInterval,
+
+        clean:true
+
+    });
+
+    client.on("connect", () => {
+        addLog("Connected to HiveMQ Cloud");
+        subscribeTopics();
+    });
+
+    client.on("message", (topic, message) => {
+
+    const payload = message.toString();
+    processMessage(topic, payload);   // <-- This line is essential
+
+});}
+
+function subscribeTopics()
+{
+    client.subscribe("classroom/#");
+    /*const root = CONFIG.mqtt.topicRoot;
+
+    client.subscribe(root+"/+/status");
+    client.subscribe(root+"/+/ir");
+    client.subscribe(root+"/+/led");
+    client.subscribe(root+"/+/battery");
+    client.subscribe(root+"/+/rssi");
+    client.subscribe(root+"/+/uptime");
+    client.subscribe(root+"/+/firmware");
+
+    addLog("Subscribed to classroom topics");*/
+
+}
+
+function processMessage(topic,payload)
+{
+console.log("processMessage() called");
+console.log(topic);
+console.log(payload);
+    const parts=topic.split("/");
+
+    const student=parts[1];
+
+    const item=parts[2];
+
+    //--------------------------------
+
+    if(!students[student])
+    {
+
+        students[student]={
+
+            status:"Offline",
+
+            ir:"LOW",
+
+            led:"OFF",
+
+            rssi:"--",
+
+            uptime:"--",
+
+            lastSeen:"Just now"
+
+        };
+
+    }
+
+    //--------------------------------
+
+    students[student].lastSeen = Date.now();
+
+    //--------------------------------
+
+    switch(item)
+    {
+
+        case "status":
+
+            students[student].status=payload;
+
+            addLog(student+" is "+payload);
+
+        break;
+
+        //--------------------------------
+
+        case "ir":
+
+            students[student].ir=(payload=="1")?"HIGH":"LOW";
+
+        break;
+
+        //--------------------------------
+
+        case "led":
+
+            students[student].led=payload;
+
+        break;
+
+        //--------------------------------
+
+        case "rssi":
+
+            students[student].rssi=payload;
+
+        break;
+
+        //--------------------------------
+
+        case "uptime":
+
+            students[student].uptime=payload;
+
+        break;
+
+    }
+
+    renderTable();
+
+    updateCards();
+
+}
+
+document
+.getElementById("search")
+.addEventListener("keyup",renderTable);
+
+document
+.getElementById("filter")
+.addEventListener("change",renderTable);
+
+setInterval(function(){
+
+    Object.values(students).forEach(s=>{
+
+        if(!s.lastSeen)
+            return;
+
+        let sec=Math.floor(
+            (Date.now()-s.lastSeen)/1000
+        );
+
+        if(sec<60)
+            s.display=sec+" sec ago";
+
+        else
+            s.display=Math.floor(sec/60)+" min ago";
+
+    });
+
+    renderTable();
+
+},1000);
+
+function renderTable(){
+    console.log("students =", students);
+    console.log("keys =", Object.keys(students));
+    const tbody=document.getElementById("studentTable");
+    tbody.innerHTML="";
+
+    let search=document.getElementById("search").value.toLowerCase();
+    let filter=document.getElementById("filter").value;
+
+    Object.keys(students).sort().forEach(name=>{
+
+        const s=students[name];
+
+        if(search!="" && !name.toLowerCase().includes(search))
+            return;
+
+        if(filter=="online" && s.status!="Online")
+            return;
+
+        if(filter=="offline" && s.status!="Offline")
+            return;
+
+        if(filter=="ledon" && s.led!="ON")
+            return;
+
+        if(filter=="iractive" && s.ir!="HIGH")
+            return;
+
+        const row=document.createElement("tr");
+
+        row.innerHTML=`
+
+        <td>${name}</td>
+
+        <td>
+            <span class="dot ${s.status=="Online"?"green":"red"}"></span>
+            <span class="badge ${s.status=="Online"?"online":"offline"}">
+                ${s.status}
+            </span>
+        </td>
+
+        <td>
+            <span class="badge ${s.ir=="HIGH"?"irhigh":"irlow"}">
+                ${s.ir}
+            </span>
+        </td>
+
+        <td>
+            <span class="badge ${s.led=="ON"?"ledon":"ledoff"}">
+                ${s.led}
+            </span>
+        </td>
+
+        <td>${s.display || "Now"}</td>
+
+        <td>
+
+            <button class="onBtn"
+                onclick="sendCommand('${name}','ON')">
+                ON
+            </button>
+
+            <button class="offBtn"
+                onclick="sendCommand('${name}','OFF')">
+                OFF
+            </button>
+
+            <button class="blinkBtn"
+                onclick="sendCommand('${name}','BLINK')">
+                Blink
+            </button>
+
+        </td>
+
+        `;
+
+        tbody.appendChild(row);
+
+    });
+
+}
+
+function sendCommand(student,command){
+
+    if(!client || !client.connected)
+        return;
+    if (students[student].status !== "Online") {
+        alert(student + " is offline");
+        return;
+    }
+
+    client.publish(
+
+        `${CONFIG.mqtt.topicRoot}/${student}/${CONFIG.topics.command}`,
+        command
+
+    );
+
+    addLog(student+" ← "+command);
+
+}
+
+setInterval(function(){
+
+    Object.values(students).forEach(s=>{
+
+        if(!s.lastSeen)
+            return;
+
+        let sec=(Date.now()-s.lastSeen)/1000;
+
+        if(sec > CONFIG.dashboard.heartbeatTimeout / 1000)
+            s.status="Offline";
+
+    });
+
+    updateCards();
+    renderTable();
+
+},5000);
+
+function updateCards()
+{
+
+    let total=0;
+
+    let online=0;
+
+    let offline=0;
+
+    let led=0;
+
+    let ir=0;
+
+    total=Object.keys(students).length;
+
+    Object.values(students).forEach(s=>{
+
+        if(s.status=="Online")
+            online++;
+        else
+            offline++;
+
+        if(s.led=="ON")
+            led++;
+
+        if(s.ir=="HIGH")
+            ir++;
+
+    });
+
+    document.getElementById("studentCount").innerHTML=total;
+
+    document.getElementById("onlineCount").innerHTML=online;
+
+    document.getElementById("offlineCount").innerHTML=offline;
+
+    document.getElementById("ledCount").innerHTML=led;
+
+    document.getElementById("irCount").innerHTML=ir;
+
+}
+
+function addLog(msg) {
+
+    const div = document.createElement("div");
+
+    div.className = "logItem";
+
+    div.innerHTML =
+        "<b>" +
+        new Date().toLocaleTimeString() +
+        "</b><br>" +
+        msg;
+
+    activityLog.prepend(div);
+
+    while(activityLog.children.length >
+          CONFIG.dashboard.activityLogLimit){
+
+        activityLog.removeChild(activityLog.lastChild);
+
+    }
+}
+
+document.getElementById("allOn").onclick=function(){
+
+    Object.keys(students).forEach(student=>{
+
+        sendCommand(student,"ON");
+
+    });
+
+};
+
+document.getElementById("allOff").onclick=function(){
+
+    Object.keys(students).forEach(student=>{
+
+        sendCommand(student,"OFF");
+
+    });
+
+};
+
+window.onload = function(){
+
+    loadConfiguration();
+
+};
+</script>
+
+</body>
+</html>
