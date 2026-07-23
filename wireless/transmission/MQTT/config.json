@@ -13,11 +13,11 @@
     },
 
     "mqtt": {
-        "host": "71e8c8d00fbc4c338e79c381b7031231.s1.eu.hivemq.cloud",
+        "host": "HOST",
         "port": 8884,
         "protocol": "wss",
-        "username": "teacher",
-        "password": "Te@cher@123",
+        "username": "username",
+        "password": "password",
         "topicRoot": "classroom"
     },
 
