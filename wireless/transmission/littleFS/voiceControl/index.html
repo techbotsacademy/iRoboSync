@@ -31,7 +31,7 @@ body {
 <body>
 
 <h2>Home Voice Control</h2>
-
+<button id="connectBtn" onclick="connectWiFi()">🌐 CONNECT WIFI</button>
 <div class="mic" onclick="start()">Mic</div>
 <h3 id="status">Waiting...</h3>
 
@@ -42,9 +42,19 @@ let port;
 let writer;
 let recognition;
 
+    function connectWiFi() {
+  const ip = prompt("Enter ESP32 IP Address (e.g. 192.168.7.213):");
+  if (ip) {
+    esp32IP = ip;
+    const btn = document.getElementById("connectBtn");
+    btn.innerText = "✅ WIFI READY";
+    btn.classList.add("connected");
+  }
+}
+
 // SEND
 async function send(data){
-	fetch("http://10.179.201.156/toggle")
+  fetch(`http://${esp32IP}/toggle}`)
         .then(response => response.text())
         .then(data => console.log(data))
         .catch(err => console.error(err));
