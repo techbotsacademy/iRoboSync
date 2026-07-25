@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+  background:#111;
+  color:white;
+  text-align:center;
+  font-family:Arial;
+}
+
+.mic {
+  font-size:50px;
+  margin:20px;
+  cursor:pointer;
+}
+
+.btn {
+  padding:10px 20px;
+  border-radius:10px;
+  border:1px solid #444;
+  display:inline-block;
+  margin-top:20px;
+}
+
+.on { color:lightgreen; }
+.off { color:red; }
+</style>
+</head>
+
+<body>
+
+<h2>Home Voice Control</h2>
+
+<div class="mic" onclick="start()">Mic</div>
+<h3 id="status">Waiting...</h3>
+
+<div id="light" class="btn off"> Light OFF</div>
+
+<script>
+let port;
+let writer;
+let recognition;
+
+// SEND
+async function send(data){
+	fetch("http://10.179.201.156/toggle")
+        .then(response => response.text())
+        .then(data => console.log(data))
+        .catch(err => console.error(err));
+}
+
+// VOICE
+function start(){
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert("Speech Recognition not supported");
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = "en-IN";
+
+  recognition.onresult = function(e){
+    const text = e.results[0][0].transcript.toLowerCase();
+    document.getElementById("status").innerText = "You said: " + text;
+    process(text);
+  };
+
+  recognition.start();
+  document.getElementById("status").innerText = "Listening...";
+}
+
+// PROCESS
+function process(text){
+  if(text.includes("light on")){
+    document.getElementById("light").innerText = "💡 Light ON";
+    document.getElementById("light").className = "btn on";
+    send("ON");
+  }
+  else if(text.includes("light off")){
+    document.getElementById("light").innerText = "💡 Light OFF";
+    document.getElementById("light").className = "btn off";
+    send("OFF");
+  }
+}
+</script>
+
+</body>
+</html>
+  

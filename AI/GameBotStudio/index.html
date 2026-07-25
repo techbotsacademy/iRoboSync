@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>HTML Game Generator</title>
+
+<style>
+body{
+    margin:0;
+    font-family:Arial;
+    background:#1e1e1e;
+    color:white;
+}
+
+header{
+    background:#111;
+    padding:15px;
+    text-align:center;
+    font-size:28px;
+}
+
+.container{
+    width:90%;
+    max-width:1200px;
+    margin:auto;
+    margin-top:20px;
+}
+
+textarea{
+    width:100%;
+    height:160px;
+    font-size:18px;
+    padding:10px;
+    border-radius:8px;
+    resize:vertical;
+}
+
+button{
+    margin-top:15px;
+    padding:15px 35px;
+    font-size:20px;
+    cursor:pointer;
+}
+
+pre{
+    background:black;
+    color:#00ff00;
+    padding:20px;
+    overflow:auto;
+    white-space:pre-wrap;
+    margin-top:20px;
+    border-radius:10px;
+}
+
+.copyBtn{
+    float:right;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+🎮 HTML Game Generator AI
+</header>
+
+<div class="container">
+
+<h2>Describe your game</h2>
+
+<textarea id="prompt">
+Create a Fruit Ninja game controlled using MediaPipe Hands.
+</textarea>
+
+<br>
+
+<button onclick="generateGame()">Generate HTML</button>
+
+<button class="copyBtn" onclick="copyCode()">Copy Code</button>
+
+<pre id="output">
+Generated HTML appears here...
+</pre>
+
+</div>
+
+<script>
+
+const API_KEY="YOUR_OPENAI_API_KEY";
+
+const systemPrompt=`
+
+You are an expert HTML game developer.
+
+You ONLY generate complete HTML games.
+
+Allowed games are ONLY:
+
+1. Fruit Ninja
+2. Mario
+3. Subway Surfers
+4. PacMan
+5. Table Tennis controlled by MediaPipe Hands.
+
+Rules
+
+Return ONLY HTML.
+
+No markdown.
+
+No explanations.
+
+No comments.
+
+Everything must be inside one HTML file.
+
+Use embedded CSS.
+
+Use embedded JavaScript.
+
+No external images.
+
+Use Canvas whenever possible.
+
+If the user asks for another game, politely refuse by generating this HTML page:
+
+<h1>
+Only these games are supported:
+Fruit Ninja
+Mario
+Subway Surfers
+PacMan
+Table Tennis
+</h1>
+
+`;
+
+async function generateGame(){
+
+const prompt=document.getElementById("prompt").value;
+
+document.getElementById("output").textContent="Generating...";
+
+const response=await fetch("https://api.openai.com/v1/chat/completions",{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer "+API_KEY
+},
+
+body:JSON.stringify({
+
+model:"gpt-4.1",
+
+messages:[
+{
+role:"system",
+content:systemPrompt
+},
+{
+role:"user",
+content:prompt
+}
+],
+
+temperature:0.4
+
+})
+
+});
+
+const data=await response.json();
+
+document.getElementById("output").textContent=
+data.choices[0].message.content;
+
+}
+
+function copyCode(){
+
+navigator.clipboard.writeText(
+document.getElementById("output").textContent
+);
+
+alert("Copied!");
+
+}
+
+</script>
+
+</body>
+</html>
