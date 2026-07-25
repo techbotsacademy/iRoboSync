@@ -54,7 +54,7 @@ let recognition;
 
 // SEND
 async function send(data){
-  fetch(`http://${esp32IP}/toggle}`)
+  fetch(`https://${esp32IP}/toggle}`)
         .then(response => response.text())
         .then(data => console.log(data))
         .catch(err => console.error(err));
