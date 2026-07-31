@@ -164,25 +164,3 @@ Score =
 - Unnecessary Jumps
 
 Display the score in a clean, game-style results screen with a "Play Again" button.
-
---------------------------------------------------
-Code Quality
---------------------------------------------------
-
-Keep everything inside a single HTML file.
-
-Write clear comments explaining:
-
-- Webcam setup
-- MediaPipe Hands
-- Hand landmark detection
-- Cycling detection algorithm
-- Jump detection algorithm
-- Physics
-- Camera system
-- Rendering
-- Game loop
-
-Organize the code into clearly labelled sections.
-
-Return only the complete updated HTML.
