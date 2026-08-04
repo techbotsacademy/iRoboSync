@@ -1,429 +1,233 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fruit Ninja - Canvas Edition</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            user-select: none;
-        }
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #1a120b;
-            font-family: 'Courier New', Courier, monospace;
-        }
-        canvas {
-            display: block;
-            background: radial-gradient(circle, #3e2723 0%, #1a0f0d 100%);
-            cursor: crosshair;
-        }
-        #ui {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            right: 20px;
-            display: flex;
-            justify-content: space-between;
-            pointer-events: none;
-            color: #fff;
-            font-size: 24px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-        }
-        #strikes {
-            color: #ff3333;
-            letter-spacing: 5px;
-        }
-        #game-over-screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.5s ease;
-        }
-        #game-over-screen.visible {
-            opacity: 1;
-            pointer-events: auto;
-        }
-        #game-over-screen h1 {
-            font-size: 60px;
-            color: #ff3333;
-            margin-bottom: 10px;
-            text-shadow: 0 0 10px rgba(255,51,51,0.5);
-        }
-        #game-over-screen p {
-            font-size: 24px;
-            margin-bottom: 30px;
-        }
-        #restart-btn {
-            padding: 12px 30px;
-            font-size: 20px;
-            font-weight: bold;
-            background-color: #e65100;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            transition: background 0.2s;
-        }
-        #restart-btn:hover {
-            background-color: #ff6d00;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Mini Fruit Ninja</title>
+<style>
+html,body{margin:0;overflow:hidden;background:#1e293b;}
+canvas{display:block;cursor:crosshair;}
+</style>
 </head>
 <body>
+<canvas id="game"></canvas>
 
-    <div id="ui">
-        <div id="score-display">SCORE: 0</div>
-        <div id="strikes"></div>
-    </div>
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
 
-    <div id="game-over-screen">
-        <h1>GAME OVER</h1>
-        <p id="final-score">Final Score: 0</p>
-        <button id="restart-btn" onclick="resetGame()">Slice Again</button>
-    </div>
+function resize(){
+  canvas.width=innerWidth;
+  canvas.height=innerHeight;
+}
+addEventListener("resize",resize);
+resize();
 
-    <canvas id="gameCanvas"></canvas>
+let score=0;
+let misses=0;
+let gameOver=false;
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const scoreDisplay = document.getElementById('score-display');
-        const strikesDisplay = document.getElementById('strikes');
-        const gameOverScreen = document.getElementById('game-over-screen');
-        const finalScoreDisplay = document.getElementById('final-score');
+const gravity=0.22;
+const fruits=[];
+const particles=[];
 
-        // Game Configuration & State
-        let score = 0;
-        let misses = 0;
-        const maxMisses = 3;
-        let isGameOver = false;
-        
-        let fruits = [];
-        let particles = [];
-        let bladeTrail = [];
-        let lastSpawnTime = 0;
-        const spawnInterval = 1000; // Spawn every 1 second
-        const gravity = 0.25;
+let mouse={x:0,y:0,px:0,py:0};
 
-        // Fruit Definitions (Colors and configurations)
-        const FRUIT_TYPES = [
-            { name: 'watermelon', color: '#2e7d32', innerColor: '#d32f2f', radius: 45 },
-            { name: 'orange', color: '#ef6c00', innerColor: '#ffe082', radius: 35 },
-            { name: 'apple', color: '#c62828', innerColor: '#fff9c4', radius: 35 },
-            { name: 'banana', color: '#fbc02d', innerColor: '#fffde7', radius: 25 },
-            { name: 'coconut', color: '#4e342e', innerColor: '#ffffff', radius: 40 }
-        ];
+const colors=["red","orange","yellow","lime","cyan","magenta"];
 
-        // Mouse tracking state
-        let isMouseDown = false;
+class Fruit{
+  constructor(){
+    this.r=20+Math.random()*10;
+    this.x=80+Math.random()*(canvas.width-160);
+    this.y=canvas.height+this.r;
+    this.vx=(Math.random()-0.5)*4;
+    this.vy=-(10+Math.random()*5);
+    this.color=colors[Math.floor(Math.random()*colors.length)];
+    this.dead=false;
+    this.sliced=false;
+  }
 
-        // Resize handler
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+  update(){
+    this.vy+=gravity;
+    this.x+=this.vx;
+    this.y+=this.vy;
 
-        // --- Classes ---
+    // wall bounce
+    if(this.x<this.r||this.x>canvas.width-this.r){
+      this.vx*=-1;
+      this.x=Math.max(this.r,Math.min(canvas.width-this.r,this.x));
+    }
 
-        class Fruit {
-            constructor() {
-                const type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
-                this.color = type.color;
-                this.innerColor = type.innerColor;
-                this.radius = type.radius;
-                
-                // Spawn randomly along the bottom layout
-                this.x = Math.random() * (canvas.width * 0.6) + (canvas.width * 0.2);
-                this.y = canvas.height + this.radius;
-                
-                // Calculate realistic upward trajectory arcs
-                this.vx = (Math.random() - 0.5) * 8; 
-                this.vy = -(Math.random() * 5 + 13); // Upward velocity
-                
-                this.sliced = false;
-                this.halfOffset = 0;
-                this.rotation = Math.random() * Math.PI * 2;
-                this.rotationSpeed = (Math.random() - 0.5) * 0.05;
-            }
+    // missed
+    if(this.y-this.r>canvas.height && !this.sliced){
+      this.dead=true;
+      misses++;
+      if(misses>=3) gameOver=true;
+    }
+  }
 
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.vy += gravity; // Gravity pull down
-                this.rotation += this.rotationSpeed;
+  draw(){
+    ctx.fillStyle=this.color;
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+    ctx.fill();
+  }
+}
 
-                if (this.sliced) {
-                    this.halfOffset += 3; // Push sliced halves apart
-                }
-            }
+// Fruit collision
+function collide(){
+  for(let i=0;i<fruits.length;i++){
+    for(let j=i+1;j<fruits.length;j++){
+      const a=fruits[i],b=fruits[j];
+      if(a.dead||b.dead) continue;
 
-            draw() {
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.rotate(this.rotation);
+      let dx=b.x-a.x;
+      let dy=b.y-a.y;
+      let d=Math.hypot(dx,dy);
+      let min=a.r+b.r;
 
-                if (!this.sliced) {
-                    // Draw Whole Fruit
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-                    ctx.fillStyle = this.color;
-                    ctx.fill();
-                    
-                    // Inner ring detail
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.radius * 0.8, 0, Math.PI * 2);
-                    ctx.fillStyle = this.innerColor;
-                    ctx.fill();
-                } else {
-                    // Draw Sliced Left Half
-                    ctx.save();
-                    ctx.translate(-this.halfOffset, 0);
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.radius, Math.PI / 2, (Math.PI * 3) / 2);
-                    ctx.fillStyle = this.color;
-                    ctx.fill();
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.radius * 0.8, Math.PI / 2, (Math.PI * 3) / 2);
-                    ctx.fillStyle = this.innerColor;
-                    ctx.fill();
-                    ctx.restore();
+      if(d<min){
+        let nx=dx/(d||1);
+        let ny=dy/(d||1);
+        let overlap=(min-d)/2;
 
-                    // Draw Sliced Right Half
-                    ctx.save();
-                    ctx.translate(this.halfOffset, 0);
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.radius, (Math.PI * 3) / 2, Math.PI / 2);
-                    ctx.fillStyle = this.color;
-                    ctx.fill();
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.radius * 0.8, (Math.PI * 3) / 2, Math.PI / 2);
-                    ctx.fillStyle = this.innerColor;
-                    ctx.fill();
-                    ctx.restore();
-                }
+        a.x-=nx*overlap;
+        a.y-=ny*overlap;
+        b.x+=nx*overlap;
+        b.y+=ny*overlap;
 
-                ctx.restore();
-            }
-        }
+        let tx=a.vx;
+        let ty=a.vy;
 
-        class Particle {
-            constructor(x, y, color) {
-                this.x = x;
-                this.y = y;
-                this.color = color;
-                this.radius = Math.random() * 4 + 2;
-                this.vx = (Math.random() - 0.5) * 10;
-                this.vy = (Math.random() - 0.5) * 10;
-                this.alpha = 1;
-                this.decay = Math.random() * 0.03 + 0.015;
-            }
+        a.vx=b.vx*0.9;
+        a.vy=b.vy*0.9;
+        b.vx=tx*0.9;
+        b.vy=ty*0.9;
+      }
+    }
+  }
+}
 
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.vy += gravity * 0.5;
-                this.alpha -= this.decay;
-            }
+// Line-circle slice test
+function intersectsLineCircle(x1,y1,x2,y2,cx,cy,r){
+  const dx=x2-x1;
+  const dy=y2-y1;
+  const l2=dx*dx+dy*dy;
+  if(l2===0) return false;
+  let t=((cx-x1)*dx+(cy-y1)*dy)/l2;
+  t=Math.max(0,Math.min(1,t));
+  const px=x1+t*dx;
+  const py=y1+t*dy;
+  return Math.hypot(px-cx,py-cy)<=r;
+}
 
-            draw() {
-                ctx.save();
-                ctx.globalAlpha = this.alpha;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.color;
-                ctx.fill();
-                ctx.restore();
-            }
-        }
+function sliceFruit(f){
+  f.dead=true;
+  f.sliced=true;
+  score++;
 
-        // --- Core Logic Functions ---
+  for(let i=0;i<12;i++){
+    particles.push({
+      x:f.x,
+      y:f.y,
+      vx:(Math.random()-0.5)*5,
+      vy:(Math.random()-0.5)*5,
+      life:30,
+      color:f.color
+    });
+  }
+}
 
-        function updateStrikesUI() {
-            strikesDisplay.textContent = 'X'.repeat(misses) + 'O'.repeat(maxMisses - misses);
-        }
+canvas.onmousemove=e=>{
+  mouse.px=mouse.x;
+  mouse.py=mouse.y;
+  mouse.x=e.clientX;
+  mouse.y=e.clientY;
 
-        function createJuiceExplosion(fruit) {
-            for (let i = 0; i < 20; i++) {
-                particles.push(new Particle(fruit.x, fruit.y, fruit.innerColor));
-            }
-        }
+  if(gameOver) return;
 
-        function checkSlices() {
-            if (bladeTrail.length < 2) return;
+  for(const f of fruits){
+    if(!f.dead &&
+      intersectsLineCircle(mouse.px,mouse.py,mouse.x,mouse.y,f.x,f.y,f.r)){
+      sliceFruit(f);
+    }
+  }
+};
 
-            // Get last two tracked points of mouse/drag line
-            const p1 = bladeTrail[bladeTrail.length - 2];
-            const p2 = bladeTrail[bladeTrail.length - 1];
+setInterval(()=>{
+  if(!gameOver) fruits.push(new Fruit());
+},800);
 
-            for (let fruit of fruits) {
-                if (fruit.sliced) continue;
+window.onkeydown=e=>{
+  if(e.code==="Space" && gameOver){
+    fruits.length=0;
+    particles.length=0;
+    score=0;
+    misses=0;
+    gameOver=false;
+  }
+};
 
-                // Basic Circle-to-Line segment intersection math approximation
-                const distToP1 = Math.hypot(fruit.x - p1.x, fruit.y - p1.y);
-                const distToP2 = Math.hypot(fruit.x - p2.x, fruit.y - p2.y);
-                const lineLength = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+function drawTrail(){
+  ctx.strokeStyle="white";
+  ctx.lineWidth=4;
+  ctx.beginPath();
+  ctx.moveTo(mouse.px,mouse.py);
+  ctx.lineTo(mouse.x,mouse.y);
+  ctx.stroke();
+}
 
-                // If mouse moved fast enough across or right into the radius boundary
-                if (distToP1 < fruit.radius || distToP2 < fruit.radius || (distToP1 + distToP2 < lineLength + fruit.radius * 0.5)) {
-                    fruit.sliced = true;
-                    // Apply a specific split trajectory
-                    fruit.vx = (fruit.x - p2.x) * 0.2;
-                    score++;
-                    scoreDisplay.textContent = `SCORE: ${score}`;
-                    createJuiceExplosion(fruit);
-                }
-            }
-        }
+function loop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-        // --- Game Loops & Controls ---
+  if(!gameOver){
+    fruits.forEach(f=>f.update());
+    collide();
+  }
 
-        function spawnManager(timestamp) {
-            if (timestamp - lastSpawnTime > spawnInterval) {
-                fruits.push(new Fruit());
-                lastSpawnTime = timestamp;
-            }
-        }
+  fruits.forEach(f=>f.draw());
 
-        function handleGameOver() {
-            isGameOver = true;
-            finalScoreDisplay.textContent = `Final Score: ${score}`;
-            gameOverScreen.classList.add('visible');
-        }
+  for(let i=particles.length-1;i>=0;i--){
+    let p=particles[i];
+    p.x+=p.vx;
+    p.y+=p.vy;
+    p.vy+=0.1;
+    p.life--;
 
-        function resetGame() {
-            score = 0;
-            misses = 0;
-            fruits = [];
-            particles = [];
-            bladeTrail = [];
-            isGameOver = false;
-            scoreDisplay.textContent = `SCORE: ${score}`;
-            updateStrikesUI();
-            gameOverScreen.classList.remove('visible');
-            requestAnimationFrame(gameLoop);
-        }
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x,p.y,3,3);
 
-        function gameLoop(timestamp) {
-            if (isGameOver) return;
+    if(p.life<=0) particles.splice(i,1);
+  }
 
-            // Clear Screen
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for(let i=fruits.length-1;i>=0;i--){
+    if(fruits[i].dead) fruits.splice(i,1);
+  }
 
-            // 1. Spawning
-            spawnManager(timestamp);
+  drawTrail();
 
-            // 2. Manage Blade Trails
-            if (bladeTrail.length > 0) {
-                // Fade out oldest point entries
-                bladeTrail.shift(); 
-            }
-            if (isMouseDown && bladeTrail.length > 1) {
-                checkSlices();
-            }
+  ctx.fillStyle="white";
+  ctx.font="24px Arial";
+  ctx.fillText("Score: "+score,20,35);
+  ctx.fillText("Misses: "+misses+"/3",20,70);
 
-            // Draw Blade
-            if (bladeTrail.length > 1) {
-                ctx.beginPath();
-                ctx.moveTo(bladeTrail[0].x, bladeTrail[0].y);
-                for (let i = 1; i < bladeTrail.length; i++) {
-                    ctx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
-                }
-                ctx.strokeStyle = '#e0f7fa';
-                ctx.lineWidth = 5;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = '#00e5ff';
-                ctx.stroke();
-                ctx.shadowBlur = 0; // Reset shadow
-            }
+  if(gameOver){
+    ctx.fillStyle="rgba(0,0,0,.6)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
 
-            // 3. Process Juice/Slice Particle FX
-            for (let i = particles.length - 1; i >= 0; i--) {
-                particles[i].update();
-                particles[i].draw();
-                if (particles[i].alpha <= 0) {
-                    particles.splice(i, 1);
-                }
-            }
+    ctx.fillStyle="white";
+    ctx.textAlign="center";
+    ctx.font="50px Arial";
+    ctx.fillText("GAME OVER",canvas.width/2,canvas.height/2-20);
+    ctx.font="28px Arial";
+    ctx.fillText("Final Score: "+score,canvas.width/2,canvas.height/2+30);
+    ctx.fillText("Press SPACE to Restart",canvas.width/2,canvas.height/2+80);
+    ctx.textAlign="left";
+  }
 
-            // 4. Process Fruits
-            for (let i = fruits.length - 1; i >= 0; i--) {
-                const f = fruits[i];
-                f.update();
-                f.draw();
+  requestAnimationFrame(loop);
+}
 
-                // Check if fruit fell below screen bottom
-                if (f.y > canvas.height + f.radius + 20) {
-                    // Only count as a strike/miss if it fell un-sliced
-                    if (!f.sliced) {
-                        misses++;
-                        updateStrikesUI();
-                        if (misses >= maxMisses) {
-                            handleGameOver();
-                        }
-                    }
-                    fruits.splice(i, 1);
-                }
-            }
-
-            requestAnimationFrame(gameLoop);
-        }
-
-        // --- Event Listeners ---
-
-        function getMousePos(e) {
-            const rect = canvas.getBoundingClientRect();
-            // Works for both standard clicks and touch screens
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            return {
-                x: clientX - rect.left,
-                y: clientY - rect.top
-            };
-        }
-
-        function trackPointerMove(e) {
-            if (!isMouseDown && e.type !== 'touchmove') return;
-            bladeTrail.push(getMousePos(e));
-            // Keep length manageable to preserve quick slashing action
-            if (bladeTrail.length > 8) bladeTrail.shift();
-        }
-
-        // Desktop Events
-        window.addEventListener('mousedown', (e) => { isMouseDown = true; bladeTrail.push(getMousePos(e)); });
-        window.addEventListener('mousemove', trackPointerMove);
-        window.addEventListener('mouseup', () => { isMouseDown = false; });
-
-        // Touchscreen Events
-        window.addEventListener('touchstart', (e) => { bladeTrail.push(getMousePos(e)); });
-        window.addEventListener('touchmove', trackPointerMove);
-        window.addEventListener('touchend', () => { bladeTrail = []; });
-
-        // Start initialized UI & Loop
-        updateStrikesUI();
-        requestAnimationFrame(gameLoop);
-
-    </script>
+loop();
+</script>
 </body>
 </html>
