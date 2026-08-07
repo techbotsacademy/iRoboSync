@@ -135,6 +135,24 @@ header{
 🏥 Smart Nurse Station
 </header>
 
+<div style="text-align:center;margin:20px;">
+
+    <button onclick="connectESP32()"
+            style="
+                padding:15px 30px;
+                font-size:18px;
+                border-radius:10px;
+                cursor:pointer;
+            ">
+        Connect to ESP32
+    </button>
+
+    <p id="connection"
+       style="margin-top:15px;font-size:18px;">
+        Not Connected
+    </p>
+
+</div>
 <div class="card">
 
     <div class="patient">
@@ -260,6 +278,64 @@ function nurseDone(){
 
 setColor("#1976d2");
 
+let esp32IP = localStorage.getItem("esp32IP") || "";
+
+// Ask user for IP Address
+function connectESP32() {
+
+    const ip = prompt(
+        "Enter the ESP32 IP Address",
+        esp32IP || "192.168.1.100"
+    );
+
+    if(ip === null) return;
+
+    esp32IP = ip.trim();
+
+    localStorage.setItem("esp32IP", esp32IP);
+
+    document.getElementById("connection").innerHTML =
+        "Connected to: " + esp32IP;
+
+}
+
+// Read status from ESP32
+function readESP32() {
+
+    if(esp32IP === "") return;
+
+    fetch(`http://${esp32IP}/status`)
+    .then(response => response.text())
+    .then(status => {
+
+        switch(status){
+
+            case "CALL":
+                patientCall();
+                break;
+
+            case "ATTENDING":
+                nurseAttending();
+                break;
+
+            case "DONE":
+                nurseDone();
+                break;
+
+        }
+
+    })
+    .catch(() => {
+
+        document.getElementById("connection").innerHTML =
+            "❌ ESP32 Offline";
+
+    });
+
+}
+
+// Read every 500ms
+setInterval(readESP32, 500);
 
 /* ==================================================
 
