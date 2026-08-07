@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Nurse Station</title>
+
+<style>
+/* =========================================
+   SMART NURSE STATION DASHBOARD
+   Grade 7 STEM Project
+   HTML + CSS + JavaScript
+   ========================================= */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial, Helvetica, sans-serif;
+}
+
+body{
+    background:#eaf4ff;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    min-height:100vh;
+}
+
+header{
+    width:100%;
+    background:#1976d2;
+    color:white;
+    text-align:center;
+    padding:25px;
+    font-size:2.3rem;
+    font-weight:bold;
+    letter-spacing:1px;
+}
+
+.card{
+    margin-top:40px;
+    background:white;
+    width:90%;
+    max-width:700px;
+    border-radius:20px;
+    padding:35px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.2);
+    text-align:center;
+}
+
+.patient{
+    font-size:2rem;
+    font-weight:bold;
+    color:#333;
+    margin-bottom:30px;
+}
+
+/* Nurse Icon */
+.icon{
+    font-size:120px;
+    transition:.5s;
+}
+
+/* Status Indicator */
+.indicator{
+    width:150px;
+    height:150px;
+    border-radius:50%;
+    margin:30px auto;
+    background:#1976d2;
+    border:8px solid #444;
+    transition:.5s;
+}
+
+.statusTitle{
+    font-size:1.4rem;
+    color:#555;
+}
+
+.status{
+    font-size:2rem;
+    font-weight:bold;
+    margin-top:10px;
+}
+
+.message{
+    margin-top:20px;
+    font-size:1.3rem;
+    color:#444;
+    min-height:40px;
+}
+
+.notes{
+    margin:40px;
+    max-width:900px;
+    background:white;
+    padding:25px;
+    border-radius:15px;
+    box-shadow:0 6px 15px rgba(0,0,0,.15);
+}
+
+.notes h2{
+    color:#1976d2;
+    margin-bottom:15px;
+}
+
+.notes li{
+    margin:10px 0;
+    font-size:1.1rem;
+}
+
+@media(max-width:700px){
+
+.icon{
+    font-size:90px;
+}
+
+.indicator{
+    width:110px;
+    height:110px;
+}
+
+.status{
+    font-size:1.6rem;
+}
+
+}
+</style>
+</head>
+
+<body>
+
+<header>
+🏥 Smart Nurse Station
+</header>
+
+<div class="card">
+
+    <div class="patient">
+        Patient #1
+    </div>
+
+    <!-- Nurse Icon -->
+    <div id="icon" class="icon">
+        👩‍⚕️
+    </div>
+
+    <!-- Status Indicator -->
+    <div id="indicator" class="indicator"></div>
+
+    <div class="statusTitle">
+        Current Status
+    </div>
+
+    <div id="status" class="status">
+        Waiting
+    </div>
+
+    <div id="message" class="message">
+        Waiting for patient request.
+    </div>
+
+</div>
+
+<div class="notes">
+
+<h2>Educational Notes</h2>
+
+<ul>
+<li><b style="color:red;">Red</b> → Patient needs help.</li>
+<li><b style="color:#1976d2;">Blue</b> → Nurse is attending the patient (or waiting for a request).</li>
+<li><b style="color:green;">Green</b> → Patient request completed.</li>
+</ul>
+
+<p style="margin-top:20px;">
+In the real project, an ESP32 with three physical buttons will send messages to this webpage.
+The webpage only displays the patient's status and does not contain any control buttons.
+</p>
+
+</div>
+
+<script>
+
+/* ===================================================
+   SMART NURSE STATION
+   JavaScript Functions
+
+   These functions simulate messages arriving from
+   the ESP32.
+
+   Later they can be called when receiving data via:
+   • WebSocket
+   • MQTT
+   • HTTP
+   • Serial
+=================================================== */
+
+const indicator = document.getElementById("indicator");
+const icon = document.getElementById("icon");
+const status = document.getElementById("status");
+const message = document.getElementById("message");
+
+
+/* Utility function */
+function setColor(color){
+    indicator.style.background = color;
+    icon.style.color = color;
+}
+
+
+/* =========================================
+   ESP32 sends: CALL
+========================================= */
+function patientCall(){
+
+    setColor("red");
+
+    status.innerHTML = "Nurse Requested";
+
+    message.innerHTML =
+        "Patient has requested assistance.";
+
+}
+
+
+/* =========================================
+   ESP32 sends: ATTENDING
+========================================= */
+function nurseAttending(){
+
+    setColor("#1976d2");
+
+    status.innerHTML = "Nurse Attending";
+
+    message.innerHTML =
+        "Nurse is attending the patient.";
+
+}
+
+
+/* =========================================
+   ESP32 sends: DONE
+========================================= */
+function nurseDone(){
+
+    setColor("green");
+
+    status.innerHTML = "Patient Assisted";
+
+    message.innerHTML =
+        "Request completed.";
+
+}
+
+
+/* =========================================
+   Initial State
+========================================= */
+
+setColor("#1976d2");
+
+
+/* ==================================================
+
+Future ESP32 Communication Example
+
+When ESP32 sends:
+
+"CALL"
+-> patientCall();
+
+"ATTENDING"
+-> nurseAttending();
+
+"DONE"
+-> nurseDone();
+
+Example using WebSocket:
+
+socket.onmessage = function(event){
+
+    if(event.data=="CALL")
+        patientCall();
+
+    else if(event.data=="ATTENDING")
+        nurseAttending();
+
+    else if(event.data=="DONE")
+        nurseDone();
+
+};
+
+=================================================== */
+
+</script>
+
+</body>
+</html>

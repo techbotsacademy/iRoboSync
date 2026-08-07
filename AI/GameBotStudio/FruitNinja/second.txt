@@ -2,20 +2,11 @@ Create a Fruit Ninja game using HTML, CSS, and JavaScript.
 
 Requirements:
 
-
-
 Full-screen canvas.
-
 Use fruits - Watermelon, Mango, Pineapple, Strawberry, Kiwi, Bananas, and Apples.
-
 Fruits follow a realistic arc.
-
 Detect collisions between the cursor and fruits.
-
 Increase the score when a fruit is sliced.
-
 Show an animation when fruits are cut.
-
 End the game after three missed fruits. 
-
 Use AI to capture the hand movements and use the finger tip as the input to slice the fruit 
