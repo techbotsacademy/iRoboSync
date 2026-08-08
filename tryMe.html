@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Try HTML Code</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f1f1f1;
+        }
+
+        .header {
+            background: #04AA6D;
+            color: white;
+            padding: 15px 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            font-weight: normal;
+            margin-top: 5px;
+        }
+
+        .container {
+            display: flex;
+            height: calc(100vh - 85px);
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .panel-title {
+            background: #333;
+            color: white;
+            padding: 10px;
+            font-weight: bold;
+        }
+
+        textarea {
+            flex: 1;
+            width: 100%;
+            resize: none;
+            border: 1px solid #ccc;
+            padding: 15px;
+            font-family: Consolas, monospace;
+            font-size: 15px;
+            line-height: 1.5;
+            background: #282c34;
+            color: #ffffff;
+            outline: none;
+        }
+
+        .buttons {
+            padding: 10px 0;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: bold;
+        }
+
+        .run-btn {
+            background: #04AA6D;
+            color: white;
+        }
+
+        .run-btn:hover {
+            background: #038c5a;
+        }
+
+        .reset-btn {
+            background: #777;
+            color: white;
+        }
+
+        .reset-btn:hover {
+            background: #555;
+        }
+
+        iframe {
+            flex: 1;
+            width: 100%;
+            border: 1px solid #ccc;
+            background: white;
+        }
+
+        .console {
+            height: 120px;
+            background: #111;
+            color: #00ff88;
+            padding: 10px;
+            overflow-y: auto;
+            font-family: Consolas, monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+
+        .console-title {
+            background: #222;
+            color: white;
+            padding: 8px;
+        }
+
+        @media (max-width: 800px) {
+            .container {
+                flex-direction: column;
+                height: auto;
+            }
+
+            .panel {
+                height: 50vh;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    Try HTML Yourself
+    <div class="subtitle">
+        Write your code, click Run Code, and see the result.
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- CODE EDITOR -->
+    <div class="panel">
+
+        <div class="panel-title">
+            HTML / CSS / JavaScript
+        </div>
+
+        <textarea id="codeEditor"><!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial;
+            text-align: center;
+            padding: 30px;
+        }
+
+        h1 {
+            color: #04AA6D;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Hello World!</h1>
+
+    <p>Try changing this code.</p>
+
+    <button onclick="sayHello()">
+        Click Me
+    </button>
+
+    <script>
+        function sayHello() {
+            alert("Hello from JavaScript!");
+            console.log("Button was clicked!");
+        }
+    </script>
+
+</body>
+</html></textarea>
+
+        <div class="buttons">
+            <button class="run-btn" onclick="runCode()">
+                ▶ Run Code
+            </button>
+
+            <button class="reset-btn" onclick="resetCode()">
+                ↺ Reset
+            </button>
+        </div>
+
+    </div>
+
+
+    <!-- OUTPUT -->
+    <div class="panel">
+
+        <div class="panel-title">
+            Result
+        </div>
+
+        <iframe id="output"></iframe>
+
+        <div class="console-title">
+            Console
+        </div>
+
+        <div class="console" id="console">
+            Ready...
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+const defaultCode = document.getElementById("codeEditor").value;
+
+
+// RUN CODE
+function runCode() {
+
+    const code = document.getElementById("codeEditor").value;
+
+    const iframe = document.getElementById("output");
+
+    const consoleBox = document.getElementById("console");
+
+    consoleBox.innerHTML = "Running code...\n";
+
+
+    // Create a Blob containing the HTML
+    const blob = new Blob(
+        [createHTML(code)],
+        { type: "text/html" }
+    );
+
+    const url = URL.createObjectURL(blob);
+
+    iframe.src = url;
+
+
+    // Release old URL after loading
+    iframe.onload = function() {
+
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 1000);
+
+    };
+
+}
+
+
+// CREATE HTML WITH CONSOLE INTERCEPTOR
+function createHTML(code) {
+
+    const consoleScript = `
+        <script>
+
+            const originalLog = console.log;
+            const originalError = console.error;
+            const originalWarn = console.warn;
+
+            function sendToParent(type, args) {
+
+                window.parent.postMessage({
+                    type: type,
+                    message: args.map(
+                        x => typeof x === "object"
+                            ? JSON.stringify(x)
+                            : String(x)
+                    ).join(" ")
+                }, "*");
+
+            }
+
+            console.log = function(...args) {
+
+                originalLog(...args);
+
+                sendToParent("log", args);
+
+            };
+
+
+            console.error = function(...args) {
+
+                originalError(...args);
+
+                sendToParent("error", args);
+
+            };
+
+
+            console.warn = function(...args) {
+
+                originalWarn(...args);
+
+                sendToParent("warn", args);
+
+            };
+
+
+            window.onerror = function(
+                message,
+                source,
+                line,
+                column,
+                error
+            ) {
+
+                sendToParent(
+                    "error",
+                    [
+                        "Error: " + message +
+                        " (Line " + line + ")"
+                    ]
+                );
+
+            };
+
+        <\/script>
+    `;
+
+
+    // Insert console script before </head>
+    if (code.includes("</head>")) {
+
+        return code.replace(
+            "</head>",
+            consoleScript + "</head>"
+        );
+
+    }
+
+
+    // If there is no head tag
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            ${consoleScript}
+        </head>
+
+        <body>
+
+            ${code}
+
+        </body>
+        </html>
+    `;
+
+}
+
+
+// RECEIVE CONSOLE MESSAGES
+window.addEventListener("message", function(event) {
+
+    if (!event.data) {
+        return;
+    }
+
+    const consoleBox =
+        document.getElementById("console");
+
+
+    if (event.data.type === "log") {
+
+        consoleBox.innerHTML +=
+            "✓ " + event.data.message + "\n";
+
+    }
+
+    else if (event.data.type === "warn") {
+
+        consoleBox.innerHTML +=
+            "⚠ " + event.data.message + "\n";
+
+    }
+
+    else if (event.data.type === "error") {
+
+        consoleBox.innerHTML +=
+            "✕ " + event.data.message + "\n";
+
+    }
+
+});
+
+
+// RESET
+function resetCode() {
+
+    document.getElementById("codeEditor").value =
+        defaultCode;
+
+    document.getElementById("console").innerHTML =
+        "Ready...";
+
+    runCode();
+}
+
+
+// RUN INITIAL CODE
+runCode();
+
+</script>
+
+</body>
+</html>
