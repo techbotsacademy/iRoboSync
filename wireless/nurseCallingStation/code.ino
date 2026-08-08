@@ -1,110 +1,287 @@
 #include <WiFi.h>
-#include <WebServer.h>
+#include <WebSocketsServer.h>
 
-// ===========================
-// WiFi Credentials
-// ===========================
+// =================================================
+// WiFi
+// =================================================
+
 const char* ssid = "YOUR_WIFI_NAME";
 const char* password = "YOUR_WIFI_PASSWORD";
 
-// ===========================
-// Web Server
-// ===========================
-WebServer server(80);
 
-// ===========================
-// Touch Pin
-// ===========================
+// =================================================
+// WebSocket Server
+// Port 81
+// =================================================
+
+WebSocketsServer webSocket = WebSocketsServer(81);
+
+
+// =================================================
+// TOUCH SENSOR
+// =================================================
+
 const int TOUCH_PIN = 15;
+
 const int TOUCH_THRESHOLD = 800;
 
-// ===========================
-// Touch Variables
-// ===========================
-int touchCount = 0;
-unsigned long lastTouchTime = 0;
-const int TAP_TIMEOUT = 400;
 bool isTouching = false;
 
-// Current nurse status
+
+// =================================================
+// NURSE BUTTONS
+// =================================================
+
+// Button 1 = Nurse starts attending
+const int ATTEND_BUTTON = 4;
+
+// Button 2 = Nurse finishes visit
+const int DONE_BUTTON = 16;
+
+
+// =================================================
+// Button state variables
+// =================================================
+
+bool lastAttendState = HIGH;
+bool lastDoneState = HIGH;
+
+
+// =================================================
+// Current status
+// =================================================
+
 String currentStatus = "WAITING";
 
-// ------------------------------------------------
-// Return current status to HTML
-// ------------------------------------------------
-void handleStatus()
+
+// =================================================
+// Send status to all connected HTML dashboards
+// =================================================
+
+void sendStatus(String status)
 {
-    server.send(200, "text/plain", currentStatus);
+    currentStatus = status;
+
+    Serial.print("Sending: ");
+    Serial.println(status);
+
+    webSocket.broadcastTXT(status);
 }
+
+
+// =================================================
+// WebSocket Events
+// =================================================
+
+void webSocketEvent(
+    uint8_t num,
+    WStype_t type,
+    uint8_t * payload,
+    size_t length
+)
+{
+    switch(type)
+    {
+
+        // -----------------------------------------
+        // Browser connected
+        // -----------------------------------------
+
+        case WStype_CONNECTED:
+
+            Serial.print("HTML connected. Client #");
+            Serial.println(num);
+
+            // Send current status immediately
+            webSocket.sendTXT(num, currentStatus);
+
+            break;
+
+
+        // -----------------------------------------
+        // Browser disconnected
+        // -----------------------------------------
+
+        case WStype_DISCONNECTED:
+
+            Serial.print("HTML disconnected. Client #");
+            Serial.println(num);
+
+            break;
+
+
+        // -----------------------------------------
+        // Message received from browser
+        // -----------------------------------------
+
+        case WStype_TEXT:
+
+            Serial.print("Message from HTML: ");
+            Serial.println((char*)payload);
+
+            break;
+
+
+        default:
+            break;
+    }
+}
+
+
+// =================================================
+// SETUP
+// =================================================
 
 void setup()
 {
     Serial.begin(115200);
 
+
+    // -----------------------------------------
+    // Touch
+    // -----------------------------------------
+
+    Serial.println();
+    Serial.println("Starting Smart Nurse Station...");
+
+
+    // -----------------------------------------
+    // Nurse buttons
+    // -----------------------------------------
+
+    pinMode(ATTEND_BUTTON, INPUT_PULLUP);
+
+    pinMode(DONE_BUTTON, INPUT_PULLUP);
+
+
+    // -----------------------------------------
+    // Connect WiFi
+    // -----------------------------------------
+
     WiFi.begin(ssid, password);
 
-    Serial.print("Connecting");
+    Serial.print("Connecting to WiFi");
 
-    while (WiFi.status() != WL_CONNECTED)
+    while(WiFi.status() != WL_CONNECTED)
     {
         delay(500);
+
         Serial.print(".");
     }
 
+
     Serial.println();
-    Serial.println("WiFi Connected");
-    Serial.print("IP Address: ");
+
+    Serial.println("WiFi Connected!");
+
+    Serial.print("ESP32 IP Address: ");
+
     Serial.println(WiFi.localIP());
 
-    server.on("/status", handleStatus);
 
-    server.begin();
+    // -----------------------------------------
+    // Start WebSocket server
+    // -----------------------------------------
 
-    Serial.println("Web Server Started");
+    webSocket.begin();
+
+    webSocket.onEvent(webSocketEvent);
+
+    Serial.println("WebSocket server started.");
+
+    Serial.println("Waiting for HTML dashboard...");
 }
+
+
+// =================================================
+// LOOP
+// =================================================
 
 void loop()
 {
-    server.handleClient();
+
+    // Keep WebSocket running
+    webSocket.loop();
+
+
+    // =================================================
+    // 1. PATIENT TOUCH
+    // =================================================
 
     int touchValue = touchRead(TOUCH_PIN);
 
-    // Detect touch
-    if (touchValue < TOUCH_THRESHOLD && !isTouching)
+
+    // Touch detected
+    if(
+        touchValue < TOUCH_THRESHOLD &&
+        !isTouching
+    )
     {
-        touchCount++;
-        lastTouchTime = millis();
+
         isTouching = true;
-        delay(40);
+
+        Serial.print("Touch detected: ");
+        Serial.println(touchValue);
+
+
+        // Send CALL to HTML
+        sendStatus("CALL");
     }
-    else if (touchValue >= TOUCH_THRESHOLD)
+
+
+    // Touch released
+    if(touchValue >= TOUCH_THRESHOLD)
     {
         isTouching = false;
     }
 
-    // Detect number of taps
-    if (touchCount > 0 &&
-        millis() - lastTouchTime > TAP_TIMEOUT)
+
+    // =================================================
+    // 2. NURSE ATTEND BUTTON
+    // =================================================
+
+    bool attendState = digitalRead(ATTEND_BUTTON);
+
+
+    // Button pressed
+    if(
+        attendState == LOW &&
+        lastAttendState == HIGH
+    )
     {
-        Serial.print("Total Taps: ");
-        Serial.println(touchCount);
 
-        if (touchCount == 1)
-        {
-            currentStatus = "CALL";
-            Serial.println("Patient Called Nurse");
-        }
-        else if (touchCount == 2)
-        {
-            currentStatus = "ATTENDING";
-            Serial.println("Nurse Attending");
-        }
-        else if (touchCount >= 3)
-        {
-            currentStatus = "DONE";
-            Serial.println("Visit Completed");
-        }
+        Serial.println("Nurse is attending patient.");
 
-        touchCount = 0;
+        sendStatus("ATTENDING");
+
+        delay(50);   // Simple debounce
     }
+
+
+    lastAttendState = attendState;
+
+
+    // =================================================
+    // 3. NURSE DONE BUTTON
+    // =================================================
+
+    bool doneState = digitalRead(DONE_BUTTON);
+
+
+    // Button pressed
+    if(
+        doneState == LOW &&
+        lastDoneState == HIGH
+    )
+    {
+
+        Serial.println("Visit completed.");
+
+        sendStatus("DONE");
+
+        delay(50);   // Simple debounce
+    }
+
+
+    lastDoneState = doneState;
 }

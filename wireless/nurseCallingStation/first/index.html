@@ -279,56 +279,65 @@ function nurseDone(){
 setColor("#1976d2");
 
 let esp32IP = localStorage.getItem("esp32IP") || "";
-let socket;
 
+// Ask user for IP Address
 function connectESP32() {
 
-    const ip = prompt("Enter ESP32 IP Address:");
+    const ip = prompt(
+        "Enter the ESP32 IP Address",
+        esp32IP || "192.168.1.100"
+    );
 
-    if (!ip) return;
+    if(ip === null) return;
 
-    socket = new WebSocket("ws://" + ip + ":81");
+    esp32IP = ip.trim();
 
-    socket.onopen = function() {
+    localStorage.setItem("esp32IP", esp32IP);
 
-        document.getElementById("connection").innerHTML =
-            "🟢 ESP32 Connected";
+    document.getElementById("connection").innerHTML =
+        "Connected to: " + esp32IP;
 
-    };
-
-    socket.onmessage = function(event) {
-
-        const command = event.data.trim();
-
-        console.log("ESP32:", command);
-
-        if (command === "CALL") {
-            patientCall();
-        }
-
-        else if (command === "ATTENDING") {
-            nurseAttending();
-        }
-
-        else if (command === "DONE") {
-            nurseDone();
-        }
-    };
-
-    socket.onclose = function() {
-
-        document.getElementById("connection").innerHTML =
-            "🔴 ESP32 Disconnected";
-
-    };
-
-    socket.onerror = function() {
-
-        document.getElementById("connection").innerHTML =
-            "🔴 Connection Error";
-
-    };
 }
+
+// Read status from ESP32
+function readESP32() {
+
+    if(esp32IP === "") return;
+
+    fetch(`http://${esp32IP}/status`)
+    .then(response => response.text())
+    .then(status => {
+
+        switch(status){
+
+            case "CALL":
+                patientCall();
+                break;
+
+            case "ATTENDING":
+                nurseAttending();
+                break;
+
+            case "DONE":
+                nurseDone();
+                break;
+
+        }
+
+    })
+    .catch(() => {
+
+        document.getElementById("connection").innerHTML =
+            "❌ ESP32 Offline";
+
+    });
+
+}
+
+// Read every 500ms
+setInterval(readESP32, 500);
+
 </script>
+
 </body>
 </html>
