@@ -1,49 +1,58 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
-// ===========================
-// WiFi Credentials
-// ===========================
-const char* ssid = "YOUR_WIFI_NAME";
-const char* password = "YOUR_WIFI_PASSWORD";
+//===========================
+// WiFi
+//===========================
+const char* ssid = "ssid";
+const char* password = "password";
 
-// ===========================
+//===========================
 // Web Server
-// ===========================
+//===========================
 WebServer server(80);
 
-// ===========================
-// Touch Pin
-// ===========================
-const int TOUCH_PIN = 15;
-const int TOUCH_THRESHOLD = 800;
+//===========================
+// Touch Pins
+//===========================
+const int CALL_PIN      = 15;
+const int ATTEND_PIN    = 4;
+const int DONE_PIN      = 12;
 
-// ===========================
-// Touch Variables
-// ===========================
-int touchCount = 0;
-unsigned long lastTouchTime = 0;
-const int TAP_TIMEOUT = 400;
-bool isTouching = false;
+int call_pin_threshold=0;
+int attend_pin_threshold=0;
+int done_pin_threshold=0;
 
-// Current nurse status
+const int TOUCH_THRESHOLD = 200;
+
+//===========================
+// Current Status
+//===========================
 String currentStatus = "WAITING";
 
-// ------------------------------------------------
-// Return current status to HTML
-// ------------------------------------------------
+// Prevent repeated triggering while finger is held
+bool callPressed = false;
+bool attendPressed = false;
+bool donePressed = false;
+
+//------------------------------------------------
 void handleStatus()
 {
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    server.sendHeader("Access-Control-Allow-Methods", "GET");
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+
     server.send(200, "text/plain", currentStatus);
 }
 
+//------------------------------------------------
 void setup()
 {
     Serial.begin(115200);
 
     WiFi.begin(ssid, password);
 
-    Serial.print("Connecting");
+    Serial.println("Connecting");
 
     while (WiFi.status() != WL_CONNECTED)
     {
@@ -53,58 +62,65 @@ void setup()
 
     Serial.println();
     Serial.println("WiFi Connected");
-    Serial.print("IP Address: ");
+    Serial.println("IP Address: ");
     Serial.println(WiFi.localIP());
 
-    server.on("/status", handleStatus);
+    server.on("/status", HTTP_GET, handleStatus);
 
     server.begin();
 
     Serial.println("Web Server Started");
+
+    call_pin_threshold=touchRead(CALL_PIN);
+    attend_pin_threshold=touchRead(ATTEND_PIN);
+    done_pin_threshold=touchRead(DONE_PIN);
+
+    Serial.println(call_pin_threshold);
+    Serial.println(attend_pin_threshold);
+    Serial.println(done_pin_threshold);
 }
 
+//------------------------------------------------
 void loop()
 {
     server.handleClient();
-
-    int touchValue = touchRead(TOUCH_PIN);
-
-    // Detect touch
-    if (touchValue < TOUCH_THRESHOLD && !isTouching)
+    int call=touchRead(CALL_PIN);
+    int attend=touchRead(ATTEND_PIN);
+    int done=touchRead(DONE_PIN);
+    // ---------------- CALL ----------------
+    if ((call_pin_threshold-call) > TOUCH_THRESHOLD)
     {
-        touchCount++;
-        lastTouchTime = millis();
-        isTouching = true;
-        delay(40);
-    }
-    else if (touchValue >= TOUCH_THRESHOLD)
-    {
-        isTouching = false;
-    }
-
-    // Detect number of taps
-    if (touchCount > 0 &&
-        millis() - lastTouchTime > TAP_TIMEOUT)
-    {
-        Serial.print("Total Taps: ");
-        Serial.println(touchCount);
-
-        if (touchCount == 1)
+        if (!callPressed)
         {
+            callPressed = true;
+            donePressed = false;
+
             currentStatus = "CALL";
-            Serial.println("Patient Called Nurse");
+            Serial.println("Patient Calling");
         }
-        else if (touchCount == 2)
-        {
-            currentStatus = "ATTENDING";
-            Serial.println("Nurse Attending");
-        }
-        else if (touchCount >= 3)
-        {
-            currentStatus = "DONE";
-            Serial.println("Visit Completed");
-        }
+    }
 
-        touchCount = 0;
+    // ---------------- ATTENDING ----------------
+    if ((attend_pin_threshold-attend) > TOUCH_THRESHOLD)
+    {
+        if (!attendPressed & callPressed)
+        {
+            attendPressed = true;
+            callPressed = false;
+            currentStatus = "ATTENDING";
+            Serial.println("Attending");
+        }
+    }
+
+    // ---------------- DONE ----------------
+    if ((done_pin_threshold-done) > TOUCH_THRESHOLD)
+    {
+        if (!donePressed and attendPressed)
+        {
+            attendPressed = false;
+            donePressed = true;
+            currentStatus = "DONE";
+            Serial.println("Completed");
+        }
     }
 }

@@ -21,36 +21,19 @@ WebSocketsServer webSocket = WebSocketsServer(81);
 // TOUCH SENSOR
 // =================================================
 
-const int TOUCH_PIN = 15;
+const int CALL_PIN      = 15;
+const int ATTEND_PIN    = 4;
+const int DONE_PIN      = 12;
 
-const int TOUCH_THRESHOLD = 800;
+int call_pin_threshold=0;
+int attend_pin_threshold=0;
+int done_pin_threshold=0;
 
-bool isTouching = false;
-
-
-// =================================================
-// NURSE BUTTONS
-// =================================================
-
-// Button 1 = Nurse starts attending
-const int ATTEND_BUTTON = 4;
-
-// Button 2 = Nurse finishes visit
-const int DONE_BUTTON = 16;
-
-
-// =================================================
-// Button state variables
-// =================================================
-
-bool lastAttendState = HIGH;
-bool lastDoneState = HIGH;
-
-
-// =================================================
-// Current status
-// =================================================
-
+const int TOUCH_THRESHOLD = 200;
+// Prevent repeated triggering while finger is held
+bool callPressed = false;
+bool attendPressed = false;
+bool donePressed = false;
 String currentStatus = "WAITING";
 
 
@@ -190,6 +173,10 @@ void setup()
     Serial.println("WebSocket server started.");
 
     Serial.println("Waiting for HTML dashboard...");
+
+    call_pin_threshold=touchRead(CALL_PIN);
+    attend_pin_threshold=touchRead(ATTEND_PIN);
+    done_pin_threshold=touchRead(DONE_PIN);
 }
 
 
@@ -203,85 +190,39 @@ void loop()
     // Keep WebSocket running
     webSocket.loop();
 
-
-    // =================================================
-    // 1. PATIENT TOUCH
-    // =================================================
-
-    int touchValue = touchRead(TOUCH_PIN);
-
-
-    // Touch detected
-    if(
-        touchValue < TOUCH_THRESHOLD &&
-        !isTouching
-    )
+    int call=touchRead(CALL_PIN);
+    int attend=touchRead(ATTEND_PIN);
+    int done=touchRead(DONE_PIN);
+    // ---------------- CALL ----------------
+    if ((call_pin_threshold-call) > TOUCH_THRESHOLD)
     {
-
-        isTouching = true;
-
-        Serial.print("Touch detected: ");
-        Serial.println(touchValue);
-
-
-        // Send CALL to HTML
-        sendStatus("CALL");
+        if (!callPressed)
+        {
+            callPressed = true;
+            donePressed = false;
+            sendStatus("CALL");
+        }
     }
 
-
-    // Touch released
-    if(touchValue >= TOUCH_THRESHOLD)
+    // ---------------- ATTENDING ----------------
+    if ((attend_pin_threshold-attend) > TOUCH_THRESHOLD)
     {
-        isTouching = false;
+        if (!attendPressed & callPressed)
+        {
+            attendPressed = true;
+            callPressed = false;
+            sendStatus("ATTENDING");
+        }
     }
 
-
-    // =================================================
-    // 2. NURSE ATTEND BUTTON
-    // =================================================
-
-    bool attendState = digitalRead(ATTEND_BUTTON);
-
-
-    // Button pressed
-    if(
-        attendState == LOW &&
-        lastAttendState == HIGH
-    )
+    // ---------------- DONE ----------------
+    if ((done_pin_threshold-done) > TOUCH_THRESHOLD)
     {
-
-        Serial.println("Nurse is attending patient.");
-
-        sendStatus("ATTENDING");
-
-        delay(50);   // Simple debounce
+        if (!donePressed and attendPressed)
+        {
+            attendPressed = false;
+            donePressed = true;
+            sendStatus("DONE");
+        }
     }
-
-
-    lastAttendState = attendState;
-
-
-    // =================================================
-    // 3. NURSE DONE BUTTON
-    // =================================================
-
-    bool doneState = digitalRead(DONE_BUTTON);
-
-
-    // Button pressed
-    if(
-        doneState == LOW &&
-        lastDoneState == HIGH
-    )
-    {
-
-        Serial.println("Visit completed.");
-
-        sendStatus("DONE");
-
-        delay(50);   // Simple debounce
-    }
-
-
-    lastDoneState = doneState;
 }
