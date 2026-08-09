@@ -4,52 +4,52 @@
 <head>
 
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 
-<meta name="viewport"
-   content="width=device-width, initial-scale=1.0">
-
-<title>AirDrop - Device B</title>
+<title>AirDrop Receiver</title>
 
 <style>
 
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #111;
-    color: white;
-    text-align: center;
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#111;
+    color:white;
+    text-align:center;
 }
 
-h1 {
-    margin-top: 30px;
+h1{
+    margin:25px;
 }
 
-#status {
-    margin: 30px auto;
-    width: 80%;
-    max-width: 700px;
-    padding: 20px;
-    border-radius: 12px;
-    background: #222;
-    font-size: 22px;
+button{
+    padding:14px 22px;
+    margin:8px;
+    border:0;
+    border-radius:10px;
+    font-size:17px;
+    cursor:pointer;
 }
 
-#receivedURL {
-    width: 80%;
-    max-width: 700px;
-    margin: 20px auto;
-    padding: 20px;
-    background: #222;
-    border-radius: 12px;
-    word-break: break-all;
+textarea{
+    width:90%;
+    max-width:800px;
+    height:120px;
+    margin:10px;
+    background:#222;
+    color:white;
+    border:1px solid #555;
+    border-radius:10px;
+    padding:10px;
 }
 
-button {
-    padding: 15px 25px;
-    font-size: 18px;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
+#status{
+    margin:20px auto;
+    width:90%;
+    max-width:800px;
+    padding:15px;
+    background:#222;
+    border-radius:10px;
 }
 
 </style>
@@ -58,103 +58,223 @@ button {
 
 <body>
 
-<h1>📥 AirDrop — Device B</h1>
+<h1>📥 AirDrop Receiver</h1>
 
 <div id="status">
-    Waiting for URL...
+    Waiting for Device A...
 </div>
 
-<div id="receivedURL">
-    No URL received
-</div>
+<h3>Paste Offer from Device A</h3>
+
+<textarea id="offer"
+          placeholder="Paste Device A offer here">
+</textarea>
+
+<br>
+
+<button onclick="createAnswer()">
+    CREATE ANSWER
+</button>
+
+<h3>Send this Answer back to Device A</h3>
+
+<textarea id="answer" readonly></textarea>
+
+<br>
+
+<button onclick="copyAnswer()">
+    COPY ANSWER
+</button>
 
 <script>
 
-const status =
-    document.getElementById("status");
-
-const receivedURL =
-    document.getElementById("receivedURL");
+let peer;
+let channel;
 
 
-// ==================================================
-// WEBSOCKET
-// ==================================================
+// =================================================
+// CREATE ANSWER
+// =================================================
 
-const socket =
-    new WebSocket("ws://YOUR_SERVER_IP:8080");
+async function createAnswer(){
 
+    try{
 
-socket.onopen = () => {
-
-    status.innerText =
-        "🟢 Connected — Waiting for transfer";
-
-};
-
-
-socket.onmessage = (event) => {
-
-    try {
-
-        const message =
-            JSON.parse(event.data);
-
-
-        if (
-            message.type ===
-            "URL_TRANSFER"
-        ) {
-
-            const url =
-                message.url;
-
-
-            receivedURL.innerText =
-                url;
-
-
-            status.innerText =
-                "📥 URL RECEIVED";
-
-
-            console.log(
-                "Received:",
-                url
+        const offer =
+            JSON.parse(
+                document.getElementById("offer").value
             );
 
 
-            // Open received URL
+        peer =
+            new RTCPeerConnection({
 
-            window.location.href =
-                url;
-        }
+                iceServers:[
+                    {
+                        urls:
+                        "stun:stun.l.google.com:19302"
+                    }
+                ]
+
+            });
+
+
+        peer.ondatachannel =
+            event => {
+
+                channel =
+                    event.channel;
+
+
+                channel.onopen =
+                    () => {
+
+                        document.getElementById(
+                            "status"
+                        ).innerText =
+                            "🟢 CONNECTED — Waiting for URL";
+
+                    };
+
+
+                channel.onmessage =
+                    event => {
+
+                        const message =
+                            JSON.parse(
+                                event.data
+                            );
+
+
+                        if(
+                            message.type ===
+                            "URL_TRANSFER"
+                        ){
+
+                            receiveURL(
+                                message.url
+                            );
+
+                        }
+
+                    };
+
+            };
+
+
+        peer.onicecandidate =
+            () => {
+
+                if(
+                    peer.iceGatheringState ===
+                    "complete"
+                ){
+
+                    document.getElementById(
+                        "answer"
+                    ).value =
+                        JSON.stringify(
+                            peer.localDescription
+                        );
+
+                }
+
+            };
+
+
+        await peer.setRemoteDescription(
+            offer
+        );
+
+
+        const answer =
+            await peer.createAnswer();
+
+
+        await peer.setLocalDescription(
+            answer
+        );
+
+
+        document.getElementById(
+            "status"
+        ).innerText =
+            "Answer created — send it to Device A";
 
     }
 
-    catch (error) {
+    catch(error){
 
         console.error(error);
 
+        alert(
+            "Invalid offer"
+        );
+
     }
 
-};
+}
 
 
-socket.onclose = () => {
+// =================================================
+// COPY ANSWER
+// =================================================
 
-    status.innerText =
-        "🔴 Disconnected";
+async function copyAnswer(){
 
-};
+    const text =
+        document.getElementById(
+            "answer"
+        ).value;
 
 
-socket.onerror = () => {
+    await navigator.clipboard.writeText(
+        text
+    );
 
-    status.innerText =
-        "⚠️ Connection error";
 
-};
+    document.getElementById(
+        "status"
+    ).innerText =
+        "Answer copied";
+
+}
+
+
+// =================================================
+// RECEIVE URL
+// =================================================
+
+function receiveURL(url){
+
+    document.getElementById(
+        "status"
+    ).innerText =
+        "📥 URL RECEIVED";
+
+
+    console.log(
+        "Received URL:",
+        url
+    );
+
+
+    /*
+       Give the user a moment to see
+       the transfer notification.
+    */
+
+    setTimeout(
+        () => {
+
+            window.location.href =
+                url;
+
+        },
+        1000
+    );
+
+}
 
 </script>
 

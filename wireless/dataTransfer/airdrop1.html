@@ -3,452 +3,315 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>AirDrop - Device A</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AirDrop Sender</title>
 
 <style>
-* {
-    box-sizing: border-box;
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#111;
+    color:white;
+    text-align:center;
 }
 
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #111;
-    color: white;
-    text-align: center;
+h1{
+    margin:25px;
 }
 
-h1 {
-    margin: 20px;
+button{
+    padding:14px 22px;
+    margin:8px;
+    border:0;
+    border-radius:10px;
+    font-size:17px;
+    cursor:pointer;
 }
 
-#status {
-    width: 90%;
-    max-width: 700px;
-    margin: 20px auto;
-    padding: 15px;
-    border-radius: 12px;
-    background: #222;
-    font-size: 20px;
+textarea{
+    width:90%;
+    max-width:800px;
+    height:120px;
+    margin:10px;
+    background:#222;
+    color:white;
+    border:1px solid #555;
+    border-radius:10px;
+    padding:10px;
 }
 
-.camera {
-    position: relative;
-    width: min(90vw, 800px);
-    margin: auto;
+#status{
+    margin:20px auto;
+    width:90%;
+    max-width:800px;
+    padding:15px;
+    background:#222;
+    border-radius:10px;
 }
 
-video {
-    width: 100%;
-    border-radius: 15px;
-    transform: scaleX(-1);
-}
-
-canvas {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    transform: scaleX(-1);
-}
-
-#urlBox {
-    margin: 20px auto;
-    width: 90%;
-    max-width: 700px;
-    padding: 15px;
-    background: #222;
-    border-radius: 10px;
-    word-break: break-all;
-}
-
-button {
-    padding: 14px 25px;
-    border: none;
-    border-radius: 10px;
-    font-size: 18px;
-    cursor: pointer;
+#url{
+    margin:20px auto;
+    width:90%;
+    max-width:800px;
+    padding:15px;
+    background:#222;
+    border-radius:10px;
+    word-break:break-all;
 }
 </style>
-
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
 </head>
 
 <body>
 
-<h1>📤 AirDrop — Device A</h1>
+<h1>📤 AirDrop Sender</h1>
 
 <div id="status">
-    Connecting...
+    Creating connection...
 </div>
 
-<button onclick="startCamera()">
-    START CAMERA
+<div id="url">
+    Current URL:<br>
+    <b id="currentURL"></b>
+</div>
+
+<h3>1. Send this Offer to Device B</h3>
+
+<textarea id="offer" readonly></textarea>
+
+<br>
+
+<button onclick="createOffer()">
+    CREATE OFFER
 </button>
 
-<div class="camera">
+<button onclick="copyOffer()">
+    COPY OFFER
+</button>
 
-```
-<video id="video" autoplay playsinline></video>
+<h3>2. Paste Device B Answer</h3>
 
-<canvas id="canvas"></canvas>
-```
+<textarea id="answer"
+          placeholder="Paste answer from Device B here">
+</textarea>
 
-</div>
+<br>
 
-<div id="urlBox">
-    URL: <span id="currentURL"></span>
-</div>
+<button onclick="setAnswer()">
+    CONNECT
+</button>
 
 <script>
 
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+let peer;
+let channel;
 
-const statusText = document.getElementById("status");
-const currentURL = document.getElementById("currentURL");
 
-currentURL.innerText = window.location.href;
+// =================================================
+// CURRENT URL
+// =================================================
 
+document.getElementById("currentURL").innerText =
+    window.location.href;
 
-// ==================================================
-// WEBSOCKET
-// ==================================================
 
-const socket = new WebSocket("ws://YOUR_SERVER_IP:8080");
+// =================================================
+// CREATE PEER
+// =================================================
 
-socket.onopen = () => {
+function createPeer(){
 
-    console.log("WebSocket connected");
+    peer = new RTCPeerConnection({
 
-    statusText.innerText =
-        "Connected — show your hand ✋";
-};
+        iceServers:[
+            {
+                urls:"stun:stun.l.google.com:19302"
+            }
+        ]
 
+    });
 
-socket.onclose = () => {
 
-    statusText.innerText =
-        "WebSocket disconnected";
-};
+    channel =
+        peer.createDataChannel("airdrop");
 
 
-socket.onerror = (error) => {
+    channel.onopen = () => {
 
-    console.error(error);
+        document.getElementById("status").innerText =
+            "🟢 CONNECTED — Ready to transfer";
 
-    statusText.innerText =
-        "WebSocket connection error";
-};
+    };
 
 
-// ==================================================
-// SEND URL
-// ==================================================
+    channel.onclose = () => {
 
-function sendURL() {
+        document.getElementById("status").innerText =
+            "Connection closed";
 
-    const url = window.location.href;
+    };
 
-    if (socket.readyState !== WebSocket.OPEN) {
 
-        alert("Device B is not connected.");
+    peer.onicecandidate = () => {
 
-        return;
-    }
+        /*
+         Wait until ICE gathering completes.
+        */
 
+        if(
+            peer.iceGatheringState ===
+            "complete"
+        ){
 
-    socket.send(JSON.stringify({
+            document.getElementById("offer").value =
+                JSON.stringify(
+                    peer.localDescription
+                );
 
-        type: "URL_TRANSFER",
-
-        url: url,
-
-        timestamp: Date.now()
-
-    }));
-
-
-    statusText.innerText =
-        "🚀 URL SENT TO DEVICE B";
-
-    console.log(
-        "Sent URL:",
-        url
-    );
-}
-
-
-// ==================================================
-// DISTANCE
-// ==================================================
-
-function distance(a, b) {
-
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-
-    return Math.sqrt(
-        dx * dx + dy * dy
-    );
-}
-
-
-// ==================================================
-// GESTURE DETECTION
-// ==================================================
-
-let previousGesture = "NONE";
-
-
-function detectGesture(landmarks) {
-
-    const wrist = landmarks[0];
-
-    const indexTip = landmarks[8];
-    const middleTip = landmarks[12];
-    const ringTip = landmarks[16];
-    const pinkyTip = landmarks[20];
-
-    const indexMCP = landmarks[5];
-    const middleMCP = landmarks[9];
-    const ringMCP = landmarks[13];
-    const pinkyMCP = landmarks[17];
-
-
-    const indexOpen =
-        distance(indexTip, wrist) >
-        distance(indexMCP, wrist) * 1.25;
-
-    const middleOpen =
-        distance(middleTip, wrist) >
-        distance(middleMCP, wrist) * 1.25;
-
-    const ringOpen =
-        distance(ringTip, wrist) >
-        distance(ringMCP, wrist) * 1.20;
-
-    const pinkyOpen =
-        distance(pinkyTip, wrist) >
-        distance(pinkyMCP, wrist) * 1.15;
-
-
-    const openCount =
-        Number(indexOpen) +
-        Number(middleOpen) +
-        Number(ringOpen) +
-        Number(pinkyOpen);
-
-
-    if (openCount >= 3) {
-
-        return "OPEN";
-
-    }
-
-
-    if (openCount <= 1) {
-
-        return "GRAB";
-
-    }
-
-
-    return "UNKNOWN";
-}
-
-
-// ==================================================
-// MEDIAPIPE
-// ==================================================
-
-function onResults(results) {
-
-    canvas.width =
-        video.videoWidth;
-
-    canvas.height =
-        video.videoHeight;
-
-
-    ctx.clearRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-
-
-    if (
-        !results.multiHandLandmarks ||
-        results.multiHandLandmarks.length === 0
-    ) {
-
-        return;
-    }
-
-
-    const hand =
-        results.multiHandLandmarks[0];
-
-
-    drawConnectors(
-        ctx,
-        hand,
-        HAND_CONNECTIONS,
-        {
-            color: "#00FF00",
-            lineWidth: 4
         }
+
+    };
+
+}
+
+
+// =================================================
+// CREATE OFFER
+// =================================================
+
+async function createOffer(){
+
+    createPeer();
+
+
+    const offer =
+        await peer.createOffer();
+
+
+    await peer.setLocalDescription(
+        offer
     );
 
 
-    drawLandmarks(
-        ctx,
-        hand,
-        {
-            color: "#FF0000",
-            lineWidth: 2
-        }
+    document.getElementById("status").innerText =
+        "Creating offer...";
+
+}
+
+
+// =================================================
+// COPY OFFER
+// =================================================
+
+async function copyOffer(){
+
+    const text =
+        document.getElementById("offer").value;
+
+    await navigator.clipboard.writeText(
+        text
     );
 
+    document.getElementById("status").innerText =
+        "Offer copied";
 
-    const gesture =
-        detectGesture(hand);
+}
 
 
-    // Only react when gesture changes
+// =================================================
+// SET ANSWER
+// =================================================
 
-    if (gesture !== previousGesture) {
+async function setAnswer(){
 
-        console.log(
-            previousGesture,
-            "→",
-            gesture
+    try{
+
+        const answer =
+            JSON.parse(
+                document.getElementById("answer").value
+            );
+
+
+        await peer.setRemoteDescription(
+            answer
         );
 
 
-        if (gesture === "OPEN") {
-
-            statusText.innerText =
-                "🖐 OPEN — Ready";
-        }
-
-
-        if (gesture === "GRAB") {
-
-            statusText.innerText =
-                "✊ GRAB — Sending URL...";
-
-            sendURL();
-        }
-
-
-        previousGesture =
-            gesture;
-    }
-}
-
-
-// ==================================================
-// MEDIAPIPE HANDS
-// ==================================================
-
-const hands = new Hands({
-
-    locateFile: (file) => {
-
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        document.getElementById("status").innerText =
+            "Connecting to Device B...";
 
     }
 
-});
-
-
-hands.setOptions({
-
-    maxNumHands: 1,
-
-    modelComplexity: 1,
-
-    minDetectionConfidence: 0.6,
-
-    minTrackingConfidence: 0.6
-
-});
-
-
-hands.onResults(onResults);
-
-
-// ==================================================
-// CAMERA
-// ==================================================
-
-async function startCamera() {
-
-    try {
-
-        const stream =
-            await navigator.mediaDevices.getUserMedia({
-
-                video: true,
-
-                audio: false
-
-            });
-
-
-        video.srcObject = stream;
-
-
-        video.onloadedmetadata = () => {
-
-            const camera =
-                new Camera(video, {
-
-                    onFrame: async () => {
-
-                        await hands.send({
-                            image: video
-                        });
-
-                    },
-
-                    width: 1280,
-
-                    height: 720
-
-                });
-
-
-            camera.start();
-
-
-            statusText.innerText =
-                "🖐 Show your hand";
-
-        };
-
-    }
-
-    catch (error) {
+    catch(error){
 
         console.error(error);
 
-        statusText.innerText =
-            "Camera permission failed";
+        alert(
+            "Invalid answer"
+        );
+
     }
+
 }
+
+
+// =================================================
+// SEND URL
+// =================================================
+
+function sendURL(){
+
+    if(
+        !channel ||
+        channel.readyState !== "open"
+    ){
+
+        alert(
+            "Devices are not connected yet."
+        );
+
+        return;
+
+    }
+
+
+    const url =
+        window.location.href;
+
+
+    channel.send(
+        JSON.stringify({
+
+            type:"URL_TRANSFER",
+
+            url:url
+
+        })
+    );
+
+
+    document.getElementById("status").innerText =
+        "🚀 URL SENT";
+
+}
+
+
+// =================================================
+// TEMPORARY TEST BUTTON
+// =================================================
+
+const testButton =
+    document.createElement("button");
+
+testButton.innerText =
+    "✊ TEST GRAB";
+
+testButton.onclick =
+    sendURL;
+
+document.body.appendChild(
+    testButton
+);
 
 </script>
 
