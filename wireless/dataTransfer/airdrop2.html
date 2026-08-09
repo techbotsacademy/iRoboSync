@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+   content="width=device-width, initial-scale=1.0">
+
+<title>AirDrop - Device B</title>
+
+<style>
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: white;
+    text-align: center;
+}
+
+h1 {
+    margin-top: 30px;
+}
+
+#status {
+    margin: 30px auto;
+    width: 80%;
+    max-width: 700px;
+    padding: 20px;
+    border-radius: 12px;
+    background: #222;
+    font-size: 22px;
+}
+
+#receivedURL {
+    width: 80%;
+    max-width: 700px;
+    margin: 20px auto;
+    padding: 20px;
+    background: #222;
+    border-radius: 12px;
+    word-break: break-all;
+}
+
+button {
+    padding: 15px 25px;
+    font-size: 18px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>📥 AirDrop — Device B</h1>
+
+<div id="status">
+    Waiting for URL...
+</div>
+
+<div id="receivedURL">
+    No URL received
+</div>
+
+<script>
+
+const status =
+    document.getElementById("status");
+
+const receivedURL =
+    document.getElementById("receivedURL");
+
+
+// ==================================================
+// WEBSOCKET
+// ==================================================
+
+const socket =
+    new WebSocket("ws://YOUR_SERVER_IP:8080");
+
+
+socket.onopen = () => {
+
+    status.innerText =
+        "🟢 Connected — Waiting for transfer";
+
+};
+
+
+socket.onmessage = (event) => {
+
+    try {
+
+        const message =
+            JSON.parse(event.data);
+
+
+        if (
+            message.type ===
+            "URL_TRANSFER"
+        ) {
+
+            const url =
+                message.url;
+
+
+            receivedURL.innerText =
+                url;
+
+
+            status.innerText =
+                "📥 URL RECEIVED";
+
+
+            console.log(
+                "Received:",
+                url
+            );
+
+
+            // Open received URL
+
+            window.location.href =
+                url;
+        }
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+    }
+
+};
+
+
+socket.onclose = () => {
+
+    status.innerText =
+        "🔴 Disconnected";
+
+};
+
+
+socket.onerror = () => {
+
+    status.innerText =
+        "⚠️ Connection error";
+
+};
+
+</script>
+
+</body>
+</html>
