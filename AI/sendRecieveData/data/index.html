@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>1. Capture Page</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body{ background:#0b0f0e; color:#eaf3ee; font-family:monospace; display:flex; flex-direction:column; align-items:center; padding:20px; }
+  .stage{ position:relative; width:min(400px, 90vw); aspect-ratio:4/3; border:1px solid #1f2a26; border-radius:10px; overflow:hidden; background:#000; }
+  video, canvas.overlay{ position:absolute; top:0; left:0; width:100%; height:100%; transform:scaleX(-1); }
+  .preview{ margin-top:15px; width:180px; aspect-ratio:4/3; border:1px solid #4fe3a1; border-radius:6px; background:#000 center/cover no-repeat; }
+  .status{ margin:10px 0; color:#7f948b; font-size:14px; text-align:center; }
+  .flash{ position:absolute; inset:0; background:#4fe3a1; opacity:0; transition:opacity .1s; pointer-events:none; }
+  .flash.on{ opacity:0.5; }
+</style>
+</head>
+<body>
+
+  <h2>1. Capture Page</h2>
+  <div class="status">Show ✊ <b>FIST</b> to capture photo</div>
+
+  <div class="stage">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="overlay" class="overlay"></canvas>
+    <div id="flash" class="flash"></div>
+  </div>
+
+  <div class="status">Saved Photo:</div>
+  <div id="preview" class="preview"></div>
+
+  <canvas id="grab" style="display:none"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+<script>
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const octx = overlay.getContext('2d');
+const grab = document.getElementById('grab');
+const gctx = grab.getContext('2d');
+const preview = document.getElementById('preview');
+const flashEl = document.getElementById('flash');
+
+function saveToDB(dataUrl) {
+  const req = indexedDB.open('GestureBridgeDB', 1);
+  req.onupgradeneeded = e => e.target.result.createObjectStore('photos');
+  req.onsuccess = e => {
+    const db = e.target.result;
+    const tx = db.transaction('photos', 'readwrite');
+    tx.objectStore('photos').put(dataUrl, 'latest_photo');
+  };
+}
+
+function checkFist(lm) {
+  const wrist = lm[0];
+  let curled = 0;
+  for (const tipIdx of [8, 12, 16, 20]) {
+    if (Math.hypot(lm[tipIdx].x - wrist.x, lm[tipIdx].y - wrist.y) < 0.30) curled++;
+  }
+  return curled >= 3;
+}
+
+let lastCap = 0;
+function takeScreenshot(){
+  // Compressed to 240x180 resolution to keep size < 8KB
+  grab.width = 240; grab.height = 180;
+  gctx.save(); gctx.translate(grab.width, 0); gctx.scale(-1, 1);
+  gctx.drawImage(video, 0, 0, grab.width, grab.height); gctx.restore();
+  
+  const dataUrl = grab.toDataURL('image/jpeg', 0.3); // 30% quality compression
+  preview.style.backgroundImage = `url(${dataUrl})`;
+  saveToDB(dataUrl);
+  
+  flashEl.classList.add('on');
+  setTimeout(() => flashEl.classList.remove('on'), 120);
+}
+
+const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
+hands.onResults(results => {
+  overlay.width = video.videoWidth; overlay.height = video.videoHeight;
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length) {
+    const lm = results.multiHandLandmarks[0];
+    if (checkFist(lm) && Date.now() - lastCap > 2000) {
+      lastCap = Date.now();
+      takeScreenshot();
+    }
+  }
+});
+
+const camera = new Camera(video, { onFrame: async () => await hands.send({image: video}), width: 400, height: 300 });
+camera.start();
+</script>
+</body>
+</html>
