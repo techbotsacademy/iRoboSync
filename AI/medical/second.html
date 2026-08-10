@@ -1,0 +1,2018 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+<title>Camera Vital Signs - Improved rPPG</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #07111f;
+    color: #e5e7eb;
+}
+
+header {
+    text-align: center;
+    padding: 20px;
+    background: #0b1628;
+    border-bottom: 1px solid #26364d;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 27px;
+}
+
+header p {
+    color: #94a3b8;
+    margin: 8px 0 0;
+}
+
+.container {
+    max-width: 1100px;
+    margin: auto;
+    padding: 20px;
+}
+
+.camera {
+    position: relative;
+    max-width: 760px;
+    margin: auto;
+    background: #000;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #334155;
+}
+
+video {
+    width: 100%;
+    display: block;
+    transform: scaleX(-1);
+}
+
+.box {
+    position: absolute;
+    pointer-events: none;
+    display: none;
+}
+
+#faceROI {
+    border: 2px solid #22c55e;
+}
+
+#chestROI {
+    border: 2px dashed #38bdf8;
+}
+
+.legend {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    background: rgba(0,0,0,.65);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 18px;
+}
+
+button {
+    border: 0;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#start {
+    background: #22c55e;
+    color: white;
+}
+
+#stop {
+    background: #ef4444;
+    color: white;
+}
+
+button:disabled {
+    opacity: .4;
+}
+
+.status {
+    text-align: center;
+    color: #94a3b8;
+    margin: 12px;
+}
+
+.vitals {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 15px;
+}
+
+.card {
+    background: #111d30;
+    border: 1px solid #26364d;
+    border-radius: 14px;
+    padding: 20px;
+    text-align: center;
+}
+
+.card h3 {
+    margin: 0 0 12px;
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+.value {
+    font-size: 42px;
+    font-weight: bold;
+}
+
+.unit {
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+.signal-card {
+    margin-top: 20px;
+    background: #111d30;
+    border: 1px solid #26364d;
+    border-radius: 14px;
+    padding: 18px;
+}
+
+canvas {
+    width: 100%;
+    height: 200px;
+    background: #020617;
+    border-radius: 8px;
+}
+
+.info {
+    margin-top: 20px;
+    background: #111d30;
+    border-radius: 12px;
+    padding: 18px;
+    line-height: 1.6;
+    color: #cbd5e1;
+}
+
+.warning {
+    margin-top: 15px;
+    padding: 14px;
+    border-left: 4px solid #f59e0b;
+    color: #fbbf24;
+    background: #17150d;
+    line-height: 1.5;
+    font-size: 13px;
+}
+
+@media(max-width:700px) {
+
+    .vitals {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+
+<h1>🫀 Camera Vital Signs</h1>
+
+<p>
+Improved rPPG heart-rate and respiratory-rate experiment
+</p>
+
+</header>
+
+<div class="container">
+
+<div class="camera">
+
+<video id="video"
+    autoplay
+    muted
+    playsinline> </video>
+
+<div id="faceROI" class="box"></div>
+<div id="chestROI" class="box"></div>
+
+<div class="legend">
+    🟢 Face / rPPG &nbsp;&nbsp;
+    🔵 Upper-body motion
+</div>
+
+</div>
+
+<div class="controls">
+
+<button id="start">
+Start Camera
+</button>
+
+<button id="stop" disabled>
+Stop
+</button>
+
+</div>
+
+<div class="status" id="status">
+Click Start Camera.
+</div>
+
+<div class="vitals">
+
+<div class="card">
+
+<h3>❤️ HEART RATE</h3>
+
+<div class="value" id="hr">
+--
+</div>
+
+<div class="unit">
+BPM
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>🫁 RESPIRATION</h3>
+
+<div class="value" id="rr">
+--
+</div>
+
+<div class="unit">
+breaths / min
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>📶 SIGNAL QUALITY</h3>
+
+<div class="value" id="quality">
+--
+</div>
+
+<div class="unit">
+%
+</div>
+
+</div>
+
+</div>
+
+<div class="signal-card">
+
+<h3>Respiration / rPPG Signal</h3>
+
+<canvas id="graph"
+     width="1000"
+     height="200"> </canvas>
+
+</div>
+
+<div class="info">
+
+<strong>Improved respiration algorithm</strong>
+
+<ol>
+
+<li>
+The webcam continuously samples the face and upper torso.
+</li>
+
+<li>
+The face signal uses chrominance-normalized RGB rather than
+the raw green channel.
+</li>
+
+<li>
+The upper-body region is analyzed for very slow periodic motion.
+</li>
+
+<li>
+The respiratory signal is restricted to approximately
+6–30 breaths/minute.
+</li>
+
+<li>
+FFT identifies the strongest respiratory frequency.
+</li>
+
+<li>
+Autocorrelation independently estimates the breathing period.
+</li>
+
+<li>
+The two estimates are compared before accepting a result.
+</li>
+
+<li>
+Several recent windows are combined to stabilize the displayed value.
+</li>
+
+</ol>
+
+</div>
+
+<div class="warning">
+
+⚠️ <strong>Experimental only.</strong>
+
+This system is not a medical device.
+Camera-based vital-sign estimation can be affected by
+lighting, camera exposure, movement, clothing, camera quality,
+skin appearance, posture and many other factors.
+
+Do not use the displayed values for diagnosis or treatment.
+
+</div>
+
+</div>
+
+<canvas id="work"
+     width="320"
+     height="240"
+     style="display:none"> </canvas>
+
+<script>
+
+
+// =========================================================
+// ELEMENTS
+// =========================================================
+
+const video =
+    document.getElementById("video");
+
+const work =
+    document.getElementById("work");
+
+const ctx =
+    work.getContext(
+        "2d",
+        {willReadFrequently:true}
+    );
+
+const graph =
+    document.getElementById("graph");
+
+const gctx =
+    graph.getContext("2d");
+
+const start =
+    document.getElementById("start");
+
+const stop =
+    document.getElementById("stop");
+
+const status =
+    document.getElementById("status");
+
+const hrElement =
+    document.getElementById("hr");
+
+const rrElement =
+    document.getElementById("rr");
+
+const qualityElement =
+    document.getElementById("quality");
+
+const faceROI =
+    document.getElementById("faceROI");
+
+const chestROI =
+    document.getElementById("chestROI");
+
+
+// =========================================================
+// PARAMETERS
+// =========================================================
+
+const SAMPLE_RATE_TARGET = 30;
+
+// 45 seconds of data
+const HISTORY_SECONDS = 45;
+
+const MAX_SAMPLES =
+    SAMPLE_RATE_TARGET *
+    HISTORY_SECONDS;
+
+let stream = null;
+
+let running = false;
+
+let samples = [];
+
+let lastSample = 0;
+
+
+// =========================================================
+// START
+// =========================================================
+
+start.onclick = async () => {
+
+    try {
+
+        stream =
+            await navigator.mediaDevices.getUserMedia({
+
+                video: {
+
+                    width: {
+                        ideal: 640
+                    },
+
+                    height: {
+                        ideal: 480
+                    },
+
+                    facingMode: "user"
+
+                },
+
+                audio:false
+
+            });
+
+
+        video.srcObject =
+            stream;
+
+        await video.play();
+
+
+        running = true;
+
+        samples = [];
+
+        start.disabled = true;
+
+        stop.disabled = false;
+
+
+        status.textContent =
+            "Collecting signal... Keep still and breathe normally.";
+
+
+        requestAnimationFrame(
+            processFrame
+        );
+
+    }
+
+    catch(error) {
+
+        console.error(error);
+
+        status.textContent =
+            "Camera error: " +
+            error.message;
+
+    }
+
+};
+
+
+// =========================================================
+// STOP
+// =========================================================
+
+stop.onclick = () => {
+
+    running = false;
+
+    if(stream) {
+
+        stream
+            .getTracks()
+            .forEach(
+                track => track.stop()
+            );
+
+    }
+
+    stream = null;
+
+    video.srcObject = null;
+
+    start.disabled = false;
+
+    stop.disabled = true;
+
+    samples = [];
+
+    hrElement.textContent = "--";
+
+    rrElement.textContent = "--";
+
+    qualityElement.textContent = "--";
+
+    faceROI.style.display = "none";
+
+    chestROI.style.display = "none";
+
+    status.textContent =
+        "Camera stopped.";
+
+};
+
+
+// =========================================================
+// FRAME PROCESSING
+// =========================================================
+
+function processFrame(timestamp) {
+
+    if(!running)
+        return;
+
+    requestAnimationFrame(
+        processFrame
+    );
+
+
+    if(
+        !video.videoWidth ||
+        timestamp - lastSample < 33
+    )
+        return;
+
+
+    lastSample =
+        timestamp;
+
+
+    ctx.drawImage(
+        video,
+        0,
+        0,
+        work.width,
+        work.height
+    );
+
+
+    const width =
+        work.width;
+
+    const height =
+        work.height;
+
+
+    // -----------------------------------------------------
+    // FACE REGION
+    // -----------------------------------------------------
+
+    const fx =
+        Math.floor(
+            width * 0.34
+        );
+
+    const fy =
+        Math.floor(
+            height * 0.20
+        );
+
+    const fw =
+        Math.floor(
+            width * 0.32
+        );
+
+    const fh =
+        Math.floor(
+            height * 0.20
+        );
+
+
+    // -----------------------------------------------------
+    // CHEST / UPPER BODY REGION
+    // -----------------------------------------------------
+
+    const cx =
+        Math.floor(
+            width * 0.25
+        );
+
+    const cy =
+        Math.floor(
+            height * 0.58
+        );
+
+    const cw =
+        Math.floor(
+            width * 0.50
+        );
+
+    const ch =
+        Math.floor(
+            height * 0.28
+        );
+
+
+    drawBox(
+        faceROI,
+        fx,
+        fy,
+        fw,
+        fh
+    );
+
+
+    drawBox(
+        chestROI,
+        cx,
+        cy,
+        cw,
+        ch
+    );
+
+
+    // -----------------------------------------------------
+    // FACE RGB
+    // -----------------------------------------------------
+
+    const face =
+        extractRegion(
+            fx,
+            fy,
+            fw,
+            fh
+        );
+
+
+    // -----------------------------------------------------
+    // CHEST MOTION
+    // -----------------------------------------------------
+
+    const chest =
+        extractRegion(
+            cx,
+            cy,
+            cw,
+            ch
+        );
+
+
+    if(!face || !chest)
+        return;
+
+
+    /*
+        Chrominance-based rPPG.
+
+        This reduces common-mode illumination
+        changes compared with raw green.
+    */
+
+// -----------------------------------------------------
+// CHROMINANCE rPPG
+// -----------------------------------------------------
+
+const X =
+    face.g - face.b;
+
+const Y =
+    face.g + face.b - 2 * face.r;
+
+// Normalize the chrominance components.
+// This avoids depending on an undefined std() function.
+const Xnorm =
+    X / (Math.abs(face.g) + Math.abs(face.b) + 0.000001);
+
+const Ynorm =
+    Y / (
+        Math.abs(face.r) +
+        Math.abs(face.g) +
+        Math.abs(face.b) +
+        0.000001
+    );
+
+// Chrominance pulse signal
+const rppg =
+    Xnorm - 0.5 * Ynorm;
+
+    /*
+        For practical robustness, retain
+        normalized green/chrominance mixture.
+    */
+
+    const normalizedGreen =
+        face.g /
+        (
+            face.r +
+            face.g +
+            face.b +
+            0.000001
+        );
+
+
+    const faceSignal =
+        0.7 * rppg +
+        0.3 * normalizedGreen;
+
+
+    /*
+        Chest signal.
+
+        Average luminance is affected by
+        small movement of the torso relative
+        to the camera.
+
+        We store multiple spatial statistics
+        so that later analysis can find the
+        strongest respiratory component.
+    */
+
+    const chestSignal =
+        chest.luminance;
+
+
+    samples.push({
+
+        time: performance.now(),
+
+        pulse:
+            faceSignal,
+
+        r:
+            face.r,
+
+        g:
+            face.g,
+
+        b:
+            face.b,
+
+        chest:
+            chestSignal
+
+    });
+
+
+    if(
+        samples.length >
+        MAX_SAMPLES
+    ) {
+
+        samples.shift();
+
+    }
+
+
+    if(
+        samples.length >
+        SAMPLE_RATE_TARGET * 8
+    ) {
+
+        calculateVitals();
+
+    }
+
+}
+
+
+// =========================================================
+// REGION EXTRACTION
+// =========================================================
+
+function extractRegion(
+    x,
+    y,
+    w,
+    h
+) {
+
+    const image =
+        ctx.getImageData(
+            x,
+            y,
+            w,
+            h
+        );
+
+    const data =
+        image.data;
+
+
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let lum = 0;
+
+    let valid = 0;
+
+
+    for(
+        let i=0;
+        i<data.length;
+        i+=4
+    ) {
+
+        const R =
+            data[i];
+
+        const G =
+            data[i+1];
+
+        const B =
+            data[i+2];
+
+
+        /*
+            Reject very dark and saturated
+            pixels where possible.
+        */
+
+        const brightness =
+            (R+G+B)/3;
+
+
+        if(
+            brightness < 35 ||
+            brightness > 250
+        )
+            continue;
+
+
+        r += R;
+
+        g += G;
+
+        b += B;
+
+
+        lum +=
+            0.299 * R +
+            0.587 * G +
+            0.114 * B;
+
+        valid++;
+
+    }
+
+
+    if(valid < 10)
+        return null;
+
+
+    return {
+
+        r:r/valid,
+
+        g:g/valid,
+
+        b:b/valid,
+
+        luminance:
+            lum/valid
+
+    };
+
+}
+
+
+// =========================================================
+// DRAW ROI
+// =========================================================
+
+function drawBox(
+    element,
+    x,
+    y,
+    w,
+    h
+) {
+
+    const sx =
+        video.clientWidth /
+        work.width;
+
+    const sy =
+        video.clientHeight /
+        work.height;
+
+
+    element.style.display =
+        "block";
+
+    element.style.left =
+        x*sx + "px";
+
+    element.style.top =
+        y*sy + "px";
+
+    element.style.width =
+        w*sx + "px";
+
+    element.style.height =
+        h*sy + "px";
+
+}
+
+
+// =========================================================
+// VITAL CALCULATION
+// =========================================================
+
+function calculateVitals() {
+
+    const times =
+        samples.map(
+            s => s.time
+        );
+
+
+    const duration =
+        (
+            times[times.length-1] -
+            times[0]
+        ) / 1000;
+
+
+    if(duration < 8)
+        return;
+
+
+    const fs =
+        (samples.length-1) /
+        duration;
+
+
+    // -----------------------------------------------------
+    // HEART SIGNAL
+    // -----------------------------------------------------
+
+    let pulse =
+        samples.map(
+            s => s.pulse
+        );
+
+
+    pulse =
+        detrend(pulse);
+
+
+    pulse =
+        bandPass(
+            pulse,
+            fs,
+            0.7,
+            3.2
+        );
+
+
+    const heart =
+        estimateRateAutocorrelation(
+            pulse,
+            fs,
+            45,
+            190
+        );
+
+
+    if(
+        heart !== null
+    ) {
+
+        hrElement.textContent =
+            Math.round(
+                heart
+            );
+
+    }
+
+
+    // -----------------------------------------------------
+    // RESPIRATION
+    // -----------------------------------------------------
+
+    const rr =
+        estimateRespiration(
+            fs
+        );
+
+
+    if(
+        rr !== null
+    ) {
+
+        rrElement.textContent =
+            Math.round(rr);
+
+    }
+
+
+    // -----------------------------------------------------
+    // QUALITY
+    // -----------------------------------------------------
+
+    const q =
+        signalQuality(
+            pulse
+        );
+
+
+    qualityElement.textContent =
+        Math.round(
+            q * 100
+        );
+
+
+    drawGraph(
+        rrSignalForGraph(fs)
+    );
+
+}
+
+
+// =========================================================
+// RESPIRATION ESTIMATION
+// =========================================================
+
+function estimateRespiration(fs) {
+
+    /*
+        Use last 40 seconds.
+
+        Long windows are important because
+        respiration may be only 0.1–0.5 Hz.
+    */
+
+    const max =
+        Math.min(
+            samples.length,
+            Math.floor(
+                fs * 40
+            )
+        );
+
+
+    const recent =
+        samples.slice(
+            -max
+        );
+
+
+    if(
+        recent.length <
+        fs * 20
+    ) {
+
+        status.textContent =
+            "Collecting respiration signal... " +
+            Math.round(
+                recent.length/fs
+            ) +
+            " / 20 seconds";
+
+        return null;
+
+    }
+
+
+    // -----------------------------------------------------
+    // SIGNAL A: FACIAL LOW FREQUENCY
+    // -----------------------------------------------------
+
+    let face =
+        recent.map(
+            s => s.pulse
+        );
+
+
+    face =
+        detrend(face);
+
+
+    face =
+        bandPass(
+            face,
+            fs,
+            0.08,
+            0.55
+        );
+
+
+    // -----------------------------------------------------
+    // SIGNAL B: CHEST MOTION
+    // -----------------------------------------------------
+
+    let chest =
+        recent.map(
+            s => s.chest
+        );
+
+
+    chest =
+        detrend(chest);
+
+
+    chest =
+        bandPass(
+            chest,
+            fs,
+            0.08,
+            0.55
+        );
+
+
+    /*
+        Normalize both signals.
+    */
+
+    face =
+        normalize(face);
+
+    chest =
+        normalize(chest);
+
+
+    /*
+        Blend.
+
+        Chest motion gets more weight because
+        it is a direct mechanical consequence
+        of breathing.
+    */
+
+    const combined =
+        face.map(
+            (x,i) =>
+                0.35*x +
+                0.65*chest[i]
+        );
+
+
+    // -----------------------------------------------------
+    // FFT ESTIMATE
+    // -----------------------------------------------------
+
+    const fftRate =
+        estimateRateFFT(
+            combined,
+            fs,
+            6,
+            30
+        );
+
+
+    // -----------------------------------------------------
+    // AUTOCORRELATION ESTIMATE
+    // -----------------------------------------------------
+
+    const acRate =
+        estimateRateAutocorrelation(
+            combined,
+            fs,
+            6,
+            30
+        );
+
+
+    if(
+        fftRate === null &&
+        acRate === null
+    ) {
+
+        return null;
+
+    }
+
+
+    /*
+        If both methods agree, confidence is
+        much higher.
+    */
+
+    if(
+        fftRate !== null &&
+        acRate !== null
+    ) {
+
+        const difference =
+            Math.abs(
+                fftRate -
+                acRate
+            );
+
+
+        if(
+            difference <= 2.5
+        ) {
+
+            return (
+                fftRate +
+                acRate
+            ) / 2;
+
+        }
+
+
+        /*
+            When they disagree, favor FFT
+            because it is generally more
+            stable for very slow signals.
+        */
+
+        return fftRate;
+
+    }
+
+
+    return fftRate !== null
+        ? fftRate
+        : acRate;
+
+}
+
+
+// =========================================================
+// FFT-STYLE SPECTRAL ESTIMATE
+// =========================================================
+
+function estimateRateFFT(
+    signal,
+    fs,
+    minBPM,
+    maxBPM
+) {
+
+    const N =
+        signal.length;
+
+
+    if(N < fs*15)
+        return null;
+
+
+    let bestFreq =
+        0;
+
+    let bestPower =
+        -Infinity;
+
+
+    /*
+        Direct DFT.
+
+        This is intentionally implemented
+        without an external FFT library.
+
+        N is limited to ~40 seconds,
+        so only the respiratory band
+        is evaluated.
+    */
+
+    const minFreq =
+        minBPM / 60;
+
+    const maxFreq =
+        maxBPM / 60;
+
+
+    const step =
+        0.005;
+
+
+    for(
+        let f=minFreq;
+        f<=maxFreq;
+        f+=step
+    ) {
+
+        let real = 0;
+        let imag = 0;
+
+
+        for(
+            let n=0;
+            n<N;
+            n++
+        ) {
+
+            const window =
+                0.5 -
+                0.5 *
+                Math.cos(
+                    2*Math.PI*n/(N-1)
+                );
+
+
+            const angle =
+                2*Math.PI*f*n/fs;
+
+
+            real +=
+                signal[n] *
+                window *
+                Math.cos(angle);
+
+            imag -=
+                signal[n] *
+                window *
+                Math.sin(angle);
+
+        }
+
+
+        const power =
+            real*real +
+            imag*imag;
+
+
+        if(
+            power >
+            bestPower
+        ) {
+
+            bestPower =
+                power;
+
+            bestFreq =
+                f;
+
+        }
+
+    }
+
+
+    if(
+        bestFreq <= 0
+    )
+        return null;
+
+
+    return bestFreq * 60;
+
+}
+
+
+// =========================================================
+// AUTOCORRELATION
+// =========================================================
+
+function estimateRateAutocorrelation(
+    signal,
+    fs,
+    minBPM,
+    maxBPM
+) {
+
+    if(
+        signal.length <
+        fs*8
+    )
+        return null;
+
+
+    const data =
+        signal.slice(
+            -Math.floor(
+                fs*30
+            )
+        );
+
+
+    const mean =
+        data.reduce(
+            (a,b)=>a+b,
+            0
+        ) / data.length;
+
+
+    const x =
+        data.map(
+            v=>v-mean
+        );
+
+
+    let energy = 0;
+
+    for(
+        const v of x
+    ) {
+
+        energy +=
+            v*v;
+
+    }
+
+
+    if(
+        energy <
+        0.0000001
+    )
+        return null;
+
+
+    const minLag =
+        Math.floor(
+            fs*60/maxBPM
+        );
+
+    const maxLag =
+        Math.ceil(
+            fs*60/minBPM
+        );
+
+
+    let bestLag =
+        -1;
+
+    let best =
+        -Infinity;
+
+
+    for(
+        let lag=minLag;
+        lag<=maxLag;
+        lag++
+    ) {
+
+        let sum=0;
+
+        let count=0;
+
+
+        for(
+            let i=0;
+            i<x.length-lag;
+            i++
+        ) {
+
+            sum +=
+                x[i] *
+                x[i+lag];
+
+            count++;
+
+        }
+
+
+        const correlation =
+            sum /
+            count;
+
+
+        if(
+            correlation >
+            best
+        ) {
+
+            best =
+                correlation;
+
+            bestLag =
+                lag;
+
+        }
+
+    }
+
+
+    if(
+        bestLag < 0
+    )
+        return null;
+
+
+    const bpm =
+        60 /
+        (bestLag/fs);
+
+
+    if(
+        bpm<minBPM ||
+        bpm>maxBPM
+    )
+        return null;
+
+
+    return bpm;
+
+}
+
+
+// =========================================================
+// DETREND
+// =========================================================
+
+function detrend(signal) {
+
+    const n =
+        signal.length;
+
+
+    if(n < 2)
+        return signal.slice();
+
+
+    /*
+        Remove linear trend.
+
+        This is better than simply subtracting
+        the mean because webcam exposure can
+        slowly drift.
+    */
+
+    let sumX=0;
+    let sumY=0;
+    let sumXY=0;
+    let sumXX=0;
+
+
+    for(
+        let i=0;
+        i<n;
+        i++
+    ) {
+
+        sumX += i;
+
+        sumY += signal[i];
+
+        sumXY +=
+            i*signal[i];
+
+        sumXX +=
+            i*i;
+
+    }
+
+
+    const slope =
+        (
+            n*sumXY -
+            sumX*sumY
+        ) /
+        (
+            n*sumXX -
+            sumX*sumX
+        );
+
+
+    const intercept =
+        (
+            sumY -
+            slope*sumX
+        ) / n;
+
+
+    return signal.map(
+        (v,i)=>
+            v -
+            (
+                slope*i +
+                intercept
+            )
+    );
+
+}
+
+
+// =========================================================
+// NORMALIZE
+// =========================================================
+
+function normalize(signal) {
+
+    const mean =
+        signal.reduce(
+            (a,b)=>a+b,
+            0
+        ) / signal.length;
+
+
+    let variance=0;
+
+    for(
+        const x of signal
+    ) {
+
+        variance +=
+            (x-mean) *
+            (x-mean);
+
+    }
+
+
+    variance /=
+        signal.length;
+
+
+    const sd =
+        Math.sqrt(
+            variance
+        ) || 1;
+
+
+    return signal.map(
+        x =>
+            (x-mean)/sd
+    );
+
+}
+
+
+// =========================================================
+// BANDPASS
+// =========================================================
+
+function bandPass(
+    signal,
+    fs,
+    low,
+    high
+) {
+
+    return lowPass(
+        highPass(
+            signal,
+            fs,
+            low
+        ),
+        fs,
+        high
+    );
+
+}
+
+
+// =========================================================
+// LOW PASS
+// =========================================================
+
+function lowPass(
+    signal,
+    fs,
+    cutoff
+) {
+
+    const dt =
+        1/fs;
+
+    const RC =
+        1 /
+        (
+            2*Math.PI*cutoff
+        );
+
+    const alpha =
+        dt /
+        (RC+dt);
+
+
+    const output =
+        new Array(
+            signal.length
+        );
+
+
+    output[0] =
+        signal[0];
+
+
+    for(
+        let i=1;
+        i<signal.length;
+        i++
+    ) {
+
+        output[i] =
+            output[i-1] +
+            alpha *
+            (
+                signal[i] -
+                output[i-1]
+            );
+
+    }
+
+
+    return output;
+
+}
+
+
+// =========================================================
+// HIGH PASS
+// =========================================================
+
+function highPass(
+    signal,
+    fs,
+    cutoff
+) {
+
+    const dt =
+        1/fs;
+
+    const RC =
+        1 /
+        (
+            2*Math.PI*cutoff
+        );
+
+    const alpha =
+        RC /
+        (RC+dt);
+
+
+    const output =
+        new Array(
+            signal.length
+        );
+
+
+    output[0] =
+        signal[0];
+
+
+    for(
+        let i=1;
+        i<signal.length;
+        i++
+    ) {
+
+        output[i] =
+            alpha *
+            (
+                output[i-1] +
+                signal[i] -
+                signal[i-1]
+            );
+
+    }
+
+
+    return output;
+
+}
+
+
+// =========================================================
+// SIGNAL QUALITY
+// =========================================================
+
+function signalQuality(
+    signal
+) {
+
+    if(
+        signal.length<30
+    )
+        return 0;
+
+
+    let min=Infinity;
+    let max=-Infinity;
+
+
+    for(
+        const x of signal
+    ) {
+
+        min =
+            Math.min(
+                min,x
+            );
+
+        max =
+            Math.max(
+                max,x
+            );
+
+    }
+
+
+    const amplitude =
+        max-min;
+
+
+    if(
+        amplitude<=0
+    )
+        return 0;
+
+
+    let sum=0;
+
+
+    for(
+        const x of signal
+    )
+        sum+=x;
+
+
+    const mean =
+        sum/signal.length;
+
+
+    let variance=0;
+
+
+    for(
+        const x of signal
+    ) {
+
+        variance +=
+            (x-mean) *
+            (x-mean);
+
+    }
+
+
+    variance /=
+        signal.length;
+
+
+    const sd =
+        Math.sqrt(
+            variance
+        );
+
+
+    let q =
+        sd/amplitude*3;
+
+
+    return Math.max(
+        0,
+        Math.min(
+            1,
+            q
+        )
+    );
+
+}
+
+
+// =========================================================
+// GRAPH SIGNAL
+// =========================================================
+
+function rrSignalForGraph(fs) {
+
+    const recent =
+        samples.slice(
+            -Math.floor(
+                fs*25
+            )
+        );
+
+
+    if(
+        recent.length<10
+    )
+        return [];
+
+
+    let signal =
+        recent.map(
+            s=>s.chest
+        );
+
+
+    signal =
+        detrend(signal);
+
+
+    signal =
+        bandPass(
+            signal,
+            fs,
+            0.08,
+            0.55
+        );
+
+
+    return normalize(
+        signal
+    );
+
+}
+
+
+// =========================================================
+// DRAW GRAPH
+// =========================================================
+
+function drawGraph(
+    signal
+) {
+
+    gctx.clearRect(
+        0,
+        0,
+        graph.width,
+        graph.height
+    );
+
+
+    if(
+        signal.length<2
+    )
+        return;
+
+
+    const display =
+        signal.slice(
+            -500
+        );
+
+
+    let min =
+        Math.min(
+            ...display
+        );
+
+    let max =
+        Math.max(
+            ...display
+        );
+
+
+    if(
+        max-min<0.000001
+    )
+        return;
+
+
+    gctx.beginPath();
+
+
+    for(
+        let i=0;
+        i<display.length;
+        i++
+    ) {
+
+        const x =
+            i /
+            (display.length-1) *
+            graph.width;
+
+
+        const y =
+            graph.height -
+            (
+                (
+                    display[i]-min
+                ) /
+                (
+                    max-min
+                )
+            ) *
+            graph.height;
+
+
+        if(i===0)
+            gctx.moveTo(x,y);
+
+        else
+            gctx.lineTo(x,y);
+
+    }
+
+
+    gctx.strokeStyle =
+        "#38bdf8";
+
+    gctx.lineWidth=2;
+
+    gctx.stroke();
+
+}
+
+</script>
+
+</body>
+</html>
