@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>2. Send / Receive Page (Laptop B)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body{ background:#0b0f0e; color:#eaf3ee; font-family:monospace; display:flex; flex-direction:column; align-items:center; padding:20px; }
+  input[type=text]{ background:#111714; border:1px solid #1f2a26; color:#eaf3ee; padding:8px 12px; border-radius:6px; font-family:monospace; width:220px; }
+  button{ background:#111714; border:1px solid #4fe3a1; color:#4fe3a1; padding:8px 14px; border-radius:6px; cursor:pointer; font-family:monospace; }
+  .stage{ position:relative; width:300px; aspect-ratio:4/3; border:1px solid #1f2a26; border-radius:8px; overflow:hidden; background:#000; margin:10px 0; }
+  video, canvas.overlay{ position:absolute; top:0; left:0; width:100%; height:100%; transform:scaleX(-1); }
+  .card{ border:1px solid #1f2a26; padding:12px; border-radius:8px; background:#111714; text-align:center; width:220px; margin-top:15px; }
+  .img-box{ width:100%; aspect-ratio:4/3; border:1px solid #1f2a26; border-radius:6px; background:#000 center/cover no-repeat; margin:8px 0; }
+  #log{ margin-top:15px; width:min(400px, 90vw); border:1px solid #1f2a26; padding:10px; background:#080b0a; font-size:12px; color:#4fe3a1; border-radius:6px; min-height:35px; }
+</style>
+</head>
+<body>
+
+  <h2>2. Receive Page (Laptop B)</h2>
+  <div>
+    <input id="espIp" type="text" placeholder="ESP32 IP e.g. 10.113.188.152" />
+    <button onclick="saveIp()">Save IP</button>
+  </div>
+
+  <div class="stage">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="overlay" class="overlay"></canvas>
+  </div>
+  <div style="font-size:13px; color:#7f948b;">Show 🖐️ <b>OPEN PALM</b> to fetch photo from ESP32</div>
+
+  <div class="card">
+    <h3 style="font-size:12px; margin:0;">ESP32 Received Photo</h3>
+    <div id="wifiImg" class="img-box"></div>
+  </div>
+
+  <div id="log">Status: Initializing...</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+<script>
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const octx = overlay.getContext('2d');
+const espIpInput = document.getElementById('espIp');
+const wifiImg = document.getElementById('wifiImg');
+const logEl = document.getElementById('log');
+
+// Load saved IP address
+espIpInput.value = localStorage.getItem('esp32ip') || '';
+function saveIp(){ localStorage.setItem('esp32ip', espIpInput.value.trim()); log('IP Saved ✓'); }
+function log(msg){ logEl.innerText = 'Status: ' + msg; }
+
+// Function to detect Open Palm gesture
+function checkOpenPalm(lm) {
+  const wrist = lm[0];
+  let extended = 0;
+  for (const tipIdx of [8, 12, 16, 20]) {
+    if (Math.hypot(lm[tipIdx].x - wrist.x, lm[tipIdx].y - wrist.y) > 0.38) extended++;
+  }
+  return extended >= 3;
+}
+
+let isFetching = false;
+let lastFetchTime = 0;
+
+// Function to fetch the photo stored on the ESP32
+async function fetchFromESP32(){
+  const ip = localStorage.getItem('esp32ip');
+  if(!ip){ log('Please Enter & Save ESP32 IP!'); return; }
+
+  try {
+    isFetching = true;
+    log('Fetching image from ESP32...');
+
+    const res = await fetch(`http://${ip}/get-photo`);
+    if(res.ok){
+      const imgData = await res.text();
+      if(imgData.length > 50) {
+        wifiImg.style.backgroundImage = `url(${imgData})`;
+        log('Photo Received Successfully ✓');
+      } else {
+        log('No photo stored on ESP32 yet!');
+      }
+    } else {
+      log('ESP32 Status Error: ' + res.status);
+    }
+  } catch(e) {
+    log('Fetch Error: ' + e.message);
+  } finally {
+    setTimeout(() => { isFetching = false; }, 2500);
+  }
+}
+
+// Initialize MediaPipe Hands tracking
+const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
+hands.onResults(results => {
+  overlay.width = video.videoWidth; overlay.height = video.videoHeight;
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length) {
+    const lm = results.multiHandLandmarks[0];
+    if (checkOpenPalm(lm) && !isFetching && (Date.now() - lastFetchTime > 2500)) {
+      lastFetchTime = Date.now();
+      fetchFromESP32();
+    }
+  }
+});
+
+// Start camera feed
+const camera = new Camera(video, { onFrame: async () => await hands.send({image: video}), width: 320, height: 240 });
+camera.start();
+</script>
+</body>
+</html>
