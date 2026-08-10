@@ -1,117 +1,537 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>1. Capture Page (Laptop A)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
-  body{ background:#0b0f0e; color:#eaf3ee; font-family:monospace; display:flex; flex-direction:column; align-items:center; padding:20px; }
-  .stage{ position:relative; width:min(400px, 90vw); aspect-ratio:4/3; border:1px solid #1f2a26; border-radius:10px; overflow:hidden; background:#000; margin-top:10px; }
-  video, canvas.overlay{ position:absolute; top:0; left:0; width:100%; height:100%; transform:scaleX(-1); }
-  .preview{ margin-top:15px; width:180px; aspect-ratio:4/3; border:1px solid #4fe3a1; border-radius:6px; background:#000 center/cover no-repeat; }
-  .status{ margin:10px 0; color:#7f948b; font-size:14px; text-align:center; }
-  #log{ margin-top:15px; width:min(400px, 90vw); border:1px solid #1f2a26; padding:10px; background:#080b0a; font-size:12px; color:#4fe3a1; border-radius:6px; }
-  .flash{ position:absolute; inset:0; background:#4fe3a1; opacity:0; transition:opacity .1s; pointer-events:none; }
-  .flash.on{ opacity:0.5; }
+body {
+    background: #0b0f0e;
+    color: #eaf3ee;
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+.stage {
+    position: relative;
+    width: min(400px, 90vw);
+    aspect-ratio: 4/3;
+    border: 1px solid #1f2a26;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #000;
+    margin-top: 10px;
+}
+
+video,
+canvas.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+video,
+canvas.overlay {
+    transform: scaleX(-1);
+}
+
+.preview {
+    margin-top: 15px;
+    width: 180px;
+    aspect-ratio: 4/3;
+    border: 1px solid #4fe3a1;
+    border-radius: 6px;
+    background: #000 center/cover no-repeat;
+}
+
+.status {
+    margin: 10px 0;
+    color: #7f948b;
+    font-size: 14px;
+    text-align: center;
+}
+
+#log {
+    margin-top: 15px;
+    width: min(400px, 90vw);
+    border: 1px solid #1f2a26;
+    padding: 10px;
+    background: #080b0a;
+    font-size: 12px;
+    color: #4fe3a1;
+    border-radius: 6px;
+}
+
+.flash {
+    position: absolute;
+    inset: 0;
+    background: #4fe3a1;
+    opacity: 0;
+    transition: opacity .1s;
+    pointer-events: none;
+}
+
+.flash.on {
+    opacity: 0.5;
+}
+
+#startButton {
+    margin-top: 15px;
+    padding: 12px 20px;
+    background: #4fe3a1;
+    color: #07100c;
+    border: none;
+    border-radius: 6px;
+    font-family: monospace;
+    font-weight: bold;
+    cursor: pointer;
+}
 </style>
+
 </head>
+
 <body>
 
-  <h2>1. Capture Page (Laptop A)</h2>
-  <div class="status">Show ✊ <b>FIST</b> to capture photo</div>
+<h2>1. Capture Page (Laptop A)</h2>
 
-  <div class="stage">
-    <video id="video" playsinline autoplay muted></video>
-    <canvas id="overlay" class="overlay"></canvas>
-    <div id="flash" class="flash"></div>
-  </div>
+<div class="status">
+    Show ✊ <b>FIST</b> to capture photo
+</div>
 
-  <div class="preview" id="preview"></div>
-  <div id="log">Status: Initializing...</div>
+<div class="stage">
+    <video id="video"
+           playsinline
+           autoplay
+           muted>
+    </video>
 
-  <canvas id="grab" style="display:none"></canvas>
+```
+<canvas id="overlay" class="overlay"></canvas>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<div id="flash" class="flash"></div>
+```
+
+</div>
+
+<button id="startButton">START CAMERA</button>
+
+<div class="preview" id="preview"></div>
+
+<div id="log">Status: Initializing...</div>
+
+<canvas id="grab" style="display:none"></canvas>
+
+<!-- MediaPipe Hands -->
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 
 <script>
-const video = document.getElementById('video');
-const overlay = document.getElementById('overlay');
-const octx = overlay.getContext('2d');
-const grab = document.getElementById('grab');
-const gctx = grab.getContext('2d');
-const preview = document.getElementById('preview');
-const flashEl = document.getElementById('flash');
-const logEl = document.getElementById('log');
 
-function log(msg){ logEl.innerText = 'Status: ' + msg; }
+const video = document.getElementById("video");
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
 
-// Function to detect Fist gesture
-function checkFist(lm) {
-  const wrist = lm[0];
-  let curled = 0;
-  for (const tipIdx of [8, 12, 16, 20]) {
-    if (Math.hypot(lm[tipIdx].x - wrist.x, lm[tipIdx].y - wrist.y) < 0.30) curled++;
-  }
-  return curled >= 3;
+const grab = document.getElementById("grab");
+const gctx = grab.getContext("2d");
+
+const preview = document.getElementById("preview");
+const flashEl = document.getElementById("flash");
+const logEl = document.getElementById("log");
+const startButton = document.getElementById("startButton");
+
+function log(msg) {
+    logEl.innerText = "Status: " + msg;
+    console.log(msg);
 }
+
+
+/* -------------------------------------------------
+   CHECK CAMERA SUPPORT
+------------------------------------------------- */
+
+function checkCameraSupport() {
+
+    if (!window.isSecureContext) {
+        log("ERROR: Page is not a secure HTTPS context");
+        return false;
+    }
+
+    if (!navigator.mediaDevices) {
+        log("ERROR: navigator.mediaDevices unavailable");
+        return false;
+    }
+
+    if (!navigator.mediaDevices.getUserMedia) {
+        log("ERROR: getUserMedia unavailable");
+        return false;
+    }
+
+    return true;
+}
+
+
+/* -------------------------------------------------
+   START CAMERA
+------------------------------------------------- */
+
+async function startCamera() {
+
+    log("Checking camera...");
+
+    if (!checkCameraSupport()) {
+        return;
+    }
+
+    try {
+
+        log("Requesting camera permission...");
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+
+            video: {
+                facingMode: "user",
+                width: {
+                    ideal: 640
+                },
+                height: {
+                    ideal: 480
+                }
+            },
+
+            audio: false
+        });
+
+        console.log("Camera stream:", stream);
+
+        video.srcObject = stream;
+
+        video.onloadedmetadata = async () => {
+
+            console.log(
+                "Video:",
+                video.videoWidth,
+                "x",
+                video.videoHeight
+            );
+
+            await video.play();
+
+            log(
+                "Camera started ✓ " +
+                video.videoWidth +
+                "x" +
+                video.videoHeight
+            );
+
+            processVideo();
+        };
+
+    } catch (err) {
+
+        console.error(err);
+
+        log(
+            "Camera error: " +
+            err.name +
+            " - " +
+            err.message
+        );
+    }
+}
+
+
+/* -------------------------------------------------
+   FIST DETECTION
+------------------------------------------------- */
+
+function checkFist(lm) {
+
+    const wrist = lm[0];
+
+    let curled = 0;
+
+    for (const tipIdx of [8, 12, 16, 20]) {
+
+        const distance = Math.hypot(
+            lm[tipIdx].x - wrist.x,
+            lm[tipIdx].y - wrist.y
+        );
+
+        if (distance < 0.30) {
+            curled++;
+        }
+    }
+
+    return curled >= 3;
+}
+
+
+/* -------------------------------------------------
+   MEDIAPIPE
+------------------------------------------------- */
+
+const hands = new Hands({
+
+    locateFile: (file) => {
+        return "https://cdn.jsdelivr.net/npm/@mediapipe/hands/" + file;
+    }
+
+});
+
+hands.setOptions({
+
+    maxNumHands: 1,
+
+    modelComplexity: 1,
+
+    minDetectionConfidence: 0.6,
+
+    minTrackingConfidence: 0.6
+
+});
+
 
 let lastCap = 0;
 let isUploading = false;
 
-// Function to capture screenshot and upload directly to host ESP32
-async function takeScreenshotAndUpload(){
-  grab.width = 240; grab.height = 180;
-  gctx.save(); gctx.translate(grab.width, 0); gctx.scale(-1, 1);
-  gctx.drawImage(video, 0, 0, grab.width, grab.height); gctx.restore();
- 
-  const dataUrl = grab.toDataURL('image/jpeg', 0.3);
-  preview.style.backgroundImage = `url(${dataUrl})`;
- 
-  flashEl.classList.add('on');
-  setTimeout(() => flashEl.classList.remove('on'), 120);
 
-  try {
-    isUploading = true;
-    log('Uploading photo to ESP32...');
-    // Since page is hosted on ESP32 itself, relative path '/upload' works automatically
-    const ESP32_URL = "http://10.113.188.152";
+/* -------------------------------------------------
+   MEDIAPIPE RESULTS
+------------------------------------------------- */
 
-  const res = await fetch(`${ESP32_URL}/upload`, {
-        method: 'POST',
-      headers: {
-          'Content-Type': 'text/plain'
-      },
-      body: dataUrl
-  });    
-  if(res.ok) log('Photo Uploaded to ESP32 ✓');
-    else log('Upload Failed: ' + res.status);
-  } catch(e) {
-    log('Network Error: ' + e.message);
-  } finally {
-    setTimeout(() => { isUploading = false; }, 2500);
-  }
-}
-
-// Initialize MediaPipe Hands tracking
-const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
-hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
 hands.onResults(results => {
-  overlay.width = video.videoWidth; overlay.height = video.videoHeight;
-  octx.clearRect(0, 0, overlay.width, overlay.height);
- 
-  if (results.multiHandLandmarks && results.multiHandLandmarks.length) {
-    const lm = results.multiHandLandmarks[0];
-    if (checkFist(lm) && !isUploading && (Date.now() - lastCap > 2500)) {
-      lastCap = Date.now();
-      takeScreenshotAndUpload();
+
+    if (!video.videoWidth) {
+        return;
     }
-  }
+
+    overlay.width = video.videoWidth;
+    overlay.height = video.videoHeight;
+
+    octx.clearRect(
+        0,
+        0,
+        overlay.width,
+        overlay.height
+    );
+
+
+    if (
+        results.multiHandLandmarks &&
+        results.multiHandLandmarks.length
+    ) {
+
+        const lm =
+            results.multiHandLandmarks[0];
+
+        log("Hand detected ✓");
+
+
+        if (
+            checkFist(lm) &&
+            !isUploading &&
+            Date.now() - lastCap > 2500
+        ) {
+
+            lastCap = Date.now();
+
+            takeScreenshotAndUpload();
+        }
+
+    } else {
+
+        log("Camera running — show your hand");
+
+    }
+
 });
 
-// Start camera feed
-const camera = new Camera(video, { onFrame: async () => await hands.send({image: video}), width: 400, height: 300 });
-camera.start();
+
+/* -------------------------------------------------
+   PROCESS CAMERA FRAMES
+------------------------------------------------- */
+
+let processing = false;
+
+async function processVideo() {
+
+    if (
+        video.readyState >= 2 &&
+        !processing
+    ) {
+
+        processing = true;
+
+        try {
+
+            await hands.send({
+                image: video
+            });
+
+        } catch (err) {
+
+            console.error(
+                "MediaPipe error:",
+                err
+            );
+
+        }
+
+        processing = false;
+    }
+
+    requestAnimationFrame(processVideo);
+}
+
+
+/* -------------------------------------------------
+   CAPTURE + UPLOAD
+------------------------------------------------- */
+
+async function takeScreenshotAndUpload() {
+
+    const width = 320;
+
+    const height =
+        Math.round(
+            width *
+            video.videoHeight /
+            video.videoWidth
+        );
+
+    grab.width = width;
+    grab.height = height;
+
+
+    gctx.save();
+
+    gctx.translate(width, 0);
+    gctx.scale(-1, 1);
+
+    gctx.drawImage(
+        video,
+        0,
+        0,
+        width,
+        height
+    );
+
+    gctx.restore();
+
+
+    const dataUrl =
+        grab.toDataURL(
+            "image/jpeg",
+            0.3
+        );
+
+
+    preview.style.backgroundImage =
+        `url(${dataUrl})`;
+
+
+    flashEl.classList.add("on");
+
+    setTimeout(() => {
+        flashEl.classList.remove("on");
+    }, 120);
+
+
+    try {
+
+        isUploading = true;
+
+        log("Uploading photo to ESP32...");
+
+
+        const ESP32_URL =
+            "http://10.113.188.152";
+
+
+        const res =
+            await fetch(
+                `${ESP32_URL}/upload`,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "text/plain"
+                    },
+
+                    body: dataUrl
+                }
+            );
+
+
+        if (res.ok) {
+
+            log(
+                "Photo Uploaded to ESP32 ✓"
+            );
+
+        } else {
+
+            log(
+                "Upload Failed: " +
+                res.status
+            );
+        }
+
+    } catch (e) {
+
+        console.error(e);
+
+        log(
+            "Network Error: " +
+            e.message
+        );
+
+    } finally {
+
+        setTimeout(() => {
+            isUploading = false;
+        }, 2500);
+
+    }
+}
+
+
+/* -------------------------------------------------
+   BUTTON
+------------------------------------------------- */
+
+startButton.addEventListener(
+    "click",
+    startCamera
+);
+
+
+/* -------------------------------------------------
+   INITIAL CHECK
+------------------------------------------------- */
+
+if (checkCameraSupport()) {
+
+    log(
+        "Ready — tap START CAMERA"
+    );
+
+} else {
+
+    log(
+        "Camera API unavailable"
+    );
+}
+
 </script>
+
 </body>
 </html>
