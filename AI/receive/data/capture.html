@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Gesture Photo Grabber</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body { background:#0b0f0e; color:#eaf3ee; font-family:monospace; display:flex; flex-direction:column; align-items:center; padding:20px; }
+  .stage { position:relative; width:min(400px, 90vw); aspect-ratio:4/3; border:1px solid #1f2a26; border-radius:10px; overflow:hidden; background:#000; margin-top:10px; }
+  video, canvas.overlay { position:absolute; top:0; left:0; width:100%; height:100%; transform:scaleX(-1); }
+  canvas.overlay { pointer-events:none; }
+  .preview { margin-top:15px; width:180px; aspect-ratio:4/3; border:1px solid #4fe3a1; border-radius:6px; background:#000 center/cover no-repeat; position:relative; overflow:hidden; }
+  .preview .flashOverlay { position:absolute; inset:0; background:#4fe3a1; opacity:0; }
+  #log { margin-top:15px; width:min(400px, 90vw); border:1px solid #1f2a26; padding:10px; background:#080b0a; font-size:12px; color:#4fe3a1; border-radius:6px; }
+  #gestureLabel { margin-top:8px; font-size:14px; font-weight:bold; color:#4fe3a1; min-height:18px; letter-spacing:1px; }
+  .ipBox { margin-top:10px; font-size:12px; }
+  .ipBox input { background:#111714; border:1px solid #1f2a26; color:#4fe3a1; padding:4px 8px; border-radius:4px; font-family:monospace; }
+</style>
+</head>
+<body>
+
+  <h2>Gesture Photo Grabber</h2>
+  <div style="font-size:13px; color:#7f948b; text-align:center;">
+    Open hand 🖐️, then close into ✊ <b>FIST</b> & hold for 1 sec to grab!
+  </div>
+
+  <div class="ipBox">
+    ESP32 IP: <input type="text" id="espIp" placeholder="e.g. 192.168.1.50 or leave blank if on ESP32">
+  </div>
+
+  <div class="stage">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="fx" class="overlay"></canvas>
+  </div>
+
+  <div id="gestureLabel"></div>
+
+  <div class="preview" id="previewBox">
+    <div id="preview" style="position:absolute; inset:0; background:inherit;"></div>
+    <div class="flashOverlay" id="flashOverlay"></div>
+  </div>
+
+  <div id="log">Status: Initializing...</div>
+  <canvas id="grab" style="display:none"></canvas>
+
+<!-- MediaPipe Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+<script>
+const video = document.getElementById('video');
+const fx = document.getElementById('fx');
+const fctx = fx.getContext('2d');
+const grab = document.getElementById('grab');
+const gctx = grab.getContext('2d');
+const preview = document.getElementById('preview');
+const flashOverlay = document.getElementById('flashOverlay');
+const logEl = document.getElementById('log');
+const gestureLabel = document.getElementById('gestureLabel');
+const espIpInput = document.getElementById('espIp');
+
+function log(msg){ logEl.innerText = 'Status: ' + msg; }
+
+// 1 second timer for photo grab
+const HOLD_MS = 1000; 
+
+function isFist(lm) {
+  const fingerPairs = [[8, 6], [12, 10], [16, 14], [20, 18]];
+  let foldedFingers = 0;
+  for (const [tip, pip] of fingerPairs) {
+    if (lm[tip].y > lm[pip].y) foldedFingers++;
+  }
+  const wrist = lm[0];
+  let closeToWrist = 0;
+  for (const tip of [8, 12, 16, 20]) {
+    const distance = Math.hypot(lm[tip].x - wrist.x, lm[tip].y - wrist.y);
+    if (distance < 0.30) closeToWrist++;
+  }
+  return (foldedFingers >= 3 && closeToWrist >= 3);
+}
+
+function isOpenPalm(lm) {
+  const wrist = lm[0];
+  let extended = 0;
+  for (const tipIdx of [8, 12, 16, 20]) {
+    const distance = Math.hypot(lm[tipIdx].x - wrist.x, lm[tipIdx].y - wrist.y);
+    if (distance > 0.35) extended++;
+  }
+  return extended >= 3;
+}
+
+let prevState = null;   
+let holdStart = null;   
+let armed = true;       
+let isUploading = false;
+
+function classify(lm){
+  if (isFist(lm)) return 'closed';
+  if (isOpenPalm(lm)) return 'open';
+  return null;
+}
+
+let particles = [];
+let burstRing = null;
+let progressPoint = null; 
+
+function drawProgressRing(){
+  if (!progressPoint) return;
+  const { x, y, progress } = progressPoint;
+  const radius = 35;
+
+  fctx.beginPath();
+  fctx.arc(x, y, radius, 0, Math.PI * 2);
+  fctx.strokeStyle = 'rgba(79, 227, 161, 0.2)';
+  fctx.lineWidth = 5;
+  fctx.stroke();
+
+  fctx.beginPath();
+  fctx.arc(x, y, radius, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+  fctx.strokeStyle = '#4fe3a1';
+  fctx.lineWidth = 5;
+  fctx.lineCap = 'round';
+  fctx.stroke();
+}
+
+function spawnGrabBurst(cx, cy){
+  particles = [];
+  for (let i = 0; i < 35; i++){
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 70 + Math.random() * 50;
+    particles.push({
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius,
+      tx: cx, ty: cy,
+      progress: 0,
+      speed: 0.08 + Math.random() * 0.04,
+      size: 2.5 + Math.random() * 2.5
+    });
+  }
+  burstRing = { x: cx, y: cy, r: 8, alpha: 1 };
+  gestureLabel.innerText = '✊ GRABBED!';
+  setTimeout(() => { gestureLabel.innerText = ''; }, 1200);
+}
+
+function drawAndUpdateFx(){
+  fctx.clearRect(0, 0, fx.width, fx.height);
+  drawProgressRing();
+
+  particles.forEach(p => {
+    p.progress = Math.min(1, p.progress + p.speed);
+    const ease = 1 - Math.pow(1 - p.progress, 3);
+    const cx = p.x + (p.tx - p.x) * ease;
+    const cy = p.y + (p.ty - p.y) * ease;
+    const alpha = 1 - p.progress;
+    fctx.beginPath();
+    fctx.arc(cx, cy, p.size * (1 - p.progress * 0.4), 0, Math.PI * 2);
+    fctx.fillStyle = `rgba(79, 227, 161, ${alpha})`;
+    fctx.fill();
+  });
+  particles = particles.filter(p => p.progress < 1);
+
+  if (burstRing){
+    fctx.beginPath();
+    fctx.arc(burstRing.x, burstRing.y, burstRing.r, 0, Math.PI * 2);
+    fctx.strokeStyle = `rgba(79, 227, 161, ${burstRing.alpha})`;
+    fctx.lineWidth = 3;
+    fctx.stroke();
+    burstRing.r += 4;
+    burstRing.alpha -= 0.04;
+    if (burstRing.alpha <= 0) burstRing = null;
+  }
+
+  requestAnimationFrame(drawAndUpdateFx);
+}
+requestAnimationFrame(drawAndUpdateFx);
+
+async function takeScreenshotAndUpload(){
+  grab.width = 320;
+  grab.height = 240;
+
+  gctx.save();
+  gctx.translate(grab.width, 0);
+  gctx.scale(-1, 1);
+  gctx.drawImage(video, 0, 0, grab.width, grab.height);
+  gctx.restore();
+
+  const dataUrl = grab.toDataURL('image/jpeg', 0.4);
+  preview.style.backgroundImage = `url(${dataUrl})`;
+
+  flashOverlay.style.transition = 'none';
+  flashOverlay.style.opacity = '0.9';
+  requestAnimationFrame(() => {
+    flashOverlay.style.transition = 'opacity 300ms ease-out';
+    flashOverlay.style.opacity = '0';
+  });
+
+  const ip = espIpInput.value.trim();
+  const targetUrl = ip ? `http://${ip}/upload` : '/upload';
+
+  try {
+    isUploading = true;
+    log('Uploading photo...');
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: dataUrl
+    });
+    if (res.ok) log('Photo Grabbed & Uploaded ✓');
+  } catch (e) {
+    log('Grabbed locally (Upload failed: enter correct ESP32 IP)');
+  } finally {
+    setTimeout(() => { isUploading = false; }, 800);
+  }
+}
+
+const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+
+hands.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+
+hands.onResults(results => {
+  fx.width = video.videoWidth;
+  fx.height = video.videoHeight;
+
+  const landmarks = (results.multiHandLandmarks && results.multiHandLandmarks[0]) || null;
+  const state = landmarks ? classify(landmarks) : null;
+
+  if (state === 'open') {
+    prevState = 'open';
+    holdStart = null;
+    progressPoint = null;
+    armed = true; 
+    log('Open hand detected — Close into a fist ✊ to grab!');
+  }
+  else if (state === 'closed' && prevState === 'open' && armed && !isUploading) {
+    const wrist = landmarks[0];
+    const cx = (1 - wrist.x) * fx.width;
+    const cy = wrist.y * fx.height;
+
+    if (holdStart === null) holdStart = Date.now();
+    const elapsed = Date.now() - holdStart;
+    const progress = Math.min(1, elapsed / HOLD_MS);
+    progressPoint = { x: cx, y: cy, progress };
+    log(`Grabbing... ${Math.round(progress * 100)}%`);
+
+    if (progress >= 1) {
+      armed = false; 
+      progressPoint = null;
+      spawnGrabBurst(cx, cy);
+      takeScreenshotAndUpload();
+    }
+  }
+  else if (state === null) {
+    holdStart = null;
+    progressPoint = null;
+  }
+});
+
+const camera = new Camera(video, {
+  onFrame: async () => await hands.send({image: video}),
+  width: 400,
+  height: 300
+});
+camera.start();
+log('Camera active — Show open hand then make a fist!');
+</script>
+</body>
+</html>

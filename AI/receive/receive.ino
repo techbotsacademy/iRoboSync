@@ -8,11 +8,23 @@ const char* password = "87654321";
 WebServer server(80);
 String storedImage = "";
 
+void handleReceive() {
+  File file = LittleFS.open("/receive", "r");
+
+  if (!file) {
+    server.send(404, "text/plain", "receive.html not found in LittleFS!");
+    return;
+  }
+
+  server.streamFile(file, "text/html");
+  file.close();
+}
+
 // Function to serve index.html from LittleFS
 void handleRoot() {
-  File file = LittleFS.open("/index.html", "r");
+  File file = LittleFS.open("/capture.html", "r");
   if (!file) {
-    server.send(404, "text/plain", "index.html not found in LittleFS!");
+    server.send(404, "text/plain", "capture.html not found in LittleFS!");
     return;
   }
   server.streamFile(file, "text/html");
@@ -32,7 +44,7 @@ void setup() {
   // Connect to WiFi
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  
+
   Serial.print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -45,14 +57,15 @@ void setup() {
   // Enable CORS
   server.enableCORS(true);
 
-  // Serve LittleFS index.html on Root URL
+  // Serve LittleFS index.html on Root URL (this is the Capture page for Laptop A)
   server.on("/", HTTP_GET, handleRoot);
+  server.on("/receive.html", HTTP_GET, handleReceive);
 
   // OPTIONS Preflight Handlers for CORS
   server.on("/upload", HTTP_OPTIONS, []() {
     server.send(200, "text/plain", "OK");
   });
-  
+
   server.on("/get-photo", HTTP_OPTIONS, []() {
     server.send(200, "text/plain", "OK");
   });
@@ -68,7 +81,7 @@ void setup() {
     }
   });
 
-  // GET: Send image to Laptop B
+  // GET: Send image to Laptop B / Phone
   server.on("/get-photo", HTTP_GET, []() {
     if (storedImage.length() > 0) {
       server.send(200, "text/plain", storedImage);
