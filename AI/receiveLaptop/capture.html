@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grab Photo</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #0b0f0e;
+    color: #eaf3ee;
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+}
+
+h2 {
+    font-size: 18px;
+    margin: 6px;
+}
+
+.hint {
+    font-size: 13px;
+    color: #7f948b;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.stage {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    aspect-ratio: 4 / 3;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+}
+
+button {
+    margin-top: 14px;
+    padding: 14px 24px;
+    background: #4fe3a1;
+    border: none;
+    border-radius: 8px;
+    font-family: monospace;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#status {
+    margin-top: 14px;
+    color: #4fe3a1;
+    text-align: center;
+}
+
+#gesture {
+    margin-top: 8px;
+    min-height: 22px;
+    color: #4fe3a1;
+    text-align: center;
+    font-size: 15px;
+}
+
+canvas {
+    display: none;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Grab Photo</h2>
+
+<div class="hint">
+    ✊ Close your fist first, then 🖐️ open your palm for 2 seconds
+</div>
+
+<div class="stage">
+
+    <video
+        id="video"
+        autoplay
+        playsinline
+        muted>
+    </video>
+
+</div>
+
+<button id="startButton">
+    START CAMERA
+</button>
+
+<div id="gesture">
+    Waiting...
+</div>
+
+<div id="status">
+    Connecting to server...
+</div>
+
+<canvas id="canvas"></canvas>
+
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+
+<script>
+
+const video =
+    document.getElementById("video");
+
+const canvas =
+    document.getElementById("canvas");
+
+const startButton =
+    document.getElementById("startButton");
+
+const gesture =
+    document.getElementById("gesture");
+
+const status =
+    document.getElementById("status");
+
+
+let socket = null;
+let stream = null;
+let latestPhoto = null;
+
+let processing = false;
+
+let previousState = null;
+let holdStart = null;
+let triggered = false;
+
+const HOLD_MS = 2000;
+
+
+// ============================================================
+// WEBSOCKET
+// ============================================================
+
+function connectWebSocket() {
+
+    const protocol =
+        location.protocol === "https:"
+            ? "wss:"
+            : "ws:";
+
+    socket = new WebSocket(
+        `${protocol}//${location.host}`
+    );
+
+    socket.onopen = () => {
+
+        status.innerText =
+            "Server connected ✓";
+
+    };
+
+    socket.onclose = () => {
+
+        status.innerText =
+            "Server disconnected — reconnecting...";
+
+        setTimeout(
+            connectWebSocket,
+            2000
+        );
+
+    };
+
+    socket.onerror = (error) => {
+
+        console.error(
+            "WebSocket error:",
+            error
+        );
+
+        status.innerText =
+            "WebSocket error";
+
+    };
+
+    socket.onmessage = (event) => {
+
+        try {
+
+            const data =
+                JSON.parse(event.data);
+
+            /*
+             * Receiver can request the latest photo.
+             */
+
+            if (
+                data.type === "photo-request"
+            ) {
+
+                if (latestPhoto) {
+
+                    socket.send(
+                        JSON.stringify({
+                            type: "photo",
+                            data: latestPhoto
+                        })
+                    );
+
+                    status.innerText =
+                        "Latest photo sent ✓";
+
+                } else {
+
+                    status.innerText =
+                        "No photo captured yet";
+
+                }
+
+            }
+
+        } catch (error) {
+
+            console.error(
+                "WebSocket message error:",
+                error
+            );
+
+        }
+
+    };
+}
+
+
+// ============================================================
+// CAMERA
+// ============================================================
+
+async function startCamera() {
+
+    try {
+
+        status.innerText =
+            "Requesting camera...";
+
+        stream =
+            await navigator.mediaDevices.getUserMedia({
+
+                video: {
+                    width: {
+                        ideal: 640
+                    },
+                    height: {
+                        ideal: 480
+                    },
+                    facingMode: "user"
+                },
+
+                audio: false
+
+            });
+
+
+        video.srcObject =
+            stream;
+
+
+        await video.play();
+
+
+        status.innerText =
+            "Camera ready ✓";
+
+        startButton.style.display =
+            "none";
+
+
+        /*
+         * IMPORTANT:
+         * Start MediaPipe only after
+         * video is actually playing.
+         */
+
+        processVideo();
+
+
+    } catch (error) {
+
+        console.error(
+            "Camera error:",
+            error
+        );
+
+        status.innerText =
+            "Camera error: " +
+            error.message;
+
+    }
+
+}
+
+
+// ============================================================
+// HAND DETECTION
+// ============================================================
+
+function isFist(lm) {
+
+    const pairs = [
+        [8, 6],
+        [12, 10],
+        [16, 14],
+        [20, 18]
+    ];
+
+    let folded = 0;
+
+    for (
+        const [tip, pip]
+        of pairs
+    ) {
+
+        if (
+            lm[tip].y >
+            lm[pip].y
+        ) {
+
+            folded++;
+
+        }
+
+    }
+
+    return folded >= 3;
+}
+
+
+function isOpenPalm(lm) {
+
+    const wrist = lm[0];
+
+    let extended = 0;
+
+    for (
+        const tipIndex
+        of [8, 12, 16, 20]
+    ) {
+
+        const dx =
+            lm[tipIndex].x -
+            wrist.x;
+
+        const dy =
+            lm[tipIndex].y -
+            wrist.y;
+
+        const distance =
+            Math.sqrt(
+                dx * dx +
+                dy * dy
+            );
+
+        if (
+            distance > 0.38
+        ) {
+
+            extended++;
+
+        }
+
+    }
+
+    return extended >= 3;
+}
+
+
+function classify(lm) {
+
+    if (isFist(lm))
+        return "closed";
+
+    if (isOpenPalm(lm))
+        return "open";
+
+    return null;
+
+}
+
+
+// ============================================================
+// GRAB GESTURE
+//
+// ✊ FIRST
+//    ↓
+// 🖐️ OPEN
+//    ↓
+// HOLD 2 SECONDS
+//    ↓
+// CAPTURE + SEND
+// ============================================================
+
+// ============================================================
+// GRAB GESTURE
+//
+// 🖐️ OPEN PALM FIRST
+//        ↓
+// ✊ CLOSE FIST
+//        ↓
+// CAPTURE + SEND
+// ============================================================
+
+function handleGesture(state) {
+
+    // First action: OPEN PALM
+    if (state === "open") {
+
+        previousState = "open";
+
+        triggered = false;
+
+        gesture.innerText =
+            "🖐️ OPEN — READY TO GRAB";
+
+        return;
+    }
+
+
+    // Second action: CLOSE FIST
+    if (
+        state === "closed" &&
+        previousState === "open" &&
+        !triggered
+    ) {
+
+        triggered = true;
+
+        gesture.innerText =
+            "✊ GRAB!";
+
+        captureAndSend();
+
+        return;
+    }
+
+}
+
+// ============================================================
+// CAPTURE + SEND
+// ============================================================
+
+function captureAndSend() {
+
+    if (
+        !video.videoWidth ||
+        !video.videoHeight
+    ) {
+
+        status.innerText =
+            "Camera not ready";
+
+        return;
+
+    }
+
+
+    canvas.width =
+        video.videoWidth;
+
+    canvas.height =
+        video.videoHeight;
+
+
+    const ctx =
+        canvas.getContext("2d");
+
+
+    /*
+     * Mirror image because
+     * preview is mirrored.
+     */
+
+    ctx.translate(
+        canvas.width,
+        0
+    );
+
+    ctx.scale(-1, 1);
+
+
+    ctx.drawImage(
+        video,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    latestPhoto =
+        canvas.toDataURL(
+            "image/jpeg",
+            0.75
+        );
+
+
+    if (
+        socket &&
+        socket.readyState ===
+        WebSocket.OPEN
+    ) {
+
+        socket.send(
+            JSON.stringify({
+                type: "photo",
+                data: latestPhoto
+            })
+        );
+
+
+        status.innerText =
+            "📸 Photo captured and sent ✓";
+
+    } else {
+
+        status.innerText =
+            "WebSocket not connected";
+
+    }
+
+}
+
+
+// ============================================================
+// MEDIAPIPE
+// ============================================================
+
+const hands =
+    new Hands({
+
+        locateFile: (file) => {
+
+            return (
+                "https://cdn.jsdelivr.net/npm/@mediapipe/hands/" +
+                file
+            );
+
+        }
+
+    });
+
+
+hands.setOptions({
+
+    maxNumHands: 1,
+
+    modelComplexity: 1,
+
+    minDetectionConfidence: 0.6,
+
+    minTrackingConfidence: 0.6
+
+});
+
+
+hands.onResults((results) => {
+
+    if (
+        !results ||
+        !results.multiHandLandmarks ||
+        results.multiHandLandmarks.length === 0
+    ) {
+
+        /*
+         * Don't reset previousState here.
+         * The user may briefly move the hand.
+         */
+
+        return;
+
+    }
+
+
+    const landmarks =
+        results.multiHandLandmarks[0];
+
+
+    const state =
+        classify(landmarks);
+
+
+    handleGesture(state);
+
+});
+
+
+// ============================================================
+// VIDEO PROCESSING
+// ============================================================
+
+async function processVideo() {
+
+    if (
+        video.readyState >= 2 &&
+        !processing
+    ) {
+
+        processing = true;
+
+        try {
+
+            await hands.send({
+                image: video
+            });
+
+        } catch (error) {
+
+            console.error(
+                "MediaPipe processing error:",
+                error
+            );
+
+            status.innerText =
+                "MediaPipe error: " +
+                error.message;
+
+        }
+
+        processing = false;
+
+    }
+
+
+    requestAnimationFrame(
+        processVideo
+    );
+
+}
+
+
+// ============================================================
+// START
+// ============================================================
+
+startButton.addEventListener(
+    "click",
+    startCamera
+);
+
+connectWebSocket();
+
+</script>
+
+</body>
+</html>
