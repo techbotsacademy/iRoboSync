@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Elder Emergency Alert System</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #030712;
+      --card-bg: rgba(17, 24, 39, 0.65);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary-neon: #00f2fe;
+      --secondary-neon: #4facfe;
+      --danger-color: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.4);
+      --success-color: #10b981;
+      --text-main: #f9fafb;
+      --text-muted: #9ca3af;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+      position: relative;
+    }
+    #particle-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; }
+    .app-container {
+      position: relative; z-index: 1; width: 100%; max-width: 1200px;
+      padding: 2rem 1.5rem; display: flex; flex-direction: column; gap: 2rem;
+    }
+    header { text-align: center; margin-bottom: 1rem; }
+    .brand-title {
+      font-size: 2.5rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--primary-neon), var(--secondary-neon));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      letter-spacing: -0.025em; margin-bottom: 0.5rem;
+    }
+    .brand-subtitle { color: var(--text-muted); font-size: 1.05rem; font-weight: 400; }
+    .mic-stage-card {
+      background: var(--card-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border); border-radius: 24px; padding: 3rem 2rem;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); position: relative; overflow: hidden;
+    }
+    .mic-button-wrapper { position: relative; margin: 1.5rem 0; }
+    .mic-btn {
+      width: 120px; height: 120px; border-radius: 50%;
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border: 2px solid var(--primary-neon); color: var(--primary-neon);
+      display: flex; align-items: center; justify-content: center; cursor: pointer; outline: none;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.2); z-index: 2; position: relative;
+    }
+    .mic-btn svg { width: 48px; height: 48px; fill: currentColor; transition: transform 0.3s ease; }
+    .mic-btn:hover { transform: scale(1.05); box-shadow: 0 0 35px rgba(0, 242, 254, 0.5); }
+    .mic-btn.listening { border-color: var(--danger-color); color: var(--danger-color); animation: pulse-danger 1.5s infinite; }
+    @keyframes pulse-danger {
+      0% { box-shadow: 0 0 0 0 var(--danger-glow); }
+      70% { box-shadow: 0 0 0 30px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .waveform-visualizer { width: 100%; max-width: 400px; height: 60px; margin-top: 1rem; }
+    .speech-transcript-box { margin-top: 1.5rem; font-size: 1.25rem; font-weight: 500; color: var(--text-main); min-height: 2rem; text-align: center; }
+    .speech-transcript-box span { color: var(--primary-neon); }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; }
+    .glass-card {
+      background: var(--card-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border); border-radius: 16px; padding: 1.5rem;
+      display: flex; flex-direction: column; gap: 0.75rem; transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+    .glass-card:hover { transform: translateY(-4px); border-color: rgba(0, 242, 254, 0.3); }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between; color: var(--text-muted);
+      font-size: 0.875rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .card-value { font-size: 1.5rem; font-weight: 600; color: var(--text-main); }
+    .status-indicator { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background-color: var(--text-muted); }
+    .dot.active { background-color: var(--success-color); box-shadow: 0 0 10px var(--success-color); }
+    .dot.error { background-color: var(--danger-color); box-shadow: 0 0 10px var(--danger-color); }
+    .emergency-trigger-btn {
+      width: 100%; padding: 1rem; border-radius: 12px; border: none;
+      background: linear-gradient(135deg, #dc2626, #991b1b); color: #ffffff;
+      font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);
+    }
+    .emergency-trigger-btn:hover { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5); }
+    .emergency-trigger-btn:active { transform: scale(0.98); }
+    footer { text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: auto; padding: 1rem 0; }
+    @media (max-width: 768px) {
+      .brand-title { font-size: 1.875rem; }
+      .mic-btn { width: 100px; height: 100px; }
+      .mic-btn svg { width: 36px; height: 36px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="particle-canvas"></canvas>
+
+  <div class="app-container">
+    <header>
+      <h1 class="brand-title">AI Elder Emergency Alert System</h1>
+      <p class="brand-subtitle">Voice Activated Emergency Assistance — Node.js Local Edition</p>
+    </header>
+
+    <div class="mic-stage-card">
+      <div class="mic-button-wrapper">
+        <button id="micBtn" class="mic-btn" aria-label="Toggle Speech Recognition">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+        </button>
+      </div>
+      <canvas id="waveform" class="waveform-visualizer"></canvas>
+      <div class="speech-transcript-box" id="transcriptDisplay">
+        Click microphone and say <span style="color: var(--primary-neon);">"Help"</span> or <span style="color: var(--primary-neon);">"Emergency"</span>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <div class="glass-card">
+        <div class="card-header"><span>System Status</span><div id="sysDot" class="dot"></div></div>
+        <div id="sysStatusText" class="card-value">Initializing...</div>
+        <div class="status-indicator"><span id="wifiIpText" style="color: var(--text-muted);">Host: Loading...</span></div>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-header"><span>Telegram Link</span><div id="telegramDot" class="dot active"></div></div>
+        <div class="card-value">BOT API</div>
+        <div class="status-indicator"><span style="color: var(--text-muted);">Server-side HTTPS relay</span></div>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-header"><span>Last Speech Heard</span></div>
+        <div id="lastSpeechText" class="card-value" style="font-size: 1.1rem; word-break: break-all;">None</div>
+        <div class="status-indicator"><span id="lastSpeechTimeText" style="color: var(--text-muted);">Timestamp: --:--</span></div>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-header"><span>Total Alerts Dispatched</span></div>
+        <div id="emergencyCountText" class="card-value">0</div>
+        <button id="manualTriggerBtn" class="emergency-trigger-btn">MANUAL PANIC OVERRIDE</button>
+      </div>
+    </div>
+
+    <footer>Node.js + Express Local Server &bull; Browser Speech Recognition &bull; Server-side Telegram Dispatch</footer>
+  </div>
+
+  <script>
+    // Background particle canvas
+    const canvas = document.getElementById('particle-canvas');
+    const ctx = canvas.getContext('2d');
+    let particlesArray = [];
+    function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    class Particle {
+      constructor() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.size = Math.random() * 2 + 1;
+        this.speedX = (Math.random() - 0.5) * 0.8;
+        this.speedY = (Math.random() - 0.5) * 0.8;
+      }
+      update() {
+        this.x += this.speedX; this.y += this.speedY;
+        if (this.x > canvas.width) this.x = 0; else if (this.x < 0) this.x = canvas.width;
+        if (this.y > canvas.height) this.y = 0; else if (this.y < 0) this.y = canvas.height;
+      }
+      draw() {
+        ctx.fillStyle = 'rgba(0, 242, 254, 0.3)';
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    function initParticles() {
+      particlesArray = [];
+      const count = Math.floor((canvas.width * canvas.height) / 15000);
+      for (let i = 0; i < count; i++) particlesArray.push(new Particle());
+    }
+    initParticles();
+    function animateParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < particlesArray.length; i++) {
+        particlesArray[i].update(); particlesArray[i].draw();
+        for (let j = i; j < particlesArray.length; j++) {
+          const dx = particlesArray[i].x - particlesArray[j].x;
+          const dy = particlesArray[i].y - particlesArray[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 100) {
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(0, 242, 254, ${0.15 - dist / 1000})`;
+            ctx.lineWidth = 0.5;
+            ctx.moveTo(particlesArray[i].x, particlesArray[i].y);
+            ctx.lineTo(particlesArray[j].x, particlesArray[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(animateParticles);
+    }
+    animateParticles();
+
+    // Audio waveform visualizer
+    const waveCanvas = document.getElementById('waveform');
+    const waveCtx = waveCanvas.getContext('2d');
+    let audioCtx, analyser, dataArray, sourceNode;
+    function initAudioVisualizer(stream) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      sourceNode = audioCtx.createMediaStreamSource(stream);
+      sourceNode.connect(analyser);
+      analyser.fftSize = 64;
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+      drawWaveform();
+    }
+    function drawWaveform() {
+      requestAnimationFrame(drawWaveform);
+      if (!analyser) return;
+      waveCanvas.width = waveCanvas.offsetWidth;
+      waveCanvas.height = waveCanvas.offsetHeight;
+      analyser.getByteFrequencyData(dataArray);
+      waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+      const barWidth = (waveCanvas.width / dataArray.length) * 2.5;
+      let x = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const barHeight = (dataArray[i] / 255) * waveCanvas.height;
+        waveCtx.fillStyle = `rgba(0, 242, 254, ${dataArray[i] / 255 + 0.2})`;
+        waveCtx.fillRect(x, waveCanvas.height - barHeight, barWidth - 2, barHeight);
+        x += barWidth;
+      }
+    }
+
+    // Speech recognition + emergency keyword detection
+    const emergencyKeywords = ['help', 'help me', 'emergency', 'please help', 'save me', 'need help', 'sos'];
+    const micBtn = document.getElementById('micBtn');
+    const transcriptDisplay = document.getElementById('transcriptDisplay');
+    let recognition;
+    let isListening = false;
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        isListening = true;
+        micBtn.classList.add('listening');
+        transcriptDisplay.innerHTML = 'Listening... Speak clearly.';
+      };
+      recognition.onerror = (event) => {
+        console.error('Speech Recognition Error:', event.error);
+        if (event.error !== 'no-speech') {
+          transcriptDisplay.innerHTML = `<span style="color: var(--danger-color);">Mic Error: ${event.error}</span>`;
+        }
+      };
+      recognition.onend = () => {
+        if (isListening) { try { recognition.start(); } catch (e) {} }
+        else { micBtn.classList.remove('listening'); }
+      };
+      recognition.onresult = (event) => {
+        let interim = '', final = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) final += event.results[i][0].transcript;
+          else interim += event.results[i][0].transcript;
+        }
+        const currentSpeech = (final || interim).toLowerCase().trim();
+        if (currentSpeech.length > 0) {
+          transcriptDisplay.innerHTML = `Recognized: "<span>${currentSpeech}</span>"`;
+          checkEmergencyPhrase(currentSpeech);
+        }
+      };
+    } else {
+      transcriptDisplay.innerHTML = '<span style="color: var(--danger-color);">Web Speech API Not Supported in this Browser (use Chrome or Edge)</span>';
+    }
+
+    micBtn.addEventListener('click', async () => {
+      if (!recognition) return;
+      if (isListening) {
+        isListening = false;
+        recognition.stop();
+        micBtn.classList.remove('listening');
+        transcriptDisplay.innerHTML = 'Listening Stopped. Click to reactivate.';
+      } else {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          initAudioVisualizer(stream);
+          recognition.start();
+        } catch (err) {
+          alert('Microphone Access Denied: ' + err.message);
+        }
+      }
+    });
+
+    let lastTriggerTime = 0;
+    function checkEmergencyPhrase(transcript) {
+      const matched = emergencyKeywords.some((keyword) => new RegExp(`\\b${keyword}\\b`, 'i').test(transcript));
+      if (matched) {
+        const now = Date.now();
+        if (now - lastTriggerTime > 6000) {
+          lastTriggerTime = now;
+          dispatchEmergencyAlert(transcript);
+        }
+      }
+    }
+
+    async function dispatchEmergencyAlert(phrase) {
+      transcriptDisplay.innerHTML = '<span style="color: var(--danger-color); font-weight:700;">⚠ EMERGENCY DETECTED! DISPATCHING...</span>';
+      try {
+        const response = await fetch('/emergency', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phrase }),
+        });
+        const data = await response.json();
+        if (data.status === 'success') {
+          transcriptDisplay.innerHTML = '<span style="color: var(--success-color); font-weight:700;">✓ EMERGENCY ALERT SENT!</span>';
+        } else {
+          transcriptDisplay.innerHTML = `<span style="color: var(--danger-color);">Alert Error: ${data.message || 'unknown'}</span>`;
+        }
+      } catch (err) {
+        console.error('Transmission error:', err);
+        transcriptDisplay.innerHTML = '<span style="color: var(--danger-color);">Failed to reach local server!</span>';
+      }
+    }
+
+    document.getElementById('manualTriggerBtn').addEventListener('click', () => {
+      dispatchEmergencyAlert('Manual Emergency Button Pressed');
+    });
+
+    async function pollTelemetry() {
+      try {
+        const res = await fetch('/status');
+        if (!res.ok) throw new Error('HTTP Status Error');
+        const data = await res.json();
+        document.getElementById('sysStatusText').innerText = data.system;
+        document.getElementById('wifiIpText').innerText = `Host: ${data.ip}`;
+        document.getElementById('lastSpeechText').innerText = data.last_phrase;
+        document.getElementById('lastSpeechTimeText').innerText = `Alert Time: ${data.last_alert}`;
+        document.getElementById('emergencyCountText').innerText = data.total_alerts;
+        document.getElementById('sysDot').className = 'dot active';
+      } catch (e) {
+        document.getElementById('sysStatusText').innerText = 'Disconnected';
+        document.getElementById('sysDot').className = 'dot error';
+      }
+    }
+    setInterval(pollTelemetry, 3000);
+    pollTelemetry();
+  </script>
+</body>
+</html>
