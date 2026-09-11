@@ -1,0 +1,1 @@
+Create a minimal Node.js static server and package.json. Return ONLY two complete files: server.js and package.json (no extra explanation).

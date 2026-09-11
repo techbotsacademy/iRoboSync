@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Fruit Ninja - Touch + Camera Fingertip (2s bounce)</title>
+
+<!-- MediaPipe scripts (Camera utils + Hands) -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<style>
+  :root{
+    --bg:#0c1221;
+    --panel-bg: rgba(0,0,0,0.35);
+    --accent: #ffcb05;
+    --text: #fff;
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    background: radial-gradient(1200px 600px at 10% 10%, #10203a 0%, #071026 30%, var(--bg) 100%);
+    color:var(--text);
+    -webkit-tap-highlight-color: transparent;
+    user-select:none;
+    touch-action: none; /* prevent page scroll while slicing */
+  }
+
+  canvas{
+    display:block;
+    width:100vw;
+    height:100vh;
+  }
+
+  .hud{
+    position:fixed;
+    left:16px;
+    top:16px;
+    z-index:10;
+    display:flex;
+    gap:12px;
+    align-items:center;
+    backdrop-filter: blur(6px);
+    background:var(--panel-bg);
+    padding:8px 12px;
+    border-radius:10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+  }
+
+  .score{
+    font-size:18px;
+    font-weight:700;
+    color:var(--accent);
+  }
+
+  .lives{
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+
+  .centerOverlay{
+    position:fixed;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    z-index:20;
+    text-align:center;
+    color:var(--text);
+  }
+
+  .btn {
+    appearance:none;
+    background:linear-gradient(180deg,#ff7a6b,#ff3e2a);
+    border:0;
+    padding:10px 18px;
+    color:white;
+    font-weight:700;
+    border-radius:10px;
+    cursor:pointer;
+    box-shadow:0 6px 18px rgba(255,60,40,0.24);
+    margin-top:12px;
+  }
+
+  .small {
+    font-size:13px;
+    opacity:0.9;
+  }
+
+  .game-over {
+    background:rgba(0,0,0,0.6);
+    padding:18px 26px;
+    border-radius:12px;
+    display:inline-block;
+  }
+
+  @media (max-width:600px){
+    .hud{left:8px; top:8px; padding:6px 10px;}
+    .score{font-size:16px;}
+  }
+</style>
+</head>
+<body>
+  <div class="hud" id="hud">
+    <div class="score" id="score">Score: 0</div>
+    <div class="lives" id="lives"></div>
+  </div>
+
+  <div class="centerOverlay" id="startScreen">
+    <div style="font-size:34px; font-weight:800; margin-bottom:6px">Fruit Ninja (Touch + Camera)</div>
+    <div class="small">Slice the fruits with your finger (touch) or by moving a fingertip in front of your camera. Mouse won't slice.</div>
+    <button class="btn" id="startBtn">Start Game</button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Hidden video for MediaPipe camera input (kept hidden to preserve layout) -->
+  <video id="mpVideo" playsinline style="display:none;"></video>
+
+<script>
+(() => {
+  // CONFIG
+  const SPAWN_INTERVAL = 900; // ms (spawn attempt)
+  const TRAIL_LIFETIME = 300; // ms (touch/hand trail)
+  const PARTICLE_COUNT = 18;
+  const MAX_MISSED = 3;
+  const FRUIT_RADIUS = 28;
+
+  // Horizontal speed (px/sec) range
+  const FRUIT_HORZ_MIN = -80;
+  const FRUIT_HORZ_MAX = 80;
+
+  // Canvas setup
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d', { alpha: true });
+  let W = canvas.width = innerWidth;
+  let H = canvas.height = innerHeight;
+  function resize(){
+    W = canvas.width = innerWidth;
+    H = canvas.height = innerHeight;
+  }
+  addEventListener('resize', resize);
+
+  // HUD
+  const scoreEl = document.getElementById('score');
+  const livesEl = document.getElementById('lives');
+  const startScreen = document.getElementById('startScreen');
+  const startBtn = document.getElementById('startBtn');
+
+  // State
+  let fruits = [];
+  let particles = [];
+  let slices = [];
+  let pointerTrail = []; // {x,y,t}
+  let lastTouch = null;
+  let lastHand = null;
+  let score = 0;
+  let missed = 0;
+  let running = false;
+  let spawnTimer = null;
+  let lastTime = 0;
+  let gameOver = false;
+
+  // MediaPipe objects
+  let handsProcessor = null;
+  let mpCamera = null;
+  const mpVideo = document.getElementById('mpVideo');
+
+  // Utils
+  function rand(min, max){ return Math.random()*(max-min)+min; }
+  function randInt(min,max){ return Math.floor(rand(min,max+1)); }
+  function now(){ return performance.now(); }
+
+  // Fruit types
+  const FRUIT_TYPES = [
+    { name:'apple', color:['#e44d42','#a72a2a'], seeds: true },
+    { name:'orange', color:['#ff9f43','#ff7f24'], seeds: false },
+    { name:'kiwi', color:['#b3e28a','#3a6b2a'], seeds: true },
+    { name:'melon', color:['#ff8fb1','#d93b6b'], seeds: false },
+  ];
+
+  // Spawn fruit ensuring time-to-apex ~ 1s (so full bounce ~2s)
+  function spawnFruit(){
+    const startX = rand(60, W-60);
+    const startY = H + 40;
+    const apexMin = H * 0.25;
+    const apexMax = H * 0.75;
+    const apexY = rand(apexMin, apexMax);
+    const displacement = startY - apexY; // positive px
+    // For t_up = 1s -> g = 2 * displacement (px/s^2)
+    const gravity = Math.max(200, 2 * displacement); // clamp to avoid extremely small g
+    // initial vy so that it reaches apex in ~1s (vy0 = -g * t_up)
+    const vy0 = -gravity * 1.0;
+    // horizontal speed in px/sec (slower overall)
+    const vx = rand(FRUIT_HORZ_MIN, FRUIT_HORZ_MAX);
+    const type = FRUIT_TYPES[randInt(0, FRUIT_TYPES.length-1)];
+    const fruit = {
+      id: Math.random().toString(36).slice(2,9),
+      x: startX, y: startY, vx, vy: vy0,
+      radius: FRUIT_RADIUS,
+      gravity: gravity,
+      rotated: 0,
+      rotSpeed: rand(-2.2, 2.2) * Math.PI / 180,
+      sliced: false,
+      color: type.color,
+      type: type,
+      createdAt: now(),
+    };
+    fruits.push(fruit);
+  }
+
+  function spawnParticles(x,y,color, count = PARTICLE_COUNT){
+    for(let i=0;i<count;i++){
+      const ang = rand(0, Math.PI*2);
+      const sp = rand(40,220); // px/sec
+      particles.push({
+        x, y,
+        vx: Math.cos(ang)*sp,
+        vy: Math.sin(ang)*sp,
+        life: rand(400,1100),
+        born: now(),
+        color: color,
+        size: rand(2,5),
+      });
+    }
+  }
+
+  function sliceFruit(fruit, px, py, vx, vy){
+    if(fruit.sliced) return;
+    fruit.sliced = true;
+    score += 1;
+    scoreEl.textContent = 'Score: ' + score;
+    spawnParticles(fruit.x, fruit.y, fruit.color[1]);
+    const splitSpeed = 120 + Math.hypot(vx,vy) * 0.6; // px/sec
+    // create slice halves (velocities in px/sec)
+    slices.push({
+      x: fruit.x, y: fruit.y,
+      ax: fruit.vx - splitSpeed * 0.6,
+      ay: fruit.vy - splitSpeed * 0.6,
+      bx: fruit.x, by: fruit.y,
+      bxv: fruit.vx + splitSpeed * 0.6,
+      byv: fruit.vy + splitSpeed * 0.6,
+      rotA: rand(-5,5) * Math.PI/180,
+      rotB: rand(-5,5) * Math.PI/180,
+      color: fruit.color,
+      born: now(),
+      life: 1400
+    });
+  }
+
+  // Distance from point to segment
+  function pointSegmentDistance(px,py,x1,y1,x2,y2){
+    const A = px-x1, B = py-y1, C = x2-x1, D = y2-y1;
+    const dot = A*C + B*D;
+    const len_sq = C*C + D*D;
+    let param = -1;
+    if(len_sq !== 0) param = dot/len_sq;
+    let xx, yy;
+    if(param < 0){ xx = x1; yy = y1; }
+    else if(param > 1){ xx = x2; yy = y2; }
+    else { xx = x1 + param*C; yy = y1 + param*D; }
+    const dx = px-xx, dy = py-yy;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+
+  // TOUCH input handling (still supported)
+  addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const p = getPointerPos(t);
+    lastTouch = p;
+    pointerTrail.push({x:p.x, y:p.y, t: now()});
+  }, {passive:false});
+
+  addEventListener('touchmove', e=>{
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const p = getPointerPos(t);
+    if(!lastTouch) lastTouch = p;
+    pointerTrail.push({x:p.x, y:p.y, t: now()});
+    processSliceSegment(lastTouch.x,lastTouch.y,p.x,p.y);
+    lastTouch = p;
+  }, {passive:false});
+
+  addEventListener('touchend', e=>{
+    e.preventDefault();
+    lastTouch = null;
+  }, {passive:false});
+
+  // Ignore mouse slicing. Keep mouse events inert.
+  addEventListener('mousedown', ()=>{});
+  addEventListener('mousemove', ()=>{});
+  addEventListener('mouseup', ()=>{});
+
+  function getPointerPos(e){
+    return { x: e.clientX, y: e.clientY };
+  }
+
+  function processSliceSegment(x1,y1,x2,y2){
+    // vx,vy in px/sec approximated
+    const vx = (x2 - x1) * 8;
+    const vy = (y2 - y1) * 8;
+    for(const fruit of fruits){
+      if(fruit.sliced) continue;
+      const dist = pointSegmentDistance(fruit.x, fruit.y, x1,y1,x2,y2);
+      if(dist <= fruit.radius){
+        sliceFruit(fruit, (x1+x2)/2, (y1+y2)/2, vx, vy);
+      }
+    }
+  }
+// Replace your onHandsResults with this (keeps mapping & pointerTrail pushes)
+function onHandsResults(results){
+  // If the game isn't running, still update lastHand so the user can test camera,
+  // but skip slicing if you prefer (we process slices only when pointerTrail grows).
+  if(!results || !results.multiHandLandmarks || results.multiHandLandmarks.length === 0){
+    lastHand = null;
+    return;
+  }
+
+  // Use first detected hand; index-fingertip is landmark 8
+  const lm = results.multiHandLandmarks[0][8];
+  if(!lm) return;
+
+  // Map normalized landmark x/y to canvas coords and mirror x to match front camera view
+  const x = (1 - lm.x) * W;
+  const y = lm.y * H;
+  const t = now();
+  const p = { x, y, t };
+
+  // Add to pointer trail (this will be drawn as a trail)
+  // Only add if movement is noticeable to reduce noise
+  if (lastHand) {
+    const dx = x - lastHand.x;
+    const dy = y - lastHand.y;
+    if (Math.hypot(dx, dy) > 1.5) {
+      pointerTrail.push(p);
+      // Also process slice segment so camera movement can cut fruits
+      processSliceSegment(lastHand.x, lastHand.y, x, y);
+    }
+  } else {
+    pointerTrail.push(p);
+  }
+
+  lastHand = { x, y, t };
+}
+// Helper to load a script and await it
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    // if already loaded, resolve
+    if (Array.from(document.scripts).some(s => s.src && s.src.includes(src))) {
+      // allow some time for global to appear if script was just added
+      return setTimeout(resolve, 50);
+    }
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = false; // preserve order
+    s.onload = () => resolve();
+    s.onerror = (e) => reject(new Error('Failed to load ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+// Ensure MediaPipe camera_utils + hands are available
+async function ensureMediaPipeLoaded() {
+  if (window.Hands && window.Camera) return;
+  // load camera utils first
+  await loadScriptOnce('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+  // then hands (pin a known version to avoid breaking changes)
+  await loadScriptOnce('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js');
+  // wait briefly for globals to be set
+  await new Promise(r => setTimeout(r, 20));
+  if (!window.Hands || !window.Camera) {
+    throw new Error('MediaPipe scripts loaded but Hands/Camera global not found');
+  }
+}
+
+// safer startMediaPipe that loads libs if needed
+async function startMediaPipe(){
+  // load libs if Hands isn't defined yet
+  try {
+    await ensureMediaPipeLoaded();
+  } catch(err){
+    console.warn('Could not load MediaPipe libraries:', err);
+    throw err;
+  }
+
+  // If already started, return
+  if (handsProcessor) return;
+
+  // Now handsProcessor class is available as `Hands`
+  handsProcessor = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
+  });
+  handsProcessor.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.5
+  });
+  handsProcessor.onResults(onHandsResults);
+
+  // Create camera AFTER handsProcessor exists
+  mpCamera = new Camera(mpVideo, {
+    onFrame: async () => {
+      if (!handsProcessor) return;
+      if (!mpVideo || mpVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      try {
+        await handsProcessor.send({image: mpVideo});
+      } catch (err) {
+        console.warn('MediaPipe send() error (ignored):', err);
+      }
+    },
+    width: 640,
+    height: 480,
+    facingMode: 'user'
+  });
+
+  try {
+    await mpCamera.start();
+  } catch (err) {
+    console.warn('Camera start failed:', err);
+    stopMediaPipe();
+    throw err;
+  }
+}
+
+// Safe stop: stop camera first, then close hands
+function stopMediaPipe(){
+  try {
+    if (mpCamera && typeof mpCamera.stop === 'function') mpCamera.stop();
+  } catch(e){ console.warn('Error stopping camera', e); }
+  mpCamera = null;
+
+  try {
+    if (handsProcessor && typeof handsProcessor.close === 'function') handsProcessor.close();
+  } catch(e){ console.warn('Error closing Hands processor', e); }
+  handsProcessor = null;
+  lastHand = null;
+}
+
+  // Update & Render (time-based)
+  function update(dt){
+    // dt in seconds
+    // fruits
+    for(let i=fruits.length-1;i>=0;i--){
+      const f = fruits[i];
+      if(f.sliced){
+        fruits.splice(i,1);
+        continue;
+      }
+      // update velocities (gravity in px/s^2)
+      f.vy += f.gravity * dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.rotated += f.rotSpeed;
+      // off bottom -> missed
+      if(f.y - f.radius > H + 40){
+        fruits.splice(i,1);
+        missed += 1;
+        updateLives();
+        if(missed >= MAX_MISSED) endGame();
+      }
+    }
+
+    // slices (halves) - velocities in px/sec
+    for(let i=slices.length-1;i>=0;i--){
+      const s = slices[i];
+      // simple gravity effect
+      s.ay += 800 * dt; // px/s^2 downward for halves (tunable)
+      s.byv += 800 * dt;
+      s.x += s.ax * dt;
+      s.y += s.ay * dt;
+      s.bx += s.bxv * dt;
+      s.by += s.byv * dt;
+      s.rotA += s.rotA * dt * 8;
+      s.rotB += s.rotB * dt * 8;
+      if(now() - s.born > s.life) slices.splice(i,1);
+    }
+
+    // particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      const age = now() - p.born;
+      if(age > p.life){
+        particles.splice(i,1);
+        continue;
+      }
+      p.vy += 800 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.995;
+      p.vy *= 0.995;
+    }
+
+    // trim pointer trail
+    const cutoff = now() - TRAIL_LIFETIME;
+    while(pointerTrail.length && pointerTrail[0].t < cutoff) pointerTrail.shift();
+  }
+
+// Replace your draw() with this to render camera + game + fingertip marker
+function draw(){
+  // Clear
+  ctx.clearRect(0,0,W,H);
+
+  // Draw camera frame first (if available)
+  if (mpVideo && mpVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    ctx.save();
+    // Mirror the video horizontally so it feels natural to the user
+    ctx.translate(W, 0);
+    ctx.scale(-1, 1);
+    // Use partial transparency so fruits remain visible
+    ctx.globalAlpha = 0.42;
+    ctx.drawImage(mpVideo, 0, 0, W, H);
+    ctx.globalAlpha = 1.0;
+    ctx.restore();
+
+    // Darken slightly so fruits and UI pop
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(0, 0, W, H);
+  } else {
+    // Optional subtle background when no camera frame
+    ctx.fillStyle = 'rgba(6,10,20,0.18)';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Draw fruits
+  for(const f of fruits) drawFruit(f);
+
+  // Draw slices (halves)
+  for(const s of slices) drawFruitHalves(s);
+
+  // Draw particles
+  for(const p of particles){
+    const t = (now() - p.born) / p.life;
+    ctx.globalAlpha = Math.max(0, 1 - t);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw touch/hand trail and last-hand marker
+  drawTrail();
+
+  // Extra: draw a clear fingertip marker for lastHand so it's obvious
+  if (lastHand) {
+    const markerAlpha = 0.95;
+    ctx.save();
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(0,200,255,${markerAlpha})`; // cyan marker
+    ctx.strokeStyle = `rgba(255,255,255,0.9)`;
+    ctx.lineWidth = 2;
+    ctx.arc(lastHand.x, lastHand.y, 12, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+  function drawFruit(f){
+    const x = f.x, y = f.y, r = f.radius;
+    const grad = ctx.createRadialGradient(x - r*0.3, y - r*0.35, r*0.1, x, y, r*1.1);
+    grad.addColorStop(0, f.color[0]);
+    grad.addColorStop(1, f.color[1]);
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(f.rotated);
+    ctx.translate(-x,-y);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+    // highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(x - r*0.3, y - r*0.45, r*0.28, r*0.16, 0, 0, Math.PI*2);
+    ctx.fill();
+    // stem
+    ctx.fillStyle = '#3b2b12';
+    ctx.fillRect(x + r*0.5, y - r*0.9, r*0.12, r*0.4);
+    // seeds if any
+    if(f.type.seeds){
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      for(let i=0;i<6;i++){
+        const ang = i/6 * Math.PI*2 + (f.rotated*0.6);
+        const sx = x + Math.cos(ang)*r*0.28;
+        const sy = y + Math.sin(ang)*r*0.28;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, r*0.06, r*0.04, ang+0.2, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawFruitHalves(s){
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(s.rotA);
+    drawHalf(0,0,s.color, -1);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(s.bx, s.by);
+    ctx.rotate(s.rotB);
+    drawHalf(0,0,s.color, 1);
+    ctx.restore();
+
+    function drawHalf(x,y,color, side){
+      const r = FRUIT_RADIUS;
+      ctx.beginPath();
+      const start = side === -1 ? Math.PI*0.5 : -Math.PI*0.5;
+      const end = side === -1 ? Math.PI*1.5 : Math.PI*0.5;
+      ctx.fillStyle = createGrad(x,y,color, side);
+      ctx.moveTo(x,y);
+      ctx.arc(x, y, r, start, end, side===1 ? true : false);
+      ctx.closePath();
+      ctx.fill();
+      // inner flesh
+      ctx.beginPath();
+      ctx.fillStyle = '#fce7e7';
+      if(side === -1){
+        ctx.moveTo(x, y);
+        ctx.arc(x, y, r*0.7, Math.PI*0.5, Math.PI*1.5);
+      } else {
+        ctx.moveTo(x, y);
+        ctx.arc(x, y, r*0.7, -Math.PI*0.5, Math.PI*0.5);
+      }
+      ctx.fill();
+    }
+    function createGrad(x,y,color, side){
+      const g = ctx.createRadialGradient(x - FRUIT_RADIUS*0.2, y - FRUIT_RADIUS*0.2, FRUIT_RADIUS*0.1, x, y, FRUIT_RADIUS*1.2);
+      g.addColorStop(0, color[0]);
+      g.addColorStop(1, color[1]);
+      return g;
+    }
+  }
+
+  function drawTrail(){
+    if(pointerTrail.length < 1) return;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // segments
+    for(let i=0;i<pointerTrail.length-1;i++){
+      const a = pointerTrail[i];
+      const b = pointerTrail[i+1];
+      const age = now() - a.t;
+      const alpha = Math.max(0, 1 - (age / TRAIL_LIFETIME));
+      ctx.strokeStyle = `rgba(255,255,255,${0.28*alpha})`;
+      ctx.lineWidth = 16 * alpha;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    // active dot at last (hand or touch)
+    const last = pointerTrail[pointerTrail.length-1];
+    const lastAge = now() - last.t;
+    const lastAlpha = Math.max(0, 1 - (lastAge / TRAIL_LIFETIME));
+    ctx.globalAlpha = lastAlpha;
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 12 * lastAlpha + 6, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // Lives UI
+  function updateLives(){
+    livesEl.innerHTML = '';
+    for(let i=0;i<MAX_MISSED;i++){
+      const heart = document.createElement('div');
+      heart.style.width = '20px';
+      heart.style.height = '20px';
+      heart.style.borderRadius = '50%';
+      heart.style.boxSizing = 'border-box';
+      heart.style.border = '2px solid rgba(255,255,255,0.12)';
+      heart.style.background = i < (MAX_MISSED - missed) ? 'linear-gradient(180deg,#ff5a5a,#ff2a2a)' : 'linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))';
+      livesEl.appendChild(heart);
+    }
+  }
+
+  // Game control
+  async function startGame(){
+    // init mediapipe camera to track fingertip
+  try {
+    await startMediaPipe();
+  } catch (err) {
+    console.warn('Could not start camera/mediapipe, continuing with touch only', err);
+  }
+
+    fruits = [];
+    slices = [];
+    particles = [];
+    pointerTrail = [];
+    lastTouch = null;
+    lastHand = null;
+    score = 0;
+    missed = 0;
+    running = true;
+    gameOver = false;
+    updateLives();
+    scoreEl.textContent = 'Score: 0';
+    startScreen.style.display = 'none';
+    lastTime = performance.now();
+    if(spawnTimer) clearInterval(spawnTimer);
+    spawnTimer = setInterval(()=>{
+      if(Math.random() < 0.95) spawnFruit();
+    }, SPAWN_INTERVAL);
+    requestAnimationFrame(loop);
+  }
+
+  function endGame(){
+    if(gameOver) return;
+    gameOver = true;
+    running = false;
+    if(spawnTimer) clearInterval(spawnTimer);
+    stopMediaPipe();
+    startScreen.style.display = 'block';
+    startScreen.innerHTML = `
+      <div class="game-over">
+        <div style="font-size:30px; font-weight:800">Game Over</div>
+        <div style="margin-top:6px; font-weight:700; color:var(--accent);">Score: ${score}</div>
+        <div style="margin-top:6px; font-size:13px; opacity:0.9">Missed ${missed} fruits</div>
+        <button class="btn" id="restartBtn" style="margin-top:12px">Play Again</button>
+      </div>
+      <div style="margin-top:12px; font-size:12px; opacity:0.85">Tip: Use your finger (touch) or move fingertip in front of camera to slice — mouse won't slice</div>
+    `;
+    const restartBtn = document.getElementById('restartBtn');
+    restartBtn.addEventListener('click', ()=>{
+      startScreen.innerHTML = `
+        <div style="font-size:34px; font-weight:800; margin-bottom:6px">Fruit Ninja (Touch + Camera)</div>
+        <div class="small">Slice the fruits with your finger (touch) or camera fingertip tracking.</div>
+        <button class="btn" id="startBtn">Start Game</button>
+      `;
+      document.getElementById('startBtn').addEventListener('click', startGame);
+    }, { once:true });
+  }
+
+  // Main loop (time-based)
+  function loop(ts){
+    const dt = Math.min(0.05, (ts - lastTime)/1000); // clamp dt to avoid big leaps
+    lastTime = ts;
+    if(running) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // Hook start button
+  startBtn.addEventListener('click', startGame);
+
+  // Initial HUD
+  updateLives();
+
+  // Clean up when leaving page
+  addEventListener('visibilitychange', ()=>{
+    if(document.hidden){
+      stopMediaPipe();
+    }
+  });
+
+})();
+</script>
+</body>
+</html>

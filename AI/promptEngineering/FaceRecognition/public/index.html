@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>REAL AI Face Recognition — Test</title>
+
+  <style>
+    :root{
+      --bg:#0b0f17;
+      --panel:#0f1720;
+      --accent:#00ffd5;
+      --muted:#7a8696;
+      --danger:#ff4d6d;
+      --ok:#5af77a;
+      --glass: rgba(255,255,255,0.03);
+      --glass2: rgba(255,255,255,0.02);
+    }
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+    body{
+      background: linear-gradient(180deg,#05060a 0%, #07101a 60%);
+      color:#e6eef8;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:28px;
+    }
+    .app{
+      width:100%;
+      max-width:1100px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border:1px solid rgba(255,255,255,0.03);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      border-radius:14px;
+      overflow:hidden;
+      display:grid;
+      grid-template-columns: 1fr 380px;
+      gap:18px;
+    }
+
+    /* Left: camera */
+    .left{
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .video-wrap{
+      position:relative;
+      border-radius:10px;
+      overflow:hidden;
+      background:linear-gradient(180deg,#020306, #05111a);
+      border:1px solid rgba(255,255,255,0.03);
+    }
+    video#video{
+      width:100%;
+      height:480px;
+      object-fit:cover; /* keep sharp */
+      transform: none;
+      display:block;
+    }
+    /* avoid filters/blur */
+    .overlay-target{
+      position:absolute;
+      left:12px;
+      top:12px;
+      background:linear-gradient(90deg, rgba(0,0,0,0.45), rgba(255,255,255,0.02));
+      padding:8px 12px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.03);
+      font-weight:600;
+      color:var(--accent);
+    }
+
+    .controls{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    button{
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      color:var(--accent);
+      border:1px solid rgba(255,255,255,0.04);
+      padding:10px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:700;
+    }
+    button.secondary{
+      color:var(--muted);
+      border-color:rgba(255,255,255,0.02);
+      background:transparent;
+    }
+    button.danger{
+      color:var(--danger);
+      border-color: rgba(255,77,109,0.18);
+    }
+    button:disabled{
+      opacity:0.45;
+      cursor:not-allowed;
+    }
+    .status{
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    /* Right: DB, logs */
+    .right{
+      padding:18px;
+      border-left:1px solid rgba(255,255,255,0.02);
+      background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .panel{
+      background:var(--glass);
+      border-radius:10px;
+      padding:12px;
+      border:1px solid rgba(255,255,255,0.02);
+    }
+    .title{
+      font-size:13px;
+      color:var(--muted);
+      margin-bottom:8px;
+      font-weight:700;
+    }
+    .db-list{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      max-height:220px;
+      overflow:auto;
+    }
+    .db-item{
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      align-items:center;
+      padding:8px;
+      border-radius:8px;
+      background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+      border:1px solid rgba(255,255,255,0.02);
+    }
+    .db-name{font-weight:800;color:#fff}
+    .db-meta{font-size:12px;color:var(--muted)}
+    .db-actions{display:flex;gap:6px}
+
+    .log{
+      font-family: ui-monospace,SFMono-Regular,Menlo,monospace;
+      font-size:12px;
+      color:#bfe9ff;
+      max-height:260px;
+      overflow:auto;
+      padding:12px;
+      border-radius:8px;
+      background:linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.25));
+      border:1px solid rgba(255,255,255,0.02);
+    }
+
+    .result{
+      padding:10px;
+      border-radius:8px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      font-weight:800;
+      color:#000;
+      justify-content:space-between;
+    }
+    .result.unknown{background:linear-gradient(90deg,#ffccd3,#ff9aa9)}
+    .result.matched{background:linear-gradient(90deg,#d1ffec,#73f0b2)}
+    .result .left{display:flex;gap:8px;align-items:center}
+    .sample-indicator{
+      background:rgba(255,255,255,0.02);
+      padding:8px 10px;border-radius:8px;color:var(--accent);font-weight:900;
+    }
+
+    /* big message overlay for file:// */
+    .file-overlay{
+      position:fixed;
+      left:0;right:0;top:0;bottom:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(2,4,6,0.85);
+      color:#fff;
+      z-index:9999;
+      padding:20px;
+      text-align:center;
+      font-size:18px;
+      line-height:1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="left">
+      <div class="video-wrap panel" aria-live="polite">
+        <div class="overlay-target" id="modelStatus">Models: loading...</div>
+        <video id="video" autoplay muted playsinline></video>
+      </div>
+
+      <div class="controls">
+        <button id="startCamBtn">Start Camera</button>
+        <button id="registerBtn" disabled>Register Person</button>
+        <button id="captureSampleBtn" disabled class="secondary">Capture Sample</button>
+        <button id="scanBtn" disabled class="secondary">Scan Once</button>
+        <button id="clearDbBtn" class="danger">Clear DB</button>
+        <div class="status" id="cameraStatus">Camera: not started</div>
+      </div>
+
+      <div class="panel">
+        <div class="title">Registration</div>
+        <div>When registering, you must capture exactly 4 real samples in order:</div>
+        <ol style="color:var(--muted);margin-top:6px">
+          <li>Front</li>
+          <li>Turn Left</li>
+          <li>Turn Right</li>
+          <li>Slightly Up or Down</li>
+        </ol>
+        <div style="margin-top:8px">
+          <div class="sample-indicator" id="sampleIndicator">Sample 0/4</div>
+        </div>
+      </div>
+
+      <div class="panel" id="scanResultPanel" style="display:none">
+        <div class="title">Scan Result</div>
+        <div id="scanResult"></div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <div class="title">Database (localStorage: real_face_db)</div>
+        <div class="db-list" id="dbList"></div>
+      </div>
+
+      <div class="panel">
+        <div class="title">Controls & Info</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div><strong>Match threshold</strong></div>
+          <div style="color:var(--muted)">0.50 (euclidean distance)</div>
+        </div>
+        <div style="margin-top:8px;color:var(--muted)">Use "Scan Once" to compare a live capture to all stored profiles.</div>
+      </div>
+
+      <div class="panel">
+        <div class="title">Event Log</div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="fileOverlay" class="file-overlay" style="display:none">
+    <div>
+      <div style="font-size:22px;font-weight:800;margin-bottom:8px">Please run this app using localhost, not by opening the HTML file directly.</div>
+      <div style="color:var(--muted);font-size:15px">Webcam and AI models require HTTP(S) and won't work from file:// URLs. Run a local server (for example: <code>npx http-server</code>, <code>python -m http.server</code>) and open via http://localhost</div>
+    </div>
+  </div>
+
+  <!-- Face API (VladMandic) - REQUIRED URL -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+
+  <script>
+    // Constants / config
+    const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+    const MATCH_THRESHOLD = 0.50;
+    const LOCALSTORAGE_KEY = 'real_face_db';
+    const REQUIRED_SAMPLE_COUNT = 4;
+
+    // UI elements
+    const startCamBtn = document.getElementById('startCamBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const captureSampleBtn = document.getElementById('captureSampleBtn');
+    const scanBtn = document.getElementById('scanBtn');
+    const clearDbBtn = document.getElementById('clearDbBtn');
+    const cameraStatus = document.getElementById('cameraStatus');
+    const modelStatus = document.getElementById('modelStatus');
+    const video = document.getElementById('video');
+    const sampleIndicator = document.getElementById('sampleIndicator');
+    const dbList = document.getElementById('dbList');
+    const logEl = document.getElementById('log');
+    const scanResultPanel = document.getElementById('scanResultPanel');
+    const scanResult = document.getElementById('scanResult');
+    const fileOverlay = document.getElementById('fileOverlay');
+
+    // runtime state
+    let stream = null;
+    let modelsLoaded = false;
+    let cameraStarted = false;
+    let registering = false;
+    let samples = []; // array of Float32Array descriptors (or arrays)
+    let currentSampleIndex = 0;
+
+    // Check for file://
+    if (location.protocol === 'file:') {
+      fileOverlay.style.display = 'flex';
+      console.warn('Please run this app using localhost, not by opening the HTML file directly.');
+      // disable all controls
+      startCamBtn.disabled = true;
+      registerBtn.disabled = true;
+      captureSampleBtn.disabled = true;
+      scanBtn.disabled = true;
+      clearDbBtn.disabled = false;
+    }
+
+    // Logging helper
+    function log(...args){
+      const txt = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+      const time = new Date().toISOString().replace('T',' ').slice(0,19);
+      console.log(txt);
+      logEl.textContent = `${time} | ${txt}\n` + logEl.textContent;
+    }
+
+    // Speech helper
+    function speak(text){
+      try{
+        const u = new SpeechSynthesisUtterance(text);
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(u);
+      }catch(e){
+        console.warn('speechSynthesis error', e);
+      }
+    }
+
+    // Load models with verification
+    async function loadModels(){
+      modelStatus.textContent = 'Models: loading...';
+      log('Loading AI models from', MODEL_URL);
+      try{
+        // load required nets
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
+        // verify
+        const ok = faceapi.nets.ssdMobilenetv1.params && faceapi.nets.faceLandmark68Net.params && faceapi.nets.faceRecognitionNet.params;
+        if (!ok){
+          throw new Error('One or more models failed to load/verify');
+        }
+
+        modelsLoaded = true;
+        modelStatus.textContent = 'Models: loaded';
+        log('AI models loaded');
+        speak('AI models loaded');
+        // enable register/scan only if camera started
+        updateControls();
+      }catch(err){
+        modelsLoaded = false;
+        modelStatus.textContent = 'Models: failed to load';
+        log('Model load error', String(err));
+        alert('Failed to load AI models. Check console. Models loaded from: ' + MODEL_URL);
+      }
+    }
+
+    // Camera start
+    async function startCamera(){
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        alert('getUserMedia not supported in this browser.');
+        return;
+      }
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({video: {width: 1280, height: 720}, audio: false});
+        video.srcObject = stream;
+        cameraStarted = true;
+        cameraStatus.textContent = 'Camera: connected';
+        log('Camera connected');
+        speak('Camera connected');
+        startCamBtn.disabled = true;
+        updateControls();
+        // ensure video plays
+        await video.play();
+      }catch(err){
+        console.error('Camera error',err);
+        cameraStatus.textContent = 'Camera: error';
+        alert('Camera access was denied or not available. See console for details.');
+      }
+    }
+
+    function updateControls(){
+      // Register and Scan require both camera and models
+      registerBtn.disabled = !(modelsLoaded && cameraStarted) || registering;
+      scanBtn.disabled = !(modelsLoaded && cameraStarted) || registering;
+      captureSampleBtn.disabled = !registering;
+    }
+
+    // DB utilities with robust handling
+    function safeLoadDB(){
+      let data = [];
+      try{
+        const raw = localStorage.getItem(LOCALSTORAGE_KEY);
+        if (!raw){
+          log('Database loaded: 0 users (empty)');
+          return [];
+        }
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)){
+          log('Database invalid: root is not array -> resetting');
+          return [];
+        }
+        // validate each entry
+        const valid = parsed.map((entry, idx) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const id = entry.id || `user_${idx}_${Date.now()}`;
+          const name = typeof entry.name === 'string' ? entry.name : 'Unknown';
+          const createdAt = entry.createdAt || (new Date()).toISOString();
+          const descriptors = Array.isArray(entry.descriptors) ? entry.descriptors : [];
+          // Keep only descriptors that are arrays of length 128 and numeric
+          const good = descriptors.filter(d => {
+            if (!Array.isArray(d)) return false;
+            if (d.length !== 128) return false;
+            for (let i=0;i<128;i++){
+              if (typeof d[i] !== 'number' || Number.isNaN(d[i])) return false;
+            }
+            return true;
+          }).slice(0, REQUIRED_SAMPLE_COUNT);
+          if (good.length !== REQUIRED_SAMPLE_COUNT){
+            // Not enough valid descriptors for this user; skip the user entirely
+            log(`Profile skipped during DB load: ${name} has ${good.length} valid descriptors (need ${REQUIRED_SAMPLE_COUNT})`);
+            return null;
+          }
+          return { id, name, descriptors: good, createdAt };
+        }).filter(Boolean);
+        log(`Database loaded: ${valid.length} users`);
+        return valid;
+      }catch(err){
+        console.error('Error parsing DB', err);
+        log('Database invalid JSON -> resetting');
+        return [];
+      }
+    }
+
+    function safeSaveDB(db){
+      try{
+        localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(db));
+        log(`Database saved: ${db.length} users`);
+        speak(`Database saved with ${db.length} users`);
+      }catch(err){
+        console.error('Save DB error', err);
+        log('Error saving DB', String(err));
+        alert('Failed to save to localStorage: ' + err);
+      }
+    }
+
+    // Render DB list
+    function renderDB(){
+      const db = safeLoadDB();
+      dbList.innerHTML = '';
+      db.forEach(entry => {
+        const item = document.createElement('div');
+        item.className = 'db-item';
+        item.innerHTML = `
+          <div style="min-width:0">
+            <div class="db-name">${escapeHtml(entry.name)}</div>
+            <div class="db-meta">ID: ${escapeHtml(entry.id)} — Created: ${escapeHtml(entry.createdAt)}</div>
+          </div>
+          <div class="db-actions">
+            <button class="secondary" data-id="${entry.id}" data-action="view">View</button>
+            <button class="danger" data-id="${entry.id}" data-action="delete">Delete</button>
+          </div>
+        `;
+        dbList.appendChild(item);
+      });
+      // wire actions
+      dbList.querySelectorAll('button').forEach(btn=>{
+        btn.addEventListener('click', async (e)=>{
+          const id = btn.getAttribute('data-id');
+          const action = btn.getAttribute('data-action');
+          if (action === 'delete'){
+            if (!confirm('Delete profile?')) return;
+            let db = safeLoadDB();
+            db = db.filter(d=>d.id !== id);
+            safeSaveDB(db);
+            renderDB();
+            log('Profile deleted', id);
+            speak('Profile deleted');
+          }else if (action === 'view'){
+            const db = safeLoadDB();
+            const entry = db.find(d=>d.id===id);
+            if (!entry) return;
+            alert(`Profile: ${entry.name}\nID: ${entry.id}\nCreated: ${entry.createdAt}\nDescriptors: ${entry.descriptors.length}`);
+          }
+        });
+      });
+    }
+
+    // escape helper
+    function escapeHtml(s){
+      if (!s) return '';
+      return s.replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+    }
+
+    // Registration flow
+    async function startRegistration(){
+      if (!modelsLoaded || !cameraStarted) {
+        alert('Camera and AI models must be ready');
+        return;
+      }
+      registering = true;
+      samples = [];
+      currentSampleIndex = 0;
+      sampleIndicator.textContent = `Sample ${currentSampleIndex}/${REQUIRED_SAMPLE_COUNT}`;
+      registerBtn.disabled = true;
+      captureSampleBtn.disabled = false;
+      scanBtn.disabled = true;
+      log('Registration started');
+      speak('Registration started. Please capture four samples.');
+      updateControls();
+    }
+
+    async function captureSample(){
+      if (!registering) return;
+      // Run detection
+      sampleIndicator.textContent = `Sample ${currentSampleIndex+1}/${REQUIRED_SAMPLE_COUNT}`;
+      log(`Capturing sample ${currentSampleIndex+1}/${REQUIRED_SAMPLE_COUNT}`);
+      try{
+        const detection = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
+        if (!detection){
+          log('No face detected — try again');
+          speak('No face detected. Please position your face and try again.');
+          return;
+        }
+        const desc = detection.descriptor;
+        const len = desc && desc.length ? desc.length : 0;
+        log(`Descriptor length: ${len}`);
+        if (len !== 128){
+          log('Invalid descriptor length (not 128) — sample rejected');
+          speak('Descriptor invalid. Please try again.');
+          return;
+        }
+        // push sample (store as plain array)
+        samples.push(Array.from(desc));
+        currentSampleIndex++;
+        log(`Sample ${currentSampleIndex}/4 captured`);
+        speak(`Sample ${currentSampleIndex} captured`);
+        sampleIndicator.textContent = `Sample ${currentSampleIndex}/${REQUIRED_SAMPLE_COUNT}`;
+        if (currentSampleIndex >= REQUIRED_SAMPLE_COUNT){
+          // finished
+          registerBtn.disabled = false;
+          captureSampleBtn.disabled = true;
+          registering = false;
+          sampleIndicator.textContent = `Sample ${REQUIRED_SAMPLE_COUNT}/${REQUIRED_SAMPLE_COUNT}`;
+          log('All 4 samples captured');
+          speak('All samples captured. Please enter the name.');
+          // prompt for name
+          setTimeout(async ()=>{
+            const name = prompt('Who is this person?');
+            if (!name){
+              log('Registration cancelled: no name entered');
+              speak('Registration cancelled');
+              samples = [];
+              currentSampleIndex = 0;
+              sampleIndicator.textContent = `Sample 0/${REQUIRED_SAMPLE_COUNT}`;
+              updateControls();
+              return;
+            }
+            // store profile
+            const profile = {
+              id: `${name.replace(/\s+/g,'_')}_${Date.now()}`,
+              name: name,
+              descriptors: samples.slice(0, REQUIRED_SAMPLE_COUNT),
+              createdAt: (new Date()).toISOString()
+            };
+            // load existing DB and append
+            const db = safeLoadDB();
+            db.push(profile);
+            safeSaveDB(db);
+            renderDB();
+            log('Registration saved for', profile.name);
+            speak(`Registration saved for ${profile.name}`);
+            // reset
+            samples = [];
+            currentSampleIndex = 0;
+            sampleIndicator.textContent = `Sample 0/${REQUIRED_SAMPLE_COUNT}`;
+            updateControls();
+          }, 50);
+        }
+      }catch(err){
+        console.error('captureSample error', err);
+        log('captureSample error', String(err));
+        speak('Error capturing sample. Check console.');
+      }
+    }
+
+    // Scan once
+    async function scanOnce(){
+      if (!modelsLoaded || !cameraStarted) {
+        alert('Camera and AI models must be ready');
+        return;
+      }
+      try{
+        log('Starting scan (single capture)');
+        const detection = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
+        if (!detection){
+          log('No face detected during scan');
+          speak('No face detected');
+          showScanResult(false, null, null);
+          return;
+        }
+        const liveDescriptor = detection.descriptor;
+        if (!liveDescriptor || liveDescriptor.length !== 128){
+          log('Live descriptor invalid or wrong length');
+          speak('No valid face descriptor detected');
+          showScanResult(false, null, null);
+          return;
+        }
+        log('Live descriptor length:', liveDescriptor.length);
+        // load DB
+        const db = safeLoadDB();
+        if (db.length === 0){
+          log('Database empty');
+          speak('Database is empty');
+          showScanResult(false, null, null, 'Database empty');
+          return;
+        }
+        // iterate through every descriptor of every user and compute euclideanDistance
+        let best = {name:null, id:null, distance:Infinity};
+        for (const entry of db){
+          log('Comparing with', entry.name);
+          for (let i=0;i<entry.descriptors.length;i++){
+            const stored = entry.descriptors[i];
+            // validate stored
+            if (!Array.isArray(stored) || stored.length !== 128) {
+              log(`Stored descriptor invalid for ${entry.name} index ${i}`);
+              continue;
+            }
+            // convert to Float32Array for comparison
+            const storedFloat = Float32Array.from(stored);
+            const dist = faceapi.euclideanDistance(liveDescriptor, storedFloat);
+            log(`Distance: ${dist.toFixed(4)} (with ${entry.name})`);
+            if (dist < best.distance){
+              best = { name: entry.name, id: entry.id, distance: dist };
+            }
+          }
+        }
+
+        if (best.name && best.distance < MATCH_THRESHOLD){
+          log('Final result: MATCHED', best.name);
+          speak(`Welcome ${best.name}`);
+          showScanResult(true, best.name, best.distance);
+        }else{
+          log('Final result: UNKNOWN');
+          speak('Unknown person');
+          showScanResult(false, best.name, best.distance);
+        }
+
+      }catch(err){
+        console.error('scanOnce error', err);
+        log('Scan error ' + String(err));
+        speak('Scan error occurred');
+      }
+    }
+
+    function showScanResult(matched, name, distance, extra){
+      scanResultPanel.style.display = 'block';
+      if (matched){
+        scanResult.innerHTML = `<div class="result matched"><div class="left">🟢 Matched: ${escapeHtml(name)}</div><div>Distance: ${distance.toFixed(4)}</div></div>`;
+      }else{
+        const distText = distance !== null && distance !== undefined ? distance.toFixed(4) : 'n/a';
+        scanResult.innerHTML = `<div class="result unknown"><div class="left">🔴 Unknown Person ${name ? '(closest: ' + escapeHtml(name) + ')' : ''}</div><div>Distance: ${distText}</div></div>`;
+      }
+      if (extra) log(extra);
+    }
+
+    // Clear DB
+    function clearDB(){
+      if (!confirm('Clear entire database?')) return;
+      localStorage.removeItem(LOCALSTORAGE_KEY);
+      renderDB();
+      log('Database cleared');
+      speak('Database cleared');
+    }
+
+    // Delete individual profile function (in renderDB handlers)
+
+    // Wire buttons
+    startCamBtn.addEventListener('click', ()=>startCamera());
+    registerBtn.addEventListener('click', ()=>startRegistration());
+    captureSampleBtn.addEventListener('click', ()=>captureSample());
+    scanBtn.addEventListener('click', ()=>scanOnce());
+    clearDbBtn.addEventListener('click', ()=>clearDB());
+
+    // Initialize
+    (async function init(){
+      log('Initializing app');
+      // Render DB now
+      renderDB();
+      // Load models right away (but do not start camera automatically)
+      await loadModels();
+      // update UI
+      updateControls();
+    })();
+
+    // Ensure UI updates when video metadata loaded (to ensure sharp)
+    video.addEventListener('loadedmetadata', ()=>{
+      // keep as-is (no CSS filter) to ensure crispness
+      log('Video loaded metadata, width:', video.videoWidth, 'height:', video.videoHeight);
+    });
+
+    // Extra safety: beforeunload cancel speech
+    window.addEventListener('beforeunload', ()=>{ try{ window.speechSynthesis.cancel(); }catch(e){} });
+
+    // Expose some debug helpers to window for debugging in console
+    window._faceApp = {
+      loadModels,
+      startCamera,
+      startRegistration,
+      captureSample,
+      scanOnce,
+      safeLoadDB,
+      safeSaveDB,
+      clearDB,
+      renderDB,
+      log
+    };
+
+  </script>
+</body>
+</html>

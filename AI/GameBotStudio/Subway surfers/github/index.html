@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subway Surfers - Endless Runner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+        }
+
+        #gameContainer {
+            position: relative;
+            background: #000;
+            border: 3px solid #fff;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        canvas {
+            display: block;
+            background: linear-gradient(180deg, #87ceeb 0%, #e0f6ff 100%);
+        }
+
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .gameOverContent {
+            text-align: center;
+            color: white;
+        }
+
+        .gameOverContent h1 {
+            font-size: 60px;
+            margin-bottom: 20px;
+            color: #ff4444;
+            text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
+        }
+
+        .gameOverContent p {
+            font-size: 28px;
+            margin: 15px 0;
+            color: #ffff00;
+        }
+
+        .gameOverContent button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 22px;
+            background: #00aa00;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .gameOverContent button:hover {
+            background: #00dd00;
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(0, 221, 0, 0.8);
+        }
+
+        #scoreDisplay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 28px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 5;
+            font-weight: bold;
+        }
+
+        #speedDisplay {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 18px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 5;
+            font-weight: bold;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            text-align: center;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <div id="scoreDisplay">Score: 0</div>
+        <div id="speedDisplay">Speed: 1.0x</div>
+        <div id="instructions">← → Move | ↑ Jump</div>
+        <div id="gameOverScreen">
+            <div class="gameOverContent">
+                <h1>GAME OVER</h1>
+                <p>Final Score: <span id="finalScore">0</span></p>
+                <p>Press the button below to play again</p>
+                <button onclick="restartGame()">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== GAME CONSTANTS ====================
+        const CANVAS_WIDTH = 400;
+        const CANVAS_HEIGHT = 600;
+        const LANE_WIDTH = CANVAS_WIDTH / 3;
+        const NUM_LANES = 3;
+
+        const PLAYER_WIDTH = 30;
+        const PLAYER_HEIGHT = 40;
+        const OBSTACLE_WIDTH = 35;
+        const OBSTACLE_HEIGHT = 35;
+
+        const BASE_GAME_SPEED = 4;
+        const BASE_JUMP_POWER = 15;
+        const GRAVITY = 0.6;
+
+        // ==================== GAME VARIABLES ====================
+        let canvas = document.getElementById('gameCanvas');
+        let ctx = canvas.getContext('2d');
+
+        let gameState = {
+            isRunning: true,
+            score: 0,
+            gameSpeed: BASE_GAME_SPEED,
+            playerLane: 1,
+            playerX: 0,
+            playerY: 0,
+            playerVelocityY: 0,
+            isJumping: false,
+            obstacles: [],
+            spawnCounter: 0
+        };
+
+        // ==================== PLAYER OBJECT ====================
+        const player = {
+            lane: 1,
+            x: 0,
+            y: 0,
+            velocityY: 0,
+            isJumping: false,
+            isGrounded: true,
+
+            update: function() {
+                // Update X position based on lane
+                this.x = this.lane * LANE_WIDTH + LANE_WIDTH / 2 - PLAYER_WIDTH / 2;
+
+                // Apply gravity
+                this.velocityY += GRAVITY;
+                this.y += this.velocityY;
+
+                // Ground collision
+                if (this.y + PLAYER_HEIGHT >= CANVAS_HEIGHT - 20) {
+                    this.y = CANVAS_HEIGHT - 20 - PLAYER_HEIGHT;
+                    this.velocityY = 0;
+                    this.isJumping = false;
+                    this.isGrounded = true;
+                }
+            },
+
+            jump: function() {
+                if (this.isGrounded) {
+                    this.velocityY = -BASE_JUMP_POWER;
+                    this.isJumping = true;
+                    this.isGrounded = false;
+                }
+            },
+
+            moveLeft: function() {
+                if (this.lane > 0) {
+                    this.lane--;
+                }
+            },
+
+            moveRight: function() {
+                if (this.lane < NUM_LANES - 1) {
+                    this.lane++;
+                }
+            },
+
+            draw: function() {
+                // Draw player body
+                ctx.fillStyle = '#FF6B6B';
+                ctx.fillRect(this.x, this.y, PLAYER_WIDTH, PLAYER_HEIGHT);
+
+                // Draw eyes
+                ctx.fillStyle = '#000';
+                ctx.fillRect(this.x + 8, this.y + 8, 6, 6);
+                ctx.fillRect(this.x + 16, this.y + 8, 6, 6);
+
+                // Draw smile
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x + PLAYER_WIDTH / 2, this.y + 22, 8, 0, Math.PI);
+                ctx.stroke();
+            }
+        };
+
+        // ==================== OBSTACLE OBJECT ====================
+        class Obstacle {
+            constructor(lane) {
+                this.lane = lane;
+                this.x = lane * LANE_WIDTH + LANE_WIDTH / 2 - OBSTACLE_WIDTH / 2;
+                this.y = -OBSTACLE_HEIGHT;
+                this.width = OBSTACLE_WIDTH;
+                this.height = OBSTACLE_HEIGHT;
+            }
+
+            update() {
+                this.y += gameState.gameSpeed;
+            }
+
+            draw() {
+                // Draw obstacle as a box
+                ctx.fillStyle = '#FF4444';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                // Add a warning pattern
+                ctx.fillStyle = '#FFFF00';
+                ctx.fillRect(this.x + 5, this.y + 5, 8, 8);
+                ctx.fillRect(this.x + 22, this.y + 5, 8, 8);
+                ctx.fillRect(this.x + 5, this.y + 22, 8, 8);
+                ctx.fillRect(this.x + 22, this.y + 22, 8, 8);
+            }
+
+            isOffScreen() {
+                return this.y > CANVAS_HEIGHT;
+            }
+
+            collidesWith(playerX, playerY, playerWidth, playerHeight) {
+                return !(playerX + playerWidth < this.x ||
+                    playerX > this.x + this.width ||
+                    playerY + playerHeight < this.y ||
+                    playerY > this.y + this.height);
+            }
+        }
+
+        // ==================== INPUT HANDLING ====================
+        const keys = {};
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+
+            if (e.key === 'ArrowUp') {
+                player.jump();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // ==================== GAME LOGIC ====================
+        function spawnObstacle() {
+            const randomLane = Math.floor(Math.random() * NUM_LANES);
+            gameState.obstacles.push(new Obstacle(randomLane));
+        }
+
+        function updateGame() {
+            if (!gameState.isRunning) return;
+
+            // Handle player movement
+            if (keys['ArrowLeft']) {
+                player.moveLeft();
+            }
+            if (keys['ArrowRight']) {
+                player.moveRight();
+            }
+
+            // Update player
+            player.update();
+
+            // Update obstacles
+            for (let i = gameState.obstacles.length - 1; i >= 0; i--) {
+                gameState.obstacles[i].update();
+
+                // Check collision
+                if (gameState.obstacles[i].collidesWith(
+                    player.x, player.y,
+                    PLAYER_WIDTH, PLAYER_HEIGHT
+                )) {
+                    endGame();
+                    return;
+                }
+
+                // Remove off-screen obstacles and increase score
+                if (gameState.obstacles[i].isOffScreen()) {
+                    gameState.obstacles.splice(i, 1);
+                    gameState.score += 10;
+                }
+            }
+
+            // Spawn new obstacles
+            gameState.spawnCounter++;
+            const spawnRate = Math.max(30, 60 - Math.floor(gameState.score / 100));
+            if (gameState.spawnCounter > spawnRate) {
+                spawnObstacle();
+                gameState.spawnCounter = 0;
+            }
+
+            // Increase game speed gradually
+            gameState.gameSpeed = BASE_GAME_SPEED + (gameState.score / 500);
+
+            // Update UI
+            document.getElementById('scoreDisplay').textContent = `Score: ${gameState.score}`;
+            document.getElementById('speedDisplay').textContent = `Speed: ${gameState.gameSpeed.toFixed(2)}x`;
+        }
+
+        // ==================== RENDERING ====================
+        function drawGame() {
+            // Clear canvas with gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+            gradient.addColorStop(0, '#87ceeb');
+            gradient.addColorStop(1, '#e0f6ff');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Draw lanes
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+
+            for (let i = 1; i < NUM_LANES; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * LANE_WIDTH, 0);
+                ctx.lineTo(i * LANE_WIDTH, CANVAS_HEIGHT);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+
+            // Draw ground
+            ctx.fillStyle = '#90EE90';
+            ctx.fillRect(0, CANVAS_HEIGHT - 20, CANVAS_WIDTH, 20);
+
+            // Draw player
+            player.draw();
+
+            // Draw obstacles
+            for (let obstacle of gameState.obstacles) {
+                obstacle.draw();
+            }
+        }
+
+        // ==================== GAME STATE MANAGEMENT ====================
+        function endGame() {
+            gameState.isRunning = false;
+            document.getElementById('finalScore').textContent = gameState.score;
+            document.getElementById('gameOverScreen').style.display = 'flex';
+        }
+
+        function restartGame() {
+            gameState = {
+                isRunning: true,
+                score: 0,
+                gameSpeed: BASE_GAME_SPEED,
+                playerLane: 1,
+                playerX: 0,
+                playerY: 0,
+                playerVelocityY: 0,
+                isJumping: false,
+                obstacles: [],
+                spawnCounter: 0
+            };
+
+            player.lane = 1;
+            player.x = 0;
+            player.y = 0;
+            player.velocityY = 0;
+            player.isJumping = false;
+            player.isGrounded = true;
+
+            document.getElementById('gameOverScreen').style.display = 'none';
+            gameLoop();
+        }
+
+        // ==================== MAIN GAME LOOP ====================
+        function gameLoop() {
+            updateGame();
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        gameLoop();
+    </script>
+</body>
+</html>

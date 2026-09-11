@@ -1,0 +1,190 @@
+Fix my existing single-file `test.html` REAL AI face recognition application.
+
+### CRITICAL FIXES
+
+1. **Do NOT run or depend on `file://` URLs.**
+   The app must be designed to run through localhost/HTTPS because webcam and AI model loading can fail from `file://`.
+
+Add a clear message if the page is opened using `file://`:
+
+**"Please run this app using localhost, not by opening the HTML file directly."**
+
+2. Use ONLY real `@vladmandic/face-api`:
+
+```text
+https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js
+```
+
+Models:
+
+```text
+https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/
+```
+
+3. Load and verify the required face detection, landmark and recognition models BEFORE enabling Register/Scan.
+
+4. Registration MUST capture exactly **4 real face samples** from the webcam:
+
+* Sample 1 → Front
+* Sample 2 → Turn Left
+* Sample 3 → Turn Right
+* Sample 4 → Slightly Up/Down
+
+Show:
+
+**Sample 1/4**
+**Sample 2/4**
+**Sample 3/4**
+**Sample 4/4**
+
+Do not automatically skip samples.
+
+For every sample use:
+
+```javascript
+await faceapi
+    .detectSingleFace(video)
+    .withFaceLandmarks()
+    .withFaceDescriptor()
+```
+
+Only accept a sample when a valid face and a descriptor with exactly **128 values** are detected.
+
+5. After all 4 samples are captured, ask:
+
+```javascript
+prompt("Who is this person?")
+```
+
+Store all 4 real descriptors:
+
+```javascript
+{
+    id,
+    name,
+    descriptors: [
+        descriptor1,
+        descriptor2,
+        descriptor3,
+        descriptor4
+    ],
+    createdAt
+}
+```
+
+Store them in:
+
+```javascript
+localStorage
+```
+
+using the exact key:
+
+```text
+real_face_db
+```
+
+6. **IMPORTANT MATCHING FIX**
+
+During scanning, extract a REAL live descriptor using:
+
+```javascript
+detectSingleFace(video)
+.withFaceLandmarks()
+.withFaceDescriptor()
+```
+
+Compare the live descriptor against **ALL 4 descriptors of EVERY registered person** using:
+
+```javascript
+faceapi.euclideanDistance(liveDescriptor, storedDescriptor)
+```
+
+Find the minimum distance.
+
+Use:
+
+```javascript
+const MATCH_THRESHOLD = 0.50;
+```
+
+If minimum distance `< 0.50`:
+
+```text
+🟢 Matched: NAME
+Distance: 0.xxxx
+```
+
+Speak:
+
+**Welcome NAME**
+
+If minimum distance `>= 0.50`:
+
+```text
+🔴 Unknown Person
+Distance: 0.xxxx
+```
+
+Speak:
+
+**Unknown Person**
+
+Never use `Math.random()`, fake vectors, fake distances, percentages or simulated matching.
+
+7. Fix the database code so it safely handles:
+
+* empty DB
+* null DB
+* invalid JSON
+* missing `descriptors`
+* descriptors that are not arrays
+* descriptors whose length is not 128
+
+Never produce:
+
+```text
+Cannot read properties of undefined
+```
+
+8. Add detailed console logs:
+
+```text
+AI models loaded
+Camera connected
+Sample 1/4 captured
+Sample 2/4 captured
+Sample 3/4 captured
+Sample 4/4 captured
+Descriptor length: 128
+Database loaded: X users
+Comparing with NAME
+Distance: 0.xxxx
+Final result: MATCHED / UNKNOWN
+```
+
+9. Keep the existing futuristic dark UI.
+
+10. Keep webcam completely sharp.
+
+DO NOT use:
+
+```css
+backdrop-filter: blur(...)
+```
+
+on the video or face target.
+
+11. Add **Clear DB** and individual profile delete buttons.
+
+12. Use `speechSynthesis` for registration success, no-face, unknown, matched and database messages.
+
+13. Most importantly, debug the current problem where:
+
+* registered person is always showing **Unknown**
+* different person is also showing **Unknown**
+* registration is capturing fewer than 4 samples
+
+Do not just change the threshold to hide the problem. Verify that REAL 128D descriptors are actually being generated, saved, loaded and compared.
+
+Return the complete corrected single-file `test.html`.
