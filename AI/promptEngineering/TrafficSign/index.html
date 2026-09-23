@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Traffic Sign Recognition - YOLO</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #222;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .description {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .upload-area {
+            background: white;
+            border: 2px dashed #aaa;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .upload-area input {
+            display: none;
+        }
+
+        .upload-button {
+            display: inline-block;
+            background: #222;
+            color: white;
+            padding: 14px 28px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .upload-button:hover {
+            background: #444;
+        }
+
+        #status {
+            text-align: center;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        #loading {
+            display: none;
+            text-align: center;
+            margin: 20px;
+        }
+
+        #resultSection {
+            display: none;
+            margin-top: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+        }
+
+        .canvas-container {
+            text-align: center;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+
+        .results {
+            margin-top: 25px;
+        }
+
+        .result {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 15px;
+            margin: 8px 0;
+            background: #f1f3f5;
+            border-radius: 8px;
+        }
+
+        .no-results {
+            color: #777;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>🚦 Traffic Sign Recognition</h1>
+
+    <div class="description">
+        Upload an image and YOLO will detect traffic signs.
+    </div>
+
+
+    <div class="upload-area">
+
+        <p style="font-size: 45px; margin: 0;">
+            📷
+        </p>
+
+        <p>
+            Select an image containing one or more traffic signs
+        </p>
+
+        <label class="upload-button">
+            Upload Image
+            <input
+                type="file"
+                id="imageInput"
+                accept="image/*"
+            >
+        </label>
+
+    </div>
+
+
+    <div id="status">
+        Loading YOLO traffic-sign model...
+    </div>
+
+
+    <div id="loading">
+        Detecting traffic signs...
+    </div>
+
+
+    <div id="resultSection">
+
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+        </div>
+
+
+        <div class="results">
+
+            <h2>Detected Traffic Signs</h2>
+
+            <div id="resultsList">
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script type="module">
+
+    import {
+        YOLO,
+        annotate
+    }
+    from "https://esm.sh/@ultralytics/yolo";
+
+
+    /*
+     * REAL TRAFFIC-SIGN YOLO MODEL
+     *
+     * This is NOT the COCO model.
+     *
+     * It is a YOLOv8s model trained on
+     * 100 traffic-sign classes.
+     */
+
+    const MODEL_URL =
+        "https://huggingface.co/RZhukotynskyi/sign-detection-yolov8s/resolve/main/sdv4.onnx";
+
+
+    let model = null;
+
+
+    const imageInput =
+        document.getElementById("imageInput");
+
+    const status =
+        document.getElementById("status");
+
+    const loading =
+        document.getElementById("loading");
+
+    const resultSection =
+        document.getElementById("resultSection");
+
+    const canvas =
+        document.getElementById("canvas");
+
+    const resultsList =
+        document.getElementById("resultsList");
+
+
+    /*
+     * Load YOLO model
+     */
+
+    async function loadModel() {
+
+        try {
+
+            status.textContent =
+                "Loading traffic-sign YOLO model...";
+
+
+            model =
+                await YOLO.load(
+                    MODEL_URL
+                );
+
+
+            status.textContent =
+                "✅ Model ready. Upload an image.";
+
+            console.log(
+                "YOLO model loaded successfully."
+            );
+
+            console.log(
+                "Running on:",
+                model.device
+            );
+
+        }
+        catch (error) {
+
+            console.error(
+                "Model loading error:",
+                error
+            );
+
+            status.textContent =
+                "❌ Failed to load traffic-sign model.";
+
+        }
+
+    }
+
+
+    /*
+     * Upload image
+     */
+
+    imageInput.addEventListener(
+        "change",
+        async function(event) {
+
+            const file =
+                event.target.files[0];
+
+
+            if (!file) {
+                return;
+            }
+
+
+            if (!model) {
+
+                alert(
+                    "The YOLO model is still loading. Please wait."
+                );
+
+                return;
+
+            }
+
+
+            resultSection.style.display =
+                "block";
+
+            loading.style.display =
+                "block";
+
+            resultsList.innerHTML =
+                "";
+
+
+            try {
+
+                /*
+                 * Run YOLO directly on
+                 * the uploaded image.
+                 */
+
+                const results =
+                    await model.predict(
+                        file,
+                        {
+                            conf: 0.25,
+                            iou: 0.7
+                        }
+                    );
+
+
+                console.log(
+                    "YOLO results:",
+                    results
+                );
+
+
+                /*
+                 * Draw detections
+                 */
+
+                await annotate(
+                    canvas,
+                    file,
+                    results
+                );
+
+
+                /*
+                 * Display detection results
+                 */
+
+                displayResults(
+                    results
+                );
+
+
+            }
+            catch (error) {
+
+                console.error(
+                    "Detection error:",
+                    error
+                );
+
+                resultsList.innerHTML = `
+                    <div class="no-results">
+                        ❌ Detection failed.
+                        Check the browser console.
+                    </div>
+                `;
+
+            }
+
+
+            loading.style.display =
+                "none";
+
+        }
+    );
+
+
+    /*
+     * Display detected signs
+     */
+
+    function displayResults(results) {
+
+        resultsList.innerHTML =
+            "";
+
+
+        if (
+            !results ||
+            !results.boxes ||
+            results.boxes.length === 0
+        ) {
+
+            resultsList.innerHTML = `
+                <div class="no-results">
+                    No traffic signs detected.
+                </div>
+            `;
+
+            return;
+
+        }
+
+
+        results.boxes.forEach(
+            (box, index) => {
+
+                const signName =
+                    box.name || "Unknown sign";
+
+
+                const confidence =
+                    box.conf;
+
+
+                const percentage =
+                    (
+                        confidence * 100
+                    ).toFixed(1);
+
+
+                const result =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                result.className =
+                    "result";
+
+
+                result.innerHTML = `
+                    <strong>
+                        ${index + 1}. ${signName}
+                    </strong>
+
+                    <span>
+                        ${percentage}% confidence
+                    </span>
+                `;
+
+
+                resultsList.appendChild(
+                    result
+                );
+
+            }
+        );
+
+    }
+
+
+    /*
+     * Start loading model
+     */
+
+    loadModel();
+
+</script>
+
+</body>
+</html>

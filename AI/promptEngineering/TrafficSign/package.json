@@ -1,0 +1,13 @@
+{
+  "name": "yolo-traffic-signal-detector",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-based YOLO traffic signal detector with webcam and image upload",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

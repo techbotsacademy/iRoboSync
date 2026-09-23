@@ -1,0 +1,5 @@
+Create Arduino C++ code for ESP32 NodeMCU + MPU6050 using I2C (SDA=19, SCL=18). 
+Use the  MPU6500_WE.h file. 
+Read accelerometer and gyroscope data and calculate/print 
+Roll, Pitch and Yaw in degrees every 100ms.. 
+Make the code directly compliable in Arduino IDE.
