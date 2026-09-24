@@ -1,4 +1,8 @@
 [Desired Output]
-Create a HTML that will allow an STL file to be uploaded and render on the screen. It should also get the input from the gyroscope being controlled by the MPU6050 using ESP32 and the STL rendering must change its orientation based on the gyroscope sensor.
+Create a HTML that will allow an STL file to be uploaded and render on the screen. 
+It should also get the input from the gyroscope being controlled by the MPU6050 using ESP32. 
+Dazzling Maimu-Snaget.stl is in the same folder as index.html should be rendered on the HTML. 
+The user should get an choose and upload another file if required which will be rendered instead of what is previously rendered.
+The STL rendering must change its orientation based on the gyroscope sensor.
 [Undesired output]
 Any other changes/improvements AI thinks is necessary.
