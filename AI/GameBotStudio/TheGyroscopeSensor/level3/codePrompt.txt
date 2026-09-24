@@ -1,0 +1,4 @@
+[DesiredOutput]
+The roll and pitch are almost stable. But Yaw is continously changing. Please update the code.ino file to take care of this error.
+[UnDesiredOutput]
+Any other change to code or UI
