@@ -1,0 +1,5 @@
+[Desired output]
+The STL being displayed is a character that is already being controlled by the Gyrosensor. Enhance the existing HTML, to make a game. Add a machine that will fire bullets at the character who has to dodge it using the Gyrosensor. Given that Gyrosensor is being used to dodge the bullets the character is not expected to move horizontally. It can only tilt. So the bullets should be shot in such a way that the character can actually dodge it.
+Keep track of scores.
+[Undesired output]
+Any change in Control of STL file or other existing features is not required

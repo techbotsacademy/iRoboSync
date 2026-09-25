@@ -1,98 +1,76 @@
 #include <Wire.h>
 #include <MPU6500_WE.h>
-#include <math.h>
 
-// MPU6050 and MPU6500 use the same I2C address in this configuration.
-#define MPU_ADDR 0x68
-#define I2C_SDA  19
-#define I2C_SCL  18
+// ESP32 NodeMCU I2C pins
+constexpr uint8_t SDA_PIN = 19;
+constexpr uint8_t SCL_PIN = 18;
+constexpr uint8_t MPU6050_ADDRESS = 0x68;
 
-MPU6500_WE mpu = MPU6500_WE(MPU_ADDR);
+constexpr uint32_t OUTPUT_INTERVAL_MS = 100;
+constexpr float RAD_TO_DEG_F = 57.2957795131f;
 
-float roll = 0.0f;
-float pitch = 0.0f;
-float yaw = 0.0f;
+MPU6500_WE mpu(MPU6050_ADDRESS);
 
-unsigned long lastUpdate = 0;
-unsigned long lastPrint = 0;
+uint32_t lastUpdateMs = 0;
+float yawDeg = 0.0f;
 
 void setup() {
   Serial.begin(115200);
   delay(500);
 
-  Wire.begin(I2C_SDA, I2C_SCL);
+  Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(400000);
 
   if (!mpu.init()) {
-    Serial.println("MPU6050 not detected. Check wiring and I2C address.");
+    Serial.println("MPU6050/MPU6500 not detected. Check wiring and I2C address.");
     while (true) {
       delay(1000);
     }
   }
 
-  // Keep the sensor still and level during this calibration.
-  Serial.println("Keep the sensor still for calibration...");
+  // Calibrate the accelerometer and gyroscope while the sensor is still.
+  Serial.println("Keep the sensor still: calibrating...");
   delay(1000);
   mpu.autoOffsets();
 
-  // These settings are supported by MPU6500_WE and are also valid for an MPU6050.
   mpu.setAccRange(MPU9250_ACC_RANGE_2G);
   mpu.setGyrRange(MPU9250_GYRO_RANGE_250);
   mpu.setAccDLPF(MPU9250_DLPF_6);
   mpu.setGyrDLPF(MPU9250_DLPF_6);
 
-  // Initialize roll and pitch from the accelerometer so startup is stable.
-  xyzFloat acc = mpu.getGValues();
-  roll = atan2f(acc.y, acc.z) * 180.0f / PI;
-  pitch = atan2f(-acc.x, sqrtf(acc.y * acc.y + acc.z * acc.z)) * 180.0f / PI;
-
-  lastUpdate = micros();
-  lastPrint = millis();
-
-  Serial.println("Roll(deg), Pitch(deg), Yaw(deg)");
+  lastUpdateMs = millis();
+  Serial.println("Roll (deg), Pitch (deg), Yaw (deg)");
 }
 
 void loop() {
-  const unsigned long nowMicros = micros();
-  const float dt = (nowMicros - lastUpdate) * 1.0e-6f;
-  lastUpdate = nowMicros;
-
-  xyzFloat acc = mpu.getGValues();
-  xyzFloat gyro = mpu.getGyrValues();
-
-  // Accelerometer angles. The accelerometer cannot determine yaw.
-  const float accRoll = atan2f(acc.y, acc.z) * 180.0f / PI;
-  const float accPitch = atan2f(-acc.x, sqrtf(acc.y * acc.y + acc.z * acc.z)) * 180.0f / PI;
-
-  // Gyroscope rates are returned in degrees/second by MPU6500_WE.
-  // This assumes the sensor X/Y/Z axes are aligned with roll/pitch/yaw.
-  const float gyroRoll = gyro.x;
-  const float gyroPitch = gyro.y;
-  const float gyroYaw = gyro.z;
-
-  // Complementary filter: gyro gives responsive motion, accelerometer removes drift
-  // from roll and pitch. Yaw is gyro-integrated and will drift over time.
-  const float gyroWeight = 0.98f;
-  roll = gyroWeight * (roll + gyroRoll * dt) + (1.0f - gyroWeight) * accRoll;
-  pitch = gyroWeight * (pitch + gyroPitch * dt) + (1.0f - gyroWeight) * accPitch;
-  yaw += gyroYaw * dt;
-
-  // Keep yaw in the range -180 to +180 degrees.
-  if (yaw > 180.0f) yaw -= 360.0f;
-  if (yaw < -180.0f) yaw += 360.0f;
-
-  if (millis() - lastPrint >= 100) {
-    lastPrint = millis();
-
-    Serial.print("Roll: ");
-    Serial.print(roll, 2);
-    Serial.print(" deg, Pitch: ");
-    Serial.print(pitch, 2);
-    Serial.print(" deg, Yaw: ");
-    Serial.print(yaw, 2);
-    Serial.println(" deg");
+  const uint32_t nowMs = millis();
+  if (nowMs - lastUpdateMs < OUTPUT_INTERVAL_MS) {
+    return;
   }
 
-  // Avoid an excessively tight loop while retaining accurate integration timing.
-  delay(2);
+  const float dt = (nowMs - lastUpdateMs) / 1000.0f;
+  lastUpdateMs = nowMs;
+
+  // getGValues() returns acceleration in g; getGyrValues() returns degrees/s.
+  const xyzFloat acc = mpu.getGValues();
+  const xyzFloat gyr = mpu.getGyrValues();
+
+  // Accelerometer angles provide an absolute reference for roll and pitch.
+  const float rollDeg = atan2f(acc.y, acc.z) * RAD_TO_DEG_F;
+  const float pitchDeg = atan2f(-acc.x, sqrtf(acc.y * acc.y + acc.z * acc.z)) * RAD_TO_DEG_F;
+
+  // Yaw has no absolute reference with an MPU6050/MPU6500 alone, so it is
+  // integrated from the Z-axis gyroscope and will gradually drift over time.
+  yawDeg += gyr.z * dt;
+  if (yawDeg > 180.0f) {
+    yawDeg -= 360.0f;
+  } else if (yawDeg < -180.0f) {
+    yawDeg += 360.0f;
+  }
+
+  Serial.print(rollDeg, 2);
+  Serial.print(", ");
+  Serial.print(pitchDeg, 2);
+  Serial.print(", ");
+  Serial.println(yawDeg, 2);
 }
