@@ -1,13 +1,5 @@
-You are an expert code evaluator. Grade the provided solution to the Fruit Ninja Canvas bug according to this scoring rubric:
+You are an expert code evaluator. Something is wrong with my code: 'The fruits are completely invisible when I play the game'.
 
-1. Bug Location (Max 2 pts): Identified that fruits are deleted in updateFruits() on spawn.
-2. Math/Logic Explanation (Max 2 pts): Explained that spawn y (height + radius + 10) causes (y - radius > height) to evaluate to true instantly.
-3. Solution Viability (Max 2 pts): Fixed the boundary check (e.g. checking dy > 0) AND increased launch velocity (dy).
-
-Calculate the weighted score out of 100%. Output JSON in the following format:
-{
-  "score": <number>,
-  "identified_root_cause": <boolean>,
-  "fixed_velocity": <boolean>,
-  "feedback": "<string>"
-}
+Create a simple 4-Step Bug Checklist to investigate why objects might be missing or broken.
+Test my code line-by-line against each item on your checklist and score it.
+Explain the item score in simple terms and steps to be taken to fix it.
