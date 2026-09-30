@@ -1,5 +1,1 @@
-You are an expert code evaluator. Something is wrong with my code: 'The fruits are not visible on the screen. The missed fruits count keep increasing and the game ends because I am not able to slice any fruit.'.
-
-Create a simple 4-Step Bug Checklist to investigate why objects might be missing or broken.
-Test my code line-by-line against each item on your checklist and score it.
-Explain the item score in simple terms and steps to be taken to fix it.
+The fruits are not visible on the screen. The missed fruits count keep increasing and the game ends because I am not able to slice any fruit.
