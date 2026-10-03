@@ -1,0 +1,15 @@
+Create a simple low-poly 3D model of a basic passenger aeroplane.
+
+The model should have:
+
+A cylindrical fuselage with a rounded nose
+Two straight wings, one on each side
+Two simple jet engines mounted under the wings
+A vertical tail fin
+Two small horizontal stabilizers at the rear
+Simple cockpit windows
+No interior
+No landing gear
+No complex details or textures
+
+Use clean, smooth geometry with simple shapes and proportions. Make the model suitable for beginners to 3D print, modify, and use in a classroom project. Keep the number of polygons low and avoid thin or fragile parts.
