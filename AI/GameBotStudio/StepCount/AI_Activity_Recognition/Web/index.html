@@ -1,0 +1,5104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Activity Recognition</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: #070b12;
+    --panel: #0d1420;
+    --panel2: #111b2a;
+    --border: #223047;
+    --text: #edf4ff;
+    --muted: #8ea1bb;
+    --green: #00ff88;
+    --cyan: #00ccff;
+    --yellow: #ffd84d;
+    --red: #ff5577;
+    --purple: #a970ff;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input {
+    font-family: inherit;
+}
+
+button {
+    border: 0;
+    cursor: pointer;
+}
+
+.header {
+    padding: 24px;
+    border-bottom: 1px solid var(--border);
+    background: #080e18;
+}
+
+.header-inner {
+    max-width: 1400px;
+    margin: auto;
+}
+
+.title {
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--green);
+    letter-spacing: 1px;
+}
+
+.subtitle {
+    color: var(--muted);
+    margin-top: 7px;
+}
+
+.status-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.status {
+    padding: 8px 12px;
+    border-radius: 20px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.status.ok {
+    color: var(--green);
+    border-color: var(--green);
+}
+
+.status.bad {
+    color: var(--red);
+    border-color: var(--red);
+}
+
+.status.warn {
+    color: var(--yellow);
+    border-color: var(--yellow);
+}
+
+.nav {
+    max-width: 1400px;
+    margin: auto;
+    padding: 14px 24px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+}
+
+.nav button {
+    padding: 10px 15px;
+    color: var(--muted);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.nav button.active {
+    color: #000;
+    background: var(--green);
+    border-color: var(--green);
+    font-weight: bold;
+}
+
+.container {
+    max-width: 1400px;
+    margin: auto;
+    padding: 24px;
+}
+
+.tab {
+    display: none;
+}
+
+.tab.active {
+    display: block;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+}
+
+.card {
+    grid-column: span 12;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+}
+
+.card.half {
+    grid-column: span 6;
+}
+
+.card.third {
+    grid-column: span 4;
+}
+
+@media(max-width: 900px) {
+    .card.half,
+    .card.third {
+        grid-column: span 12;
+    }
+}
+
+.card h2,
+.card h3 {
+    margin-top: 0;
+}
+
+.muted {
+    color: var(--muted);
+}
+
+button.primary {
+    background: var(--green);
+    color: #00150b;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+button.secondary {
+    background: var(--cyan);
+    color: #001018;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+button.warning {
+    background: var(--yellow);
+    color: #181300;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+button.danger {
+    background: var(--red);
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+button.dark {
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 12px 18px;
+    border-radius: 8px;
+}
+
+button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.connection-box {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+@media(max-width: 800px) {
+    .connection-box {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.metric {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    padding: 15px;
+    border-radius: 10px;
+}
+
+.metric-label {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.metric-value {
+    font-size: 22px;
+    margin-top: 7px;
+    font-weight: bold;
+}
+
+.sensor-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+}
+
+@media(max-width: 800px) {
+    .sensor-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.sensor-value {
+    background: #080d15;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 13px;
+    text-align: center;
+}
+
+.sensor-value strong {
+    display: block;
+    color: var(--cyan);
+    font-size: 20px;
+    margin-top: 5px;
+}
+
+.activity-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+@media(max-width: 800px) {
+    .activity-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.activity-btn {
+    min-height: 75px;
+    background: var(--panel2);
+    color: var(--text);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.activity-btn.selected {
+    border-color: var(--green);
+    color: var(--green);
+}
+
+.progress-container {
+    width: 100%;
+    height: 18px;
+    background: #05080d;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    margin-top: 15px;
+}
+
+.progress {
+    width: 0%;
+    height: 100%;
+    background: var(--green);
+    transition: width 0.1s linear;
+}
+
+.count-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.count {
+    padding: 14px;
+    text-align: center;
+    background: var(--panel2);
+    border-radius: 9px;
+}
+
+.count span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.count strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 24px;
+}
+
+.log {
+    background: #03060a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 220px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+}
+
+.training-status {
+    font-size: 20px;
+    color: var(--cyan);
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+@media(max-width: 800px) {
+    .stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.stat-box {
+    background: var(--panel2);
+    padding: 16px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.stat-box .number {
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--green);
+}
+
+.stat-box .label {
+    color: var(--muted);
+    margin-top: 5px;
+    font-size: 12px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+th,
+td {
+    padding: 10px;
+    border: 1px solid var(--border);
+    text-align: center;
+}
+
+th {
+    background: var(--panel2);
+    color: var(--cyan);
+}
+
+td {
+    background: #080d15;
+}
+
+.confusion {
+    max-width: 700px;
+    overflow-x: auto;
+}
+
+.matrix-cell {
+    min-width: 75px;
+    height: 60px;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.matrix-diagonal {
+    color: var(--green);
+}
+
+.probability {
+    margin: 13px 0;
+}
+
+.probability-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.probability-track {
+    width: 100%;
+    height: 17px;
+    background: #03060a;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.probability-fill {
+    width: 0%;
+    height: 100%;
+    background: var(--cyan);
+    transition: width 0.2s;
+}
+
+.live-activity {
+    text-align: center;
+    padding: 25px;
+    background: #080d15;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.live-activity .activity-name {
+    font-size: 42px;
+    font-weight: 900;
+    color: var(--green);
+}
+
+.live-activity .confidence {
+    font-size: 20px;
+    color: var(--cyan);
+    margin-top: 10px;
+}
+
+.chart-wrap {
+    height: 250px;
+    background: #03060a;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+}
+
+canvas {
+    width: 100%;
+    height: 100%;
+}
+
+select,
+input[type="number"] {
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 10px;
+    border-radius: 7px;
+}
+
+.notice {
+    padding: 13px;
+    border-radius: 8px;
+    background: #0b1522;
+    border-left: 4px solid var(--cyan);
+    color: var(--muted);
+}
+
+.error {
+    color: var(--red);
+}
+
+.success {
+    color: var(--green);
+}
+
+.warning-text {
+    color: var(--yellow);
+}
+
+.hidden {
+    display: none !important;
+}
+</style>
+</head>
+
+<body>
+
+<header class="header">
+    <div class="header-inner">
+        <div class="title">AI ACTIVITY RECOGNITION</div>
+        <div class="subtitle">ESP32 + MPU6050 + TensorFlow.js</div>
+
+        <div class="status-row">
+            <div id="espStatus" class="status bad">ESP32 DISCONNECTED</div>
+            <div id="mpuStatus" class="status bad">MPU6050 NOT CONNECTED</div>
+            <div id="datasetStatus" class="status warn">DATASET EMPTY</div>
+            <div id="modelStatus" class="status warn">MODEL NOT TRAINED</div>
+        </div>
+    </div>
+</header>
+
+<nav class="nav">
+    <button class="nav-btn active" data-tab="connectTab">CONNECT</button>
+    <button class="nav-btn" data-tab="dataTab">TRAIN DATA</button>
+    <button class="nav-btn" data-tab="trainTab">TRAIN MODEL</button>
+    <button class="nav-btn" data-tab="testTab">TEST</button>
+    <button class="nav-btn" data-tab="storageTab">DATA / MODEL</button>
+    <button class="nav-btn" data-tab="liveTab">LIVE PREDICTION</button>
+</nav>
+
+<main class="container">
+
+<!-- ========================================================= -->
+<!-- CONNECT -->
+<!-- ========================================================= -->
+
+<section id="connectTab" class="tab active">
+
+    <div class="grid">
+
+        <div class="card">
+            <h2>ESP32 Connection</h2>
+
+            <p class="muted">
+                Connect your computer or phone to the ESP32 Wi-Fi network
+                and then connect this application to the sensor.
+            </p>
+
+            <div class="notice">
+                Wi-Fi SSID:
+                <strong>AI_ACTIVITY_ESP32</strong><br>
+                Password:
+                <strong>AI12345678</strong><br>
+                ESP32 IP:
+                <strong>192.168.4.1</strong>
+            </div>
+
+            <div class="button-row">
+                <button id="connectBtn" class="primary">
+                    CONNECT ESP32
+                </button>
+
+                <button id="disconnectBtn" class="dark">
+                    DISCONNECT
+                </button>
+            </div>
+
+            <p id="connectionMessage" class="muted">
+                ESP32 is not connected.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Connection Information</h2>
+
+            <div class="connection-box">
+
+                <div class="metric">
+                    <div class="metric-label">ESP32</div>
+                    <div id="espInfo" class="metric-value">OFFLINE</div>
+                </div>
+
+                <div class="metric">
+                    <div class="metric-label">MPU6050</div>
+                    <div id="mpuInfo" class="metric-value">NOT READY</div>
+                </div>
+
+                <div class="metric">
+                    <div class="metric-label">IP ADDRESS</div>
+                    <div id="ipInfo" class="metric-value">--</div>
+                </div>
+
+                <div class="metric">
+                    <div class="metric-label">SAMPLE RATE</div>
+                    <div id="rateInfo" class="metric-value">50 Hz</div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Live Sensor Data</h2>
+
+            <div class="sensor-grid">
+
+                <div class="sensor-value">
+                    ACC X
+                    <strong id="accX">0.000</strong>
+                </div>
+
+                <div class="sensor-value">
+                    ACC Y
+                    <strong id="accY">0.000</strong>
+                </div>
+
+                <div class="sensor-value">
+                    ACC Z
+                    <strong id="accZ">0.000</strong>
+                </div>
+
+                <div class="sensor-value">
+                    GYRO X
+                    <strong id="gyroX">0.000</strong>
+                </div>
+
+                <div class="sensor-value">
+                    GYRO Y
+                    <strong id="gyroY">0.000</strong>
+                </div>
+
+                <div class="sensor-value">
+                    GYRO Z
+                    <strong id="gyroZ">0.000</strong>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Sensor Graph</h2>
+
+            <div class="chart-wrap">
+                <canvas id="sensorCanvas"></canvas>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<!-- ========================================================= -->
+<!-- TRAIN DATA -->
+<!-- ========================================================= -->
+
+<section id="dataTab" class="tab">
+
+    <div class="grid">
+
+        <div class="card">
+            <h2>Training Data Collection</h2>
+
+            <p class="muted">
+                Select the activity you are about to perform.
+                The browser automatically labels the recorded sensor window.
+            </p>
+
+            <div class="activity-grid">
+
+                <button class="activity-btn" data-label="walking">
+                    WALKING
+                </button>
+
+                <button class="activity-btn" data-label="running">
+                    RUNNING
+                </button>
+
+                <button class="activity-btn" data-label="squat">
+                    SQUAT
+                </button>
+
+                <button class="activity-btn" data-label="standing">
+                    STANDING
+                </button>
+
+            </div>
+
+            <div class="button-row">
+
+                <button id="startRecordingBtn" class="primary">
+                    START RECORDING
+                </button>
+
+                <button id="stopRecordingBtn" class="danger" disabled>
+                    STOP RECORDING
+                </button>
+
+            </div>
+
+            <div style="margin-top:20px;">
+                <strong id="recordingLabel">
+                    No activity selected
+                </strong>
+
+                <div class="progress-container">
+                    <div id="recordProgress" class="progress"></div>
+                </div>
+
+                <p id="recordProgressText" class="muted">
+                    0 / 100 samples
+                </p>
+            </div>
+
+            <div id="recordingState" class="training-status">
+                READY
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Dataset Summary</h2>
+
+            <div class="count-grid">
+
+                <div class="count">
+                    <span>WALKING</span>
+                    <strong id="walkingCount">0</strong>
+                </div>
+
+                <div class="count">
+                    <span>RUNNING</span>
+                    <strong id="runningCount">0</strong>
+                </div>
+
+                <div class="count">
+                    <span>SQUAT</span>
+                    <strong id="squatCount">0</strong>
+                </div>
+
+                <div class="count">
+                    <span>STANDING</span>
+                    <strong id="standingCount">0</strong>
+                </div>
+
+            </div>
+
+            <p>
+                Total windows:
+                <strong id="totalCount">0</strong>
+            </p>
+
+            <div class="button-row">
+                <button id="showDatasetBtn" class="dark">
+                    SHOW DATASET
+                </button>
+
+                <button id="clearCurrentBtn" class="warning">
+                    CLEAR CURRENT CLASS
+                </button>
+
+                <button id="clearAllDataBtn" class="danger">
+                    CLEAR ALL DATA
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Recording Information</h2>
+
+            <div class="stats">
+
+                <div class="stat-box">
+                    <div class="number">2 s</div>
+                    <div class="label">WINDOW</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="number">50 Hz</div>
+                    <div class="label">SAMPLE RATE</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="number">100</div>
+                    <div class="label">TIME STEPS</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="number">6</div>
+                    <div class="label">FEATURES</div>
+                </div>
+
+            </div>
+
+            <p class="muted">
+                Each training example contains a complete 2-second time-series
+                window with six real MPU6050 features.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Dataset Preview</h2>
+
+            <div id="datasetPreview">
+                <p class="muted">
+                    Click SHOW DATASET to display collected windows.
+                </p>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<!-- ========================================================= -->
+<!-- TRAIN MODEL -->
+<!-- ========================================================= -->
+
+<section id="trainTab" class="tab">
+
+    <div class="grid">
+
+        <div class="card">
+            <h2>TensorFlow.js Model Training</h2>
+
+            <div class="notice">
+                Training is performed locally in this browser using
+                TensorFlow.js. No dataset is uploaded to a cloud server.
+            </div>
+
+            <div class="button-row">
+
+                <button id="trainModelBtn" class="primary">
+                    TRAIN MODEL
+                </button>
+
+                <button id="stopTrainingBtn" class="danger" disabled>
+                    STOP TRAINING
+                </button>
+
+            </div>
+
+            <div style="margin-top:20px;">
+
+                <div class="training-status" id="trainingStatus">
+                    READY
+                </div>
+
+                <div class="progress-container">
+                    <div id="trainingProgress" class="progress"></div>
+                </div>
+
+                <p id="trainingProgressText" class="muted">
+                    Epoch 0 / 30
+                </p>
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Training Metrics</h2>
+
+            <div class="stats">
+
+                <div class="stat-box">
+                    <div id="trainAccuracy" class="number">--</div>
+                    <div class="label">TRAIN ACCURACY</div>
+                </div>
+
+                <div class="stat-box">
+                    <div id="valAccuracy" class="number">--</div>
+                    <div class="label">VALIDATION ACCURACY</div>
+                </div>
+
+                <div class="stat-box">
+                    <div id="testAccuracy" class="number">--</div>
+                    <div class="label">TEST ACCURACY</div>
+                </div>
+
+                <div class="stat-box">
+                    <div id="trainingEpochs" class="number">--</div>
+                    <div class="label">EPOCHS</div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Training Log</h2>
+            <div id="trainingLog" class="log">
+Waiting for training...
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<!-- ========================================================= -->
+<!-- TEST -->
+<!-- ========================================================= -->
+
+<section id="testTab" class="tab">
+
+    <div class="grid">
+
+        <div class="card">
+            <h2>Model Test Results</h2>
+
+            <div class="stats">
+
+                <div class="stat-box">
+                    <div id="testSamples" class="number">0</div>
+                    <div class="label">TEST SAMPLES</div>
+                </div>
+
+                <div class="stat-box">
+                    <div id="correctSamples" class="number">0</div>
+                    <div class="label">CORRECT</div>
+                </div>
+
+                <div class="stat-box">
+                    <div id="wrongSamples" class="number">0</div>
+                    <div class="label">WRONG</div>
+                </div>
+
+                <div class="stat-box">
+                    <div id="testAccuracyLarge" class="number">--</div>
+                    <div class="label">TEST ACCURACY</div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Confusion Matrix</h2>
+
+            <p class="muted">
+                Rows represent actual labels. Columns represent predicted labels.
+            </p>
+
+            <div id="confusionMatrix" class="confusion">
+                <p class="muted">
+                    Train a model first.
+                </p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Per-Class Test Results</h2>
+
+            <div id="classResults">
+                <p class="muted">
+                    Train a model first.
+                </p>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<!-- ========================================================= -->
+<!-- DATA / MODEL -->
+<!-- ========================================================= -->
+
+<section id="storageTab" class="tab">
+
+    <div class="grid">
+
+        <div class="card">
+            <h2>Dataset Storage</h2>
+
+            <p class="muted">
+                Dataset windows are stored locally in IndexedDB.
+                They remain available after refreshing the browser.
+            </p>
+
+            <div class="button-row">
+
+                <button id="exportCsvBtn" class="primary">
+                    EXPORT CSV
+                </button>
+
+                <button id="importCsvBtn" class="secondary">
+                    IMPORT CSV
+                </button>
+
+                <input
+                    id="csvFileInput"
+                    type="file"
+                    accept=".csv,text/csv"
+                    class="hidden"
+                >
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>TensorFlow.js Model</h2>
+
+            <p class="muted">
+                The trained model and its normalization metadata are saved
+                locally using TensorFlow.js IndexedDB storage.
+            </p>
+
+            <div class="button-row">
+
+                <button id="saveModelBtn" class="primary">
+                    SAVE MODEL
+                </button>
+
+                <button id="loadModelBtn" class="secondary">
+                    LOAD MODEL
+                </button>
+
+                <button id="deleteModelBtn" class="danger">
+                    DELETE MODEL
+                </button>
+
+            </div>
+
+            <p id="modelStorageInfo" class="muted">
+                No model information available.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Dataset / Model Information</h2>
+
+            <div id="storageInfo" class="log">
+Loading...
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<!-- ========================================================= -->
+<!-- LIVE PREDICTION -->
+<!-- ========================================================= -->
+
+<section id="liveTab" class="tab">
+
+    <div class="grid">
+
+        <div class="card">
+            <h2>Live Activity Recognition</h2>
+
+            <div class="notice">
+                During live prediction, do not select an activity.
+                The model receives a NEW sensor window and automatically
+                predicts the activity.
+            </div>
+
+            <div class="button-row">
+
+                <button id="startLiveBtn" class="primary">
+                    START LIVE PREDICTION
+                </button>
+
+                <button id="stopLiveBtn" class="danger" disabled>
+                    STOP LIVE PREDICTION
+                </button>
+
+            </div>
+
+            <div class="live-activity" style="margin-top:20px;">
+
+                <div class="muted">
+                    CURRENT ACTIVITY
+                </div>
+
+                <div id="liveActivity" class="activity-name">
+                    --
+                </div>
+
+                <div id="liveConfidence" class="confidence">
+                    Confidence: --
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Prediction Probabilities</h2>
+
+            <div class="probability">
+
+                <div class="probability-header">
+                    <span>WALKING</span>
+                    <strong id="probWalking">0%</strong>
+                </div>
+
+                <div class="probability-track">
+                    <div id="barWalking" class="probability-fill"></div>
+                </div>
+
+            </div>
+
+            <div class="probability">
+
+                <div class="probability-header">
+                    <span>RUNNING</span>
+                    <strong id="probRunning">0%</strong>
+                </div>
+
+                <div class="probability-track">
+                    <div id="barRunning" class="probability-fill"></div>
+                </div>
+
+            </div>
+
+            <div class="probability">
+
+                <div class="probability-header">
+                    <span>SQUAT</span>
+                    <strong id="probSquat">0%</strong>
+                </div>
+
+                <div class="probability-track">
+                    <div id="barSquat" class="probability-fill"></div>
+                </div>
+
+            </div>
+
+            <div class="probability">
+
+                <div class="probability-header">
+                    <span>STANDING</span>
+                    <strong id="probStanding">0%</strong>
+                </div>
+
+                <div class="probability-track">
+                    <div id="barStanding" class="probability-fill"></div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Live Prediction Window</h2>
+
+            <p id="liveProgressText" class="muted">
+                Waiting for live prediction...
+            </p>
+
+            <div class="progress-container">
+                <div id="liveProgress" class="progress"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Live Sensor Graph</h2>
+
+            <div class="chart-wrap">
+                <canvas id="liveCanvas"></canvas>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+</main>
+
+<script>
+"use strict";
+
+/* ============================================================
+   CONFIGURATION
+   ============================================================ */
+
+const ESP32_BASE_URL = "http://192.168.4.1";
+
+const STATUS_URL =
+    ESP32_BASE_URL + "/api/status";
+
+const WINDOW_SECONDS = 2;
+
+const SAMPLE_RATE = 50;
+
+const WINDOW_SIZE =
+    WINDOW_SECONDS * SAMPLE_RATE;
+
+const FEATURE_COUNT = 6;
+
+const EPOCHS = 30;
+
+const BATCH_SIZE = 16;
+
+const MIN_SAMPLES_PER_CLASS = 10;
+
+const CONFIDENCE_THRESHOLD = 0.60;
+
+const CLASS_NAMES = [
+    "walking",
+    "running",
+    "squat",
+    "standing"
+];
+
+const CLASS_DISPLAY_NAMES = {
+    walking: "WALKING",
+    running: "RUNNING",
+    squat: "SQUAT",
+    standing: "STANDING"
+};
+
+const MODEL_KEY =
+    "indexeddb://activity-model";
+
+const DB_NAME =
+    "AIActivityRecognitionDB";
+
+const DB_VERSION = 1;
+
+const STORE_NAME =
+    "dataset";
+
+/* ============================================================
+   GLOBAL STATE
+   ============================================================ */
+
+let db = null;
+
+let espConnected = false;
+
+let currentSensor = {
+    ax: 0,
+    ay: 0,
+    az: 0,
+    gx: 0,
+    gy: 0,
+    gz: 0,
+    timestamp: 0
+};
+
+let selectedActivity = null;
+
+let recording = false;
+
+let recordingBuffer = [];
+
+let currentModel = null;
+
+let normalization = null;
+
+let modelMetadata = null;
+
+let trainingRunning = false;
+
+let trainingStopRequested = false;
+
+let liveRunning = false;
+
+let liveBuffer = [];
+
+let sensorTimer = null;
+
+let predictionTimer = null;
+
+let predictionHistory = [];
+
+let lastSensorUpdate = 0;
+
+let testResult = null;
+
+/* ============================================================
+   DOM HELPERS
+   ============================================================ */
+
+function $(id) {
+    return document.getElementById(id);
+}
+
+function setText(id, value) {
+    const element = $(id);
+
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+function logMessage(message) {
+    const log = $("trainingLog");
+
+    if (!log) {
+        return;
+    }
+
+    const time =
+        new Date().toLocaleTimeString();
+
+    log.textContent +=
+        "[" + time + "] " + message + "\n";
+
+    log.scrollTop =
+        log.scrollHeight;
+}
+
+/* ============================================================
+   TAB NAVIGATION
+   ============================================================ */
+
+document.querySelectorAll(".nav-btn").forEach(button => {
+
+    button.addEventListener("click", () => {
+
+        document.querySelectorAll(".nav-btn")
+            .forEach(btn => btn.classList.remove("active"));
+
+        document.querySelectorAll(".tab")
+            .forEach(tab => tab.classList.remove("active"));
+
+        button.classList.add("active");
+
+        const target =
+            $(button.dataset.tab);
+
+        if (target) {
+            target.classList.add("active");
+        }
+
+    });
+
+});
+
+/* ============================================================
+   INDEXEDDB
+   ============================================================ */
+
+function openDatabase() {
+
+    return new Promise((resolve, reject) => {
+
+        const request =
+            indexedDB.open(
+                DB_NAME,
+                DB_VERSION
+            );
+
+        request.onupgradeneeded = event => {
+
+            const database =
+                event.target.result;
+
+            if (!database.objectStoreNames.contains(STORE_NAME)) {
+
+                const store =
+                    database.createObjectStore(
+                        STORE_NAME,
+                        {
+                            keyPath: "id",
+                            autoIncrement: true
+                        }
+                    );
+
+                store.createIndex(
+                    "label",
+                    "label",
+                    {
+                        unique: false
+                    }
+                );
+            }
+        };
+
+        request.onsuccess = event => {
+
+            db = event.target.result;
+
+            resolve(db);
+        };
+
+        request.onerror = () => {
+
+            reject(
+                request.error
+            );
+        };
+
+    });
+}
+
+function addDatasetSample(sample) {
+
+    return new Promise((resolve, reject) => {
+
+        const transaction =
+            db.transaction(
+                STORE_NAME,
+                "readwrite"
+            );
+
+        const store =
+            transaction.objectStore(
+                STORE_NAME
+            );
+
+        const request =
+            store.add(sample);
+
+        request.onsuccess = () => {
+            resolve(request.result);
+        };
+
+        request.onerror = () => {
+            reject(request.error);
+        };
+
+    });
+}
+
+function getAllDatasetSamples() {
+
+    return new Promise((resolve, reject) => {
+
+        const transaction =
+            db.transaction(
+                STORE_NAME,
+                "readonly"
+            );
+
+        const store =
+            transaction.objectStore(
+                STORE_NAME
+            );
+
+        const request =
+            store.getAll();
+
+        request.onsuccess = () => {
+            resolve(request.result || []);
+        };
+
+        request.onerror = () => {
+            reject(request.error);
+        };
+
+    });
+}
+
+function deleteDatasetSample(id) {
+
+    return new Promise((resolve, reject) => {
+
+        const transaction =
+            db.transaction(
+                STORE_NAME,
+                "readwrite"
+            );
+
+        const store =
+            transaction.objectStore(
+                STORE_NAME
+            );
+
+        const request =
+            store.delete(id);
+
+        request.onsuccess = () => {
+            resolve();
+        };
+
+        request.onerror = () => {
+            reject(request.error);
+        };
+
+    });
+}
+
+function clearDataset() {
+
+    return new Promise((resolve, reject) => {
+
+        const transaction =
+            db.transaction(
+                STORE_NAME,
+                "readwrite"
+            );
+
+        const store =
+            transaction.objectStore(
+                STORE_NAME
+            );
+
+        const request =
+            store.clear();
+
+        request.onsuccess = () => {
+            resolve();
+        };
+
+        request.onerror = () => {
+            reject(request.error);
+        };
+
+    });
+}
+
+/* ============================================================
+   DATASET SUMMARY
+   ============================================================ */
+
+async function updateDatasetSummary() {
+
+    if (!db) {
+        return;
+    }
+
+    const samples =
+        await getAllDatasetSamples();
+
+    const counts = {
+        walking: 0,
+        running: 0,
+        squat: 0,
+        standing: 0
+    };
+
+    samples.forEach(sample => {
+
+        if (
+            Object.prototype.hasOwnProperty.call(
+                counts,
+                sample.label
+            )
+        ) {
+            counts[sample.label]++;
+        }
+
+    });
+
+    setText(
+        "walkingCount",
+        counts.walking
+    );
+
+    setText(
+        "runningCount",
+        counts.running
+    );
+
+    setText(
+        "squatCount",
+        counts.squat
+    );
+
+    setText(
+        "standingCount",
+        counts.standing
+    );
+
+    setText(
+        "totalCount",
+        samples.length
+    );
+
+    const datasetStatus =
+        $("datasetStatus");
+
+    if (samples.length === 0) {
+
+        datasetStatus.textContent =
+            "DATASET EMPTY";
+
+        datasetStatus.className =
+            "status warn";
+
+    } else {
+
+        datasetStatus.textContent =
+            "DATASET: " +
+            samples.length +
+            " WINDOWS";
+
+        datasetStatus.className =
+            "status ok";
+    }
+
+}
+
+/* ============================================================
+   ESP32 CONNECTION
+   ============================================================ */
+
+async function fetchSensorData() {
+
+    try {
+
+        const response =
+            await fetch(
+                STATUS_URL + "?t=" + Date.now(),
+                {
+                    method: "GET",
+                    cache: "no-store"
+                }
+            );
+
+        if (!response.ok) {
+            throw new Error(
+                "HTTP " + response.status
+            );
+        }
+
+        const data =
+            await response.json();
+
+        if (
+            typeof data.ax !== "number" ||
+            typeof data.ay !== "number" ||
+            typeof data.az !== "number" ||
+            typeof data.gx !== "number" ||
+            typeof data.gy !== "number" ||
+            typeof data.gz !== "number"
+        ) {
+            throw new Error(
+                "Invalid sensor response"
+            );
+        }
+
+        currentSensor = {
+            ax: data.ax,
+            ay: data.ay,
+            az: data.az,
+            gx: data.gx,
+            gy: data.gy,
+            gz: data.gz,
+            timestamp:
+                data.timestamp || Date.now()
+        };
+
+        lastSensorUpdate =
+            Date.now();
+
+        espConnected = true;
+
+        updateConnectionUI();
+
+        updateSensorUI();
+
+        updateSensorGraph();
+
+        if (recording) {
+
+            recordingBuffer.push([
+                currentSensor.ax,
+                currentSensor.ay,
+                currentSensor.az,
+                currentSensor.gx,
+                currentSensor.gy,
+                currentSensor.gz
+            ]);
+
+            updateRecordingProgress();
+        }
+
+        if (liveRunning) {
+
+            liveBuffer.push([
+                currentSensor.ax,
+                currentSensor.ay,
+                currentSensor.az,
+                currentSensor.gx,
+                currentSensor.gy,
+                currentSensor.gz
+            ]);
+
+            updateLiveProgress();
+
+        }
+
+        return true;
+
+    } catch (error) {
+
+        espConnected = false;
+
+        updateConnectionUI();
+
+        return false;
+    }
+}
+
+async function connectESP32() {
+
+    setText(
+        "connectionMessage",
+        "Connecting to ESP32..."
+    );
+
+    const success =
+        await fetchSensorData();
+
+    if (success) {
+
+        setText(
+            "connectionMessage",
+            "ESP32 connected successfully."
+        );
+
+        startSensorPolling();
+
+    } else {
+
+        setText(
+            "connectionMessage",
+            "Connection failed. Connect to AI_ACTIVITY_ESP32 Wi-Fi and try again."
+        );
+
+    }
+}
+
+function disconnectESP32() {
+
+    espConnected = false;
+
+    stopSensorPolling();
+
+    updateConnectionUI();
+
+    setText(
+        "connectionMessage",
+        "ESP32 disconnected."
+    );
+}
+
+function startSensorPolling() {
+
+    stopSensorPolling();
+
+    sensorTimer =
+        setInterval(
+            fetchSensorData,
+            20
+        );
+}
+
+function stopSensorPolling() {
+
+    if (sensorTimer !== null) {
+
+        clearInterval(
+            sensorTimer
+        );
+
+        sensorTimer = null;
+    }
+}
+
+function updateConnectionUI() {
+
+    const espStatus =
+        $("espStatus");
+
+    const mpuStatus =
+        $("mpuStatus");
+
+    if (espConnected) {
+
+        espStatus.textContent =
+            "ESP32 CONNECTED";
+
+        espStatus.className =
+            "status ok";
+
+        mpuStatus.textContent =
+            "MPU6050 READY";
+
+        mpuStatus.className =
+            "status ok";
+
+        setText(
+            "espInfo",
+            "ONLINE"
+        );
+
+        setText(
+            "mpuInfo",
+            "READY"
+        );
+
+        setText(
+            "ipInfo",
+            "192.168.4.1"
+        );
+
+    } else {
+
+        espStatus.textContent =
+            "ESP32 DISCONNECTED";
+
+        espStatus.className =
+            "status bad";
+
+        mpuStatus.textContent =
+            "MPU6050 NOT CONNECTED";
+
+        mpuStatus.className =
+            "status bad";
+
+        setText(
+            "espInfo",
+            "OFFLINE"
+        );
+
+        setText(
+            "mpuInfo",
+            "NOT READY"
+        );
+
+        setText(
+            "ipInfo",
+            "--"
+        );
+    }
+}
+
+/* ============================================================
+   SENSOR UI
+   ============================================================ */
+
+function updateSensorUI() {
+
+    setText(
+        "accX",
+        currentSensor.ax.toFixed(3)
+    );
+
+    setText(
+        "accY",
+        currentSensor.ay.toFixed(3)
+    );
+
+    setText(
+        "accZ",
+        currentSensor.az.toFixed(3)
+    );
+
+    setText(
+        "gyroX",
+        currentSensor.gx.toFixed(3)
+    );
+
+    setText(
+        "gyroY",
+        currentSensor.gy.toFixed(3)
+    );
+
+    setText(
+        "gyroZ",
+        currentSensor.gz.toFixed(3)
+    );
+}
+
+/* ============================================================
+   SENSOR GRAPH
+   ============================================================ */
+
+const sensorHistory = [];
+
+const MAX_GRAPH_POINTS = 100;
+
+function updateSensorGraph() {
+
+    sensorHistory.push({
+        x: currentSensor.ax,
+        y: currentSensor.ay,
+        z: currentSensor.az
+    });
+
+    if (
+        sensorHistory.length >
+        MAX_GRAPH_POINTS
+    ) {
+        sensorHistory.shift();
+    }
+
+    drawGraph(
+        $("sensorCanvas"),
+        sensorHistory
+    );
+
+    drawGraph(
+        $("liveCanvas"),
+        sensorHistory
+    );
+}
+
+function drawGraph(canvas, points) {
+
+    if (!canvas) {
+        return;
+    }
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+    const width =
+        Math.max(
+            300,
+            Math.floor(rect.width)
+        );
+
+    const height =
+        Math.max(
+            180,
+            Math.floor(rect.height)
+        );
+
+    const ratio =
+        window.devicePixelRatio || 1;
+
+    canvas.width =
+        width * ratio;
+
+    canvas.height =
+        height * ratio;
+
+    const ctx =
+        canvas.getContext("2d");
+
+    ctx.setTransform(
+        ratio,
+        0,
+        0,
+        ratio,
+        0,
+        0
+    );
+
+    ctx.clearRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+    ctx.strokeStyle =
+        "#1d2a3d";
+
+    ctx.lineWidth = 1;
+
+    for (
+        let i = 0;
+        i <= 4;
+        i++
+    ) {
+
+        const y =
+            (height / 4) * i;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            0,
+            y
+        );
+
+        ctx.lineTo(
+            width,
+            y
+        );
+
+        ctx.stroke();
+    }
+
+    if (points.length < 2) {
+        return;
+    }
+
+    const values = [
+        {
+            key: "x",
+            color: "#00ff88"
+        },
+        {
+            key: "y",
+            color: "#00ccff"
+        },
+        {
+            key: "z",
+            color: "#ffd84d"
+        }
+    ];
+
+    let min = Infinity;
+    let max = -Infinity;
+
+    points.forEach(point => {
+
+        values.forEach(series => {
+
+            min =
+                Math.min(
+                    min,
+                    point[series.key]
+                );
+
+            max =
+                Math.max(
+                    max,
+                    point[series.key]
+                );
+        });
+
+    });
+
+    if (
+        !Number.isFinite(min) ||
+        !Number.isFinite(max)
+    ) {
+        return;
+    }
+
+    if (
+        Math.abs(max - min) < 0.001
+    ) {
+
+        max += 1;
+        min -= 1;
+    }
+
+    const padding =
+        Math.max(
+            0.5,
+            (max - min) * 0.1
+        );
+
+    min -= padding;
+    max += padding;
+
+    values.forEach(series => {
+
+        ctx.strokeStyle =
+            series.color;
+
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+
+        points.forEach((point, index) => {
+
+            const x =
+                (index /
+                    (points.length - 1)) *
+                width;
+
+            const normalized =
+                (point[series.key] - min) /
+                (max - min);
+
+            const y =
+                height -
+                normalized * height;
+
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+
+        });
+
+        ctx.stroke();
+    });
+}
+
+/* ============================================================
+   ACTIVITY SELECTION
+   ============================================================ */
+
+document.querySelectorAll(".activity-btn")
+    .forEach(button => {
+
+        button.addEventListener(
+            "click",
+            () => {
+
+                if (recording) {
+                    return;
+                }
+
+                document
+                    .querySelectorAll(".activity-btn")
+                    .forEach(btn =>
+                        btn.classList.remove(
+                            "selected"
+                        )
+                    );
+
+                button.classList.add(
+                    "selected"
+                );
+
+                selectedActivity =
+                    button.dataset.label;
+
+                setText(
+                    "recordingLabel",
+                    "Selected: " +
+                    CLASS_DISPLAY_NAMES[
+                        selectedActivity
+                    ]
+                );
+            }
+        );
+
+    });
+
+/* ============================================================
+   TRAINING DATA RECORDING
+   ============================================================ */
+
+async function startRecording() {
+
+    if (!espConnected) {
+
+        alert(
+            "Please connect the ESP32 first."
+        );
+
+        return;
+    }
+
+    if (!selectedActivity) {
+
+        alert(
+            "Please select an activity first."
+        );
+
+        return;
+    }
+
+    if (recording) {
+        return;
+    }
+
+    recording = true;
+
+    recordingBuffer = [];
+
+    $("startRecordingBtn")
+        .disabled = true;
+
+    $("stopRecordingBtn")
+        .disabled = false;
+
+    setText(
+        "recordingState",
+        "RECORDING " +
+        CLASS_DISPLAY_NAMES[
+            selectedActivity
+        ]
+    );
+
+    setText(
+        "recordProgressText",
+        "0 / " +
+        WINDOW_SIZE +
+        " samples"
+    );
+
+    $("recordProgress").style.width =
+        "0%";
+
+    /*
+      Sampling is driven by the ESP32 polling loop.
+      A complete 100-sample window is stored.
+    */
+
+    while (
+        recording &&
+        recordingBuffer.length < WINDOW_SIZE
+    ) {
+
+        await sleep(10);
+
+        if (
+            Date.now() -
+            lastSensorUpdate >
+            1000
+        ) {
+
+            await fetchSensorData();
+        }
+    }
+
+    if (
+        recording &&
+        recordingBuffer.length >= WINDOW_SIZE
+    ) {
+
+        await saveRecordedWindow();
+    }
+
+}
+
+async function saveRecordedWindow() {
+
+    const sequence =
+        recordingBuffer
+            .slice(0, WINDOW_SIZE)
+            .map(row => row.slice());
+
+    const sample = {
+        label: selectedActivity,
+        timestamp: new Date().toISOString(),
+        sampleRate: SAMPLE_RATE,
+        windowLength: WINDOW_SIZE,
+        sequence: sequence
+    };
+
+    try {
+
+        await addDatasetSample(
+            sample
+        );
+
+        setText(
+            "recordingState",
+            "SAVED " +
+            CLASS_DISPLAY_NAMES[
+                selectedActivity
+            ]
+        );
+
+        await updateDatasetSummary();
+
+    } catch (error) {
+
+        console.error(error);
+
+        setText(
+            "recordingState",
+            "ERROR SAVING SAMPLE"
+        );
+
+    }
+
+    recording = false;
+
+    $("startRecordingBtn")
+        .disabled = false;
+
+    $("stopRecordingBtn")
+        .disabled = true;
+
+    recordingBuffer = [];
+
+    $("recordProgress").style.width =
+        "100%";
+
+}
+
+function stopRecording() {
+
+    recording = false;
+
+    recordingBuffer = [];
+
+    $("startRecordingBtn")
+        .disabled = false;
+
+    $("stopRecordingBtn")
+        .disabled = true;
+
+    setText(
+        "recordingState",
+        "RECORDING STOPPED"
+    );
+}
+
+function updateRecordingProgress() {
+
+    const count =
+        Math.min(
+            recordingBuffer.length,
+            WINDOW_SIZE
+        );
+
+    const percent =
+        (count / WINDOW_SIZE) * 100;
+
+    $("recordProgress").style.width =
+        percent + "%";
+
+    setText(
+        "recordProgressText",
+        count +
+        " / " +
+        WINDOW_SIZE +
+        " samples"
+    );
+}
+
+/* ============================================================
+   DATASET DISPLAY
+   ============================================================ */
+
+async function showDataset() {
+
+    const samples =
+        await getAllDatasetSamples();
+
+    const preview =
+        $("datasetPreview");
+
+    if (samples.length === 0) {
+
+        preview.innerHTML =
+            "<p class='muted'>Dataset is empty.</p>";
+
+        return;
+    }
+
+    let html = `
+        <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Label</th>
+                    <th>Timestamp</th>
+                    <th>Steps</th>
+                    <th>Sample Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    samples
+        .slice(-30)
+        .reverse()
+        .forEach(sample => {
+
+            html += `
+                <tr>
+                    <td>${sample.id ?? "-"}</td>
+                    <td>${escapeHtml(
+                        CLASS_DISPLAY_NAMES[
+                            sample.label
+                        ] || sample.label
+                    )}</td>
+                    <td>${escapeHtml(
+                        sample.timestamp
+                    )}</td>
+                    <td>${sample.sequence.length}</td>
+                    <td>${sample.sampleRate}</td>
+                </tr>
+            `;
+        });
+
+    html += `
+            </tbody>
+        </table>
+        </div>
+    `;
+
+    preview.innerHTML = html;
+}
+
+/* ============================================================
+   CLEAR DATA
+   ============================================================ */
+
+async function clearCurrentClass() {
+
+    if (!selectedActivity) {
+
+        alert(
+            "Select a class first."
+        );
+
+        return;
+    }
+
+    const confirmed =
+        confirm(
+            "Delete all " +
+            CLASS_DISPLAY_NAMES[
+                selectedActivity
+            ] +
+            " samples?"
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const samples =
+        await getAllDatasetSamples();
+
+    for (const sample of samples) {
+
+        if (
+            sample.label ===
+            selectedActivity
+        ) {
+
+            await deleteDatasetSample(
+                sample.id
+            );
+        }
+    }
+
+    await updateDatasetSummary();
+
+    await showDataset();
+}
+
+async function clearAllData() {
+
+    const confirmed =
+        confirm(
+            "Delete ALL collected dataset windows? This cannot be undone."
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    await clearDataset();
+
+    await updateDatasetSummary();
+
+    await showDataset();
+
+    alert(
+        "All dataset windows deleted."
+    );
+}
+
+/* ============================================================
+   CSV EXPORT
+   ============================================================ */
+
+function csvEscape(value) {
+
+    const text =
+        String(value);
+
+    if (
+        text.includes(",") ||
+        text.includes('"') ||
+        text.includes("\n")
+    ) {
+
+        return '"' +
+            text.replace(
+                /"/g,
+                '""'
+            ) +
+            '"';
+    }
+
+    return text;
+}
+
+async function exportCSV() {
+
+    const samples =
+        await getAllDatasetSamples();
+
+    if (samples.length === 0) {
+
+        alert(
+            "Dataset is empty."
+        );
+
+        return;
+    }
+
+    const header =
+        [
+            "label",
+            "sample_id",
+            "timestamp",
+            "step",
+            "accX",
+            "accY",
+            "accZ",
+            "gyroX",
+            "gyroY",
+            "gyroZ"
+        ];
+
+    const rows = [
+        header
+    ];
+
+    samples.forEach(sample => {
+
+        sample.sequence.forEach(
+            (values, index) => {
+
+                rows.push([
+                    sample.label,
+                    sample.id,
+                    sample.timestamp,
+                    index,
+                    values[0],
+                    values[1],
+                    values[2],
+                    values[3],
+                    values[4],
+                    values[5]
+                ]);
+            }
+        );
+
+    });
+
+    const csv =
+        rows
+            .map(row =>
+                row
+                    .map(csvEscape)
+                    .join(",")
+            )
+            .join("\n");
+
+    const blob =
+        new Blob(
+            [csv],
+            {
+                type: "text/csv;charset=utf-8"
+            }
+        );
+
+    const url =
+        URL.createObjectURL(
+            blob
+        );
+
+    const link =
+        document.createElement("a");
+
+    link.href = url;
+
+    link.download =
+        "AI_Activity_Dataset_" +
+        new Date()
+            .toISOString()
+            .slice(0, 10) +
+        ".csv";
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    URL.revokeObjectURL(url);
+}
+
+/* ============================================================
+   CSV IMPORT
+   ============================================================ */
+
+function parseCSVLine(line) {
+
+    const result = [];
+
+    let current = "";
+
+    let insideQuotes = false;
+
+    for (
+        let i = 0;
+        i < line.length;
+        i++
+    ) {
+
+        const char =
+            line[i];
+
+        if (char === '"') {
+
+            if (
+                insideQuotes &&
+                line[i + 1] === '"'
+            ) {
+
+                current += '"';
+
+                i++;
+
+            } else {
+
+                insideQuotes =
+                    !insideQuotes;
+            }
+
+        } else if (
+            char === "," &&
+            !insideQuotes
+        ) {
+
+            result.push(current);
+
+            current = "";
+
+        } else {
+
+            current += char;
+        }
+    }
+
+    result.push(current);
+
+    return result;
+}
+
+function parseCSV(text) {
+
+    const lines =
+        text
+            .split(/\r?\n/)
+            .filter(line =>
+                line.trim().length > 0
+            );
+
+    if (lines.length < 2) {
+        throw new Error(
+            "CSV file is empty."
+        );
+    }
+
+    const headers =
+        parseCSVLine(lines[0])
+            .map(value =>
+                value.trim()
+            );
+
+    const requiredHeaders = [
+        "label",
+        "sample_id",
+        "timestamp",
+        "step",
+        "accX",
+        "accY",
+        "accZ",
+        "gyroX",
+        "gyroY",
+        "gyroZ"
+    ];
+
+    for (
+        const required of requiredHeaders
+    ) {
+
+        if (
+            !headers.includes(required)
+        ) {
+
+            throw new Error(
+                "Missing CSV column: " +
+                required
+            );
+        }
+    }
+
+    const index =
+        {};
+
+    headers.forEach(
+        (header, i) => {
+            index[header] = i;
+        }
+    );
+
+    const groups =
+        new Map();
+
+    for (
+        let i = 1;
+        i < lines.length;
+        i++
+    ) {
+
+        const columns =
+            parseCSVLine(lines[i]);
+
+        if (
+            columns.length !==
+            headers.length
+        ) {
+            continue;
+        }
+
+        const label =
+            columns[index.label]
+                .trim()
+                .toLowerCase();
+
+        if (
+            !CLASS_NAMES.includes(
+                label
+            )
+        ) {
+            continue;
+        }
+
+        const sampleId =
+            columns[index.sample_id]
+                .trim();
+
+        const key =
+            label +
+            "::" +
+            sampleId;
+
+        if (!groups.has(key)) {
+
+            groups.set(
+                key,
+                {
+                    label,
+                    timestamp:
+                        columns[
+                            index.timestamp
+                        ],
+                    sampleRate:
+                        SAMPLE_RATE,
+                    windowLength:
+                        WINDOW_SIZE,
+                    rows: []
+                }
+            );
+        }
+
+        const values = [
+            Number(
+                columns[index.accX]
+            ),
+            Number(
+                columns[index.accY]
+            ),
+            Number(
+                columns[index.accZ]
+            ),
+            Number(
+                columns[index.gyroX]
+            ),
+            Number(
+                columns[index.gyroY]
+            ),
+            Number(
+                columns[index.gyroZ]
+            )
+        ];
+
+        if (
+            values.every(
+                Number.isFinite
+            )
+        ) {
+
+            groups
+                .get(key)
+                .rows
+                .push(values);
+        }
+    }
+
+    const windows = [];
+
+    for (
+        const group of groups.values()
+    ) {
+
+        group.rows.sort(
+            (a, b) =>
+                group.rows.indexOf(a) -
+                group.rows.indexOf(b)
+        );
+
+        if (
+            group.rows.length ===
+            WINDOW_SIZE
+        ) {
+
+            windows.push({
+                label: group.label,
+                timestamp:
+                    group.timestamp ||
+                    new Date().toISOString(),
+                sampleRate:
+                    SAMPLE_RATE,
+                windowLength:
+                    WINDOW_SIZE,
+                sequence:
+                    group.rows
+            });
+        }
+    }
+
+    return windows;
+}
+
+async function importCSVFile(file) {
+
+    try {
+
+        const text =
+            await file.text();
+
+        const windows =
+            parseCSV(text);
+
+        if (windows.length === 0) {
+
+            throw new Error(
+                "No complete 100-sample windows found in the CSV."
+            );
+        }
+
+        for (
+            const window of windows
+        ) {
+
+            await addDatasetSample(
+                window
+            );
+        }
+
+        await updateDatasetSummary();
+
+        alert(
+            "Imported " +
+            windows.length +
+            " complete windows."
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "CSV import failed:\n" +
+            error.message
+        );
+    }
+}
+
+/* ============================================================
+   FEATURE EXTRACTION
+   ============================================================ */
+
+function sampleToFeatures(sample) {
+
+    if (
+        !sample ||
+        !Array.isArray(sample.sequence)
+    ) {
+        throw new Error(
+            "Invalid dataset sample."
+        );
+    }
+
+    if (
+        sample.sequence.length !==
+        WINDOW_SIZE
+    ) {
+
+        throw new Error(
+            "Invalid window length."
+        );
+    }
+
+    return sample.sequence.map(
+        row => {
+
+            if (
+                !Array.isArray(row) ||
+                row.length !== FEATURE_COUNT
+            ) {
+
+                throw new Error(
+                    "Invalid feature row."
+                );
+            }
+
+            return row.map(Number);
+        }
+    );
+}
+
+/* ============================================================
+   SHUFFLING / SPLITTING
+   ============================================================ */
+
+function shuffleArray(array) {
+
+    const copy =
+        array.slice();
+
+    for (
+        let i = copy.length - 1;
+        i > 0;
+        i--
+    ) {
+
+        const j =
+            Math.floor(
+                Math.random() *
+                (i + 1)
+            );
+
+        [
+            copy[i],
+            copy[j]
+        ] = [
+            copy[j],
+            copy[i]
+        ];
+    }
+
+    return copy;
+}
+
+function stratifiedSplit(samples) {
+
+    const byClass = {};
+
+    CLASS_NAMES.forEach(
+        label => {
+            byClass[label] = [];
+        }
+    );
+
+    samples.forEach(sample => {
+
+        if (
+            byClass[sample.label]
+        ) {
+            byClass[
+                sample.label
+            ].push(sample);
+        }
+
+    });
+
+    const train = [];
+
+    const validation = [];
+
+    const test = [];
+
+    CLASS_NAMES.forEach(label => {
+
+        const items =
+            shuffleArray(
+                byClass[label]
+            );
+
+        const n =
+            items.length;
+
+        let trainCount =
+            Math.floor(
+                n * 0.70
+            );
+
+        let validationCount =
+            Math.floor(
+                n * 0.15
+            );
+
+        let testCount =
+            n -
+            trainCount -
+            validationCount;
+
+        if (
+            n >= 3
+        ) {
+
+            if (
+                validationCount === 0
+            ) {
+                validationCount = 1;
+            }
+
+            if (
+                testCount === 0
+            ) {
+                testCount = 1;
+            }
+
+            trainCount =
+                n -
+                validationCount -
+                testCount;
+        }
+
+        train.push(
+            ...items.slice(
+                0,
+                trainCount
+            )
+        );
+
+        validation.push(
+            ...items.slice(
+                trainCount,
+                trainCount +
+                validationCount
+            )
+        );
+
+        test.push(
+            ...items.slice(
+                trainCount +
+                validationCount
+            )
+        );
+
+    });
+
+    return {
+        train: shuffleArray(train),
+        validation: shuffleArray(validation),
+        test: shuffleArray(test)
+    };
+}
+
+/* ============================================================
+   NORMALIZATION
+   ============================================================ */
+
+function calculateNormalization(samples) {
+
+    const sums =
+        new Array(
+            FEATURE_COUNT
+        ).fill(0);
+
+    const squared =
+        new Array(
+            FEATURE_COUNT
+        ).fill(0);
+
+    let count = 0;
+
+    samples.forEach(sample => {
+
+        sample.sequence.forEach(row => {
+
+            for (
+                let j = 0;
+                j < FEATURE_COUNT;
+                j++
+            ) {
+
+                const value =
+                    Number(row[j]);
+
+                sums[j] += value;
+
+                squared[j] +=
+                    value * value;
+            }
+
+            count++;
+        });
+
+    });
+
+    const mean =
+        new Array(
+            FEATURE_COUNT
+        );
+
+    const std =
+        new Array(
+            FEATURE_COUNT
+        );
+
+    for (
+        let j = 0;
+        j < FEATURE_COUNT;
+        j++
+    ) {
+
+        mean[j] =
+            sums[j] / count;
+
+        const variance =
+            (
+                squared[j] / count
+            ) -
+            (
+                mean[j] *
+                mean[j]
+            );
+
+        std[j] =
+            Math.sqrt(
+                Math.max(
+                    variance,
+                    1e-8
+                )
+            );
+    }
+
+    return {
+        mean,
+        std
+    };
+}
+
+function normalizeSequence(
+    sequence,
+    norm
+) {
+
+    return sequence.map(row =>
+        row.map(
+            (value, index) =>
+                (
+                    Number(value) -
+                    norm.mean[index]
+                ) /
+                norm.std[index]
+        )
+    );
+}
+
+/* ============================================================
+   TENSOR CREATION
+   ============================================================ */
+
+function createTensorDataset(
+    samples,
+    norm
+) {
+
+    const features = [];
+
+    const labels = [];
+
+    samples.forEach(sample => {
+
+        const normalized =
+            normalizeSequence(
+                sample.sequence,
+                norm
+            );
+
+        features.push(
+            normalized
+        );
+
+        labels.push(
+            CLASS_NAMES.indexOf(
+                sample.label
+            )
+        );
+    });
+
+    /*
+      Convert class indexes to one-hot float32 labels.
+      This matches the 4-unit softmax output layer.
+    */
+
+    const oneHotLabels =
+        labels.map(labelIndex => {
+
+            const row =
+                new Array(
+                    CLASS_NAMES.length
+                ).fill(0);
+
+            row[labelIndex] = 1;
+
+            return row;
+        });
+
+    return {
+        xs: tf.tensor3d(
+            features,
+            [
+                features.length,
+                WINDOW_SIZE,
+                FEATURE_COUNT
+            ],
+            "float32"
+        ),
+
+        ys: tf.tensor2d(
+            oneHotLabels,
+            [
+                oneHotLabels.length,
+                CLASS_NAMES.length
+            ],
+            "float32"
+        )
+    };
+}
+
+/* ============================================================
+   MODEL CREATION
+   ============================================================ */
+
+function createModel() {
+
+    const model =
+        tf.sequential();
+
+    model.add(
+        tf.layers.conv1d({
+            inputShape: [
+                WINDOW_SIZE,
+                FEATURE_COUNT
+            ],
+            filters: 32,
+            kernelSize: 5,
+            activation: "relu",
+            padding: "same"
+        })
+    );
+
+    model.add(
+        tf.layers.batchNormalization()
+    );
+
+    model.add(
+        tf.layers.maxPooling1d({
+            poolSize: 2
+        })
+    );
+
+    model.add(
+        tf.layers.conv1d({
+            filters: 64,
+            kernelSize: 5,
+            activation: "relu",
+            padding: "same"
+        })
+    );
+
+    model.add(
+        tf.layers.batchNormalization()
+    );
+
+    model.add(
+        tf.layers.maxPooling1d({
+            poolSize: 2
+        })
+    );
+
+    model.add(
+        tf.layers.globalAveragePooling1d()
+    );
+
+    model.add(
+        tf.layers.dense({
+            units: 64,
+            activation: "relu"
+        })
+    );
+
+    model.add(
+        tf.layers.dropout({
+            rate: 0.25
+        })
+    );
+
+    model.add(
+        tf.layers.dense({
+            units: CLASS_NAMES.length,
+            activation: "softmax"
+        })
+    );
+
+   model.compile({
+    optimizer: tf.train.adam(0.001),
+    loss: "categoricalCrossentropy",
+    metrics: ["accuracy"]
+});
+
+    return model;
+}
+
+/* ============================================================
+   TRAIN MODEL
+   ============================================================ */
+
+async function trainModel() {
+
+    if (trainingRunning) {
+        return;
+    }
+
+    const samples =
+        await getAllDatasetSamples();
+
+    if (samples.length === 0) {
+
+        alert(
+            "Dataset is empty. Collect training data first."
+        );
+
+        return;
+    }
+
+    const counts = {};
+
+    CLASS_NAMES.forEach(
+        label => {
+            counts[label] = 0;
+        }
+    );
+
+    samples.forEach(sample => {
+
+        if (
+            counts[sample.label] !==
+            undefined
+        ) {
+            counts[sample.label]++;
+        }
+    });
+
+    const insufficient =
+        CLASS_NAMES.filter(
+            label =>
+                counts[label] <
+                MIN_SAMPLES_PER_CLASS
+        );
+
+    if (
+        insufficient.length > 0
+    ) {
+
+        alert(
+            "Not enough samples.\n\n" +
+            insufficient
+                .map(
+                    label =>
+                        CLASS_DISPLAY_NAMES[
+                            label
+                        ] +
+                        ": " +
+                        counts[label] +
+                        " / " +
+                        MIN_SAMPLES_PER_CLASS
+                )
+                .join("\n")
+        );
+
+        return;
+    }
+
+    trainingRunning = true;
+
+    trainingStopRequested = false;
+
+    $("trainModelBtn")
+        .disabled = true;
+
+    $("stopTrainingBtn")
+        .disabled = false;
+
+    $("trainingProgress").style.width =
+        "0%";
+
+    $("trainingLog").textContent =
+        "";
+
+    setText(
+        "trainingStatus",
+        "Preparing dataset..."
+    );
+
+    try {
+
+        const split =
+            stratifiedSplit(
+                samples
+            );
+
+        if (
+            split.train.length === 0 ||
+            split.validation.length === 0 ||
+            split.test.length === 0
+        ) {
+
+            throw new Error(
+                "Dataset is too small for train/validation/test splitting."
+            );
+        }
+
+        logMessage(
+            "Total windows: " +
+            samples.length
+        );
+
+        logMessage(
+            "Training windows: " +
+            split.train.length
+        );
+
+        logMessage(
+            "Validation windows: " +
+            split.validation.length
+        );
+
+        logMessage(
+            "Test windows: " +
+            split.test.length
+        );
+
+        /*
+          Normalization is calculated ONLY from
+          the training split to prevent data leakage.
+        */
+
+        normalization =
+            calculateNormalization(
+                split.train
+            );
+
+        logMessage(
+            "Normalization calculated from training data."
+        );
+
+        const trainData =
+            createTensorDataset(
+                split.train,
+                normalization
+            );
+
+        const validationData =
+            createTensorDataset(
+                split.validation,
+                normalization
+            );
+
+        const testData =
+            createTensorDataset(
+                split.test,
+                normalization
+            );
+
+        if (currentModel) {
+
+            currentModel.dispose();
+
+            currentModel =
+                null;
+        }
+
+        currentModel =
+            createModel();
+
+        currentModel.summary();
+
+        logMessage(
+            "TensorFlow.js model created."
+        );
+
+        setText(
+            "trainingStatus",
+            "Training model..."
+        );
+
+        const history =
+            await currentModel.fit(
+                trainData.xs,
+                trainData.ys,
+                {
+                    epochs: EPOCHS,
+                    batchSize: BATCH_SIZE,
+                    shuffle: true,
+                    validationData: [
+                        validationData.xs,
+                        validationData.ys
+                    ],
+
+                    callbacks: {
+
+                        onEpochEnd:
+                            async (
+                                epoch,
+                                logs
+                            ) => {
+
+                                const epochNumber =
+                                    epoch + 1;
+
+                                const accuracy =
+                                    Number(
+                                        logs.acc ??
+                                        logs.accuracy ??
+                                        0
+                                    );
+
+                                const valAccuracy =
+                                    Number(
+                                        logs.val_acc ??
+                                        logs.val_accuracy ??
+                                        0
+                                    );
+
+                                const loss =
+                                    Number(
+                                        logs.loss ??
+                                        0
+                                    );
+
+                                const valLoss =
+                                    Number(
+                                        logs.val_loss ??
+                                        0
+                                    );
+
+                                setText(
+                                    "trainingProgressText",
+                                    "Epoch " +
+                                    epochNumber +
+                                    " / " +
+                                    EPOCHS
+                                );
+
+                                $("trainingProgress")
+                                    .style
+                                    .width =
+                                    (
+                                        epochNumber /
+                                        EPOCHS *
+                                        100
+                                    ) +
+                                    "%";
+
+                                logMessage(
+                                    "Epoch " +
+                                    epochNumber +
+                                    "/" +
+                                    EPOCHS +
+                                    " | loss=" +
+                                    loss.toFixed(4) +
+                                    " | accuracy=" +
+                                    (
+                                        accuracy *
+                                        100
+                                    ).toFixed(2) +
+                                    "% | val_loss=" +
+                                    valLoss.toFixed(4) +
+                                    " | val_accuracy=" +
+                                    (
+                                        valAccuracy *
+                                        100
+                                    ).toFixed(2) +
+                                    "%"
+                                );
+
+                                setText(
+                                    "trainAccuracy",
+                                    (
+                                        accuracy *
+                                        100
+                                    ).toFixed(2) +
+                                    "%"
+                                );
+
+                                setText(
+                                    "valAccuracy",
+                                    (
+                                        valAccuracy *
+                                        100
+                                    ).toFixed(2) +
+                                    "%"
+                                );
+
+                                if (
+                                    trainingStopRequested
+                                ) {
+
+                                    currentModel.stopTraining =
+                                        true;
+                                }
+
+                                await tf.nextFrame();
+                            }
+
+                    }
+                }
+            );
+
+        setText(
+            "trainingEpochs",
+            history.history.loss.length
+        );
+
+        if (
+            trainingStopRequested
+        ) {
+
+            throw new Error(
+                "Training stopped by user."
+            );
+        }
+
+        const trainEvaluation =
+            currentModel.evaluate(
+                trainData.xs,
+                trainData.ys,
+                {
+                    batchSize: BATCH_SIZE
+                }
+            );
+
+        const testEvaluation =
+            currentModel.evaluate(
+                testData.xs,
+                testData.ys,
+                {
+                    batchSize: BATCH_SIZE
+                }
+            );
+
+        const trainAccuracyTensor =
+            Array.isArray(
+                trainEvaluation
+            )
+                ? trainEvaluation[1]
+                : null;
+
+        const testAccuracyTensor =
+            Array.isArray(
+                testEvaluation
+            )
+                ? testEvaluation[1]
+                : null;
+
+        const trainAccuracy =
+            trainAccuracyTensor
+                ? (await trainAccuracyTensor.data())[0]
+                : 0;
+
+        const testAccuracy =
+            testAccuracyTensor
+                ? (await testAccuracyTensor.data())[0]
+                : 0;
+
+        const finalValAccuracy =
+            history.history.val_accuracy
+                ? history.history
+                    .val_accuracy
+                    .at(-1)
+                : history.history
+                    .val_acc
+                    ?.at(-1) || 0;
+
+        setText(
+            "trainAccuracy",
+            (
+                trainAccuracy *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+
+        setText(
+            "valAccuracy",
+            (
+                finalValAccuracy *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+
+        setText(
+            "testAccuracy",
+            (
+                testAccuracy *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+
+        setText(
+            "testAccuracyLarge",
+            (
+                testAccuracy *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+
+        setText(
+            "trainingStatus",
+            "TRAINING COMPLETE"
+        );
+
+        logMessage(
+            "Training completed."
+        );
+
+        logMessage(
+            "Train accuracy: " +
+            (
+                trainAccuracy *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+
+        logMessage(
+            "Validation accuracy: " +
+            (
+                finalValAccuracy *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+
+        logMessage(
+            "Test accuracy: " +
+            (
+                testAccuracy *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+
+        modelMetadata = {
+            modelVersion: "1.0",
+            classNames: CLASS_NAMES,
+            windowSeconds: WINDOW_SECONDS,
+            windowSize: WINDOW_SIZE,
+            sampleRate: SAMPLE_RATE,
+            featureCount: FEATURE_COUNT,
+            features: [
+                "accX",
+                "accY",
+                "accZ",
+                "gyroX",
+                "gyroY",
+                "gyroZ"
+            ],
+            normalization: normalization,
+            trainingDate:
+                new Date().toISOString(),
+            trainingAccuracy:
+                trainAccuracy,
+            validationAccuracy:
+                finalValAccuracy,
+            testAccuracy:
+                testAccuracy,
+            datasetCounts:
+                counts,
+            datasetSize:
+                samples.length
+        };
+
+        await runTestEvaluation(
+            split.test,
+            testData,
+            testAccuracy
+        );
+
+        updateModelStatus();
+
+    } catch (error) {
+
+        console.error(error);
+
+        setText(
+            "trainingStatus",
+            "TRAINING ERROR"
+        );
+
+        logMessage(
+            "ERROR: " +
+            error.message
+        );
+
+        if (
+            currentModel &&
+            trainingStopRequested
+        ) {
+
+            logMessage(
+                "Training was stopped."
+            );
+        }
+
+    } finally {
+
+        trainingRunning = false;
+
+        $("trainModelBtn")
+            .disabled = false;
+
+        $("stopTrainingBtn")
+            .disabled = true;
+
+        trainingStopRequested = false;
+
+    }
+}
+
+function stopTraining() {
+
+    if (!trainingRunning) {
+        return;
+    }
+
+    trainingStopRequested = true;
+
+    setText(
+        "trainingStatus",
+        "STOPPING..."
+    );
+}
+
+/* ============================================================
+   MODEL EVALUATION / CONFUSION MATRIX
+   ============================================================ */
+
+async function runTestEvaluation(
+    testSamples,
+    testData,
+    testAccuracy
+) {
+
+    if (!currentModel) {
+        return;
+    }
+
+    const probabilities =
+        currentModel.predict(
+            testData.xs
+        );
+
+    const predictionArray =
+        await probabilities.array();
+
+    const actualLabels =
+        testSamples.map(
+            sample =>
+                CLASS_NAMES.indexOf(
+                    sample.label
+                )
+        );
+
+    const predictedLabels =
+        predictionArray.map(
+            row => {
+
+                let bestIndex = 0;
+
+                let bestValue =
+                    row[0];
+
+                for (
+                    let i = 1;
+                    i < row.length;
+                    i++
+                ) {
+
+                    if (
+                        row[i] >
+                        bestValue
+                    ) {
+
+                        bestValue =
+                            row[i];
+
+                        bestIndex =
+                            i;
+                    }
+                }
+
+                return bestIndex;
+            }
+        );
+
+    const matrix =
+        CLASS_NAMES.map(
+            () =>
+                CLASS_NAMES.map(
+                    () => 0
+                )
+        );
+
+    for (
+        let i = 0;
+        i < actualLabels.length;
+        i++
+    ) {
+
+        matrix[
+            actualLabels[i]
+        ][
+            predictedLabels[i]
+        ]++;
+    }
+
+    testResult = {
+        accuracy: testAccuracy,
+        testSamples: testSamples.length,
+        actualLabels,
+        predictedLabels,
+        matrix
+    };
+
+    probabilities.dispose();
+
+    renderConfusionMatrix(
+        matrix
+    );
+
+    renderClassResults(
+        matrix
+    );
+
+    setText(
+        "testSamples",
+        testSamples.length
+    );
+
+    const correct =
+        predictedLabels.filter(
+            (prediction, index) =>
+                prediction ===
+                actualLabels[index]
+        ).length;
+
+    setText(
+        "correctSamples",
+        correct
+    );
+
+    setText(
+        "wrongSamples",
+        testSamples.length -
+        correct
+    );
+}
+
+function renderConfusionMatrix(matrix) {
+
+    let html = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Actual \\ Predicted</th>
+    `;
+
+    CLASS_NAMES.forEach(
+        label => {
+
+            html += `
+                <th>
+                    ${CLASS_DISPLAY_NAMES[label]}
+                </th>
+            `;
+        }
+    );
+
+    html += `
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    matrix.forEach(
+        (row, actualIndex) => {
+
+            html += `
+                <tr>
+                    <th>
+                        ${
+                            CLASS_DISPLAY_NAMES[
+                                CLASS_NAMES[
+                                    actualIndex
+                                ]
+                            ]
+                        }
+                    </th>
+            `;
+
+            row.forEach(
+                (value, predictedIndex) => {
+
+                    const diagonal =
+                        actualIndex ===
+                        predictedIndex;
+
+                    html += `
+                        <td class="matrix-cell ${
+                            diagonal
+                                ? "matrix-diagonal"
+                                : ""
+                        }">
+                            ${value}
+                        </td>
+                    `;
+                }
+            );
+
+            html += `
+                </tr>
+            `;
+        }
+    );
+
+    html += `
+            </tbody>
+        </table>
+    `;
+
+    $("confusionMatrix")
+        .innerHTML = html;
+}
+
+function renderClassResults(matrix) {
+
+    let html = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Class</th>
+                    <th>Actual Samples</th>
+                    <th>Correct</th>
+                    <th>Accuracy</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    CLASS_NAMES.forEach(
+        (label, index) => {
+
+            const actual =
+                matrix[index]
+                    .reduce(
+                        (sum, value) =>
+                            sum + value,
+                        0
+                    );
+
+            const correct =
+                matrix[index][index];
+
+            const accuracy =
+                actual > 0
+                    ? (
+                        correct /
+                        actual *
+                        100
+                    )
+                    : 0;
+
+            html += `
+                <tr>
+                    <td>
+                        ${CLASS_DISPLAY_NAMES[label]}
+                    </td>
+                    <td>${actual}</td>
+                    <td>${correct}</td>
+                    <td>
+                        ${accuracy.toFixed(2)}%
+                    </td>
+                </tr>
+            `;
+        }
+    );
+
+    html += `
+            </tbody>
+        </table>
+    `;
+
+    $("classResults")
+        .innerHTML = html;
+}
+
+/* ============================================================
+   MODEL SAVE / LOAD
+   ============================================================ */
+
+async function saveModel() {
+
+    if (!currentModel) {
+
+        alert(
+            "No trained model is available."
+        );
+
+        return;
+    }
+
+    if (!normalization) {
+
+        alert(
+            "Normalization data is missing."
+        );
+
+        return;
+    }
+
+    try {
+
+        await currentModel.save(
+            MODEL_KEY
+        );
+
+        localStorage.setItem(
+            "activity-model-metadata",
+            JSON.stringify(
+                modelMetadata
+            )
+        );
+
+        updateModelStatus();
+
+        alert(
+            "Model saved successfully."
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "Model save failed:\n" +
+            error.message
+        );
+    }
+}
+
+async function loadModel() {
+
+    try {
+
+        const model =
+            await tf.loadLayersModel(
+                MODEL_KEY
+            );
+
+        const metadataText =
+            localStorage.getItem(
+                "activity-model-metadata"
+            );
+
+        if (!metadataText) {
+
+            model.dispose();
+
+            throw new Error(
+                "Model metadata was not found."
+            );
+        }
+
+        const metadata =
+            JSON.parse(
+                metadataText
+            );
+
+        if (
+            !metadata.normalization ||
+            !metadata.classNames
+        ) {
+
+            model.dispose();
+
+            throw new Error(
+                "Invalid model metadata."
+            );
+        }
+
+        if (
+            JSON.stringify(
+                metadata.classNames
+            ) !==
+            JSON.stringify(
+                CLASS_NAMES
+            )
+        ) {
+
+            model.dispose();
+
+            throw new Error(
+                "Model classes do not match this application."
+            );
+        }
+
+        if (currentModel) {
+            currentModel.dispose();
+        }
+
+        currentModel =
+            model;
+
+        normalization =
+            metadata.normalization;
+
+        modelMetadata =
+            metadata;
+
+        setText(
+            "trainingStatus",
+            "MODEL LOADED"
+        );
+
+        updateModelStatus();
+
+        alert(
+            "Model loaded successfully."
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "No compatible saved model was found.\n\n" +
+            error.message
+        );
+    }
+}
+
+async function deleteModel() {
+
+    const confirmed =
+        confirm(
+            "Delete the saved TensorFlow.js model?"
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+
+        await tf.io.removeModel(
+            MODEL_KEY
+        );
+
+    } catch (error) {
+
+        console.log(
+            "Saved model was not present."
+        );
+    }
+
+    localStorage.removeItem(
+        "activity-model-metadata"
+    );
+
+    if (currentModel) {
+
+        currentModel.dispose();
+
+        currentModel =
+            null;
+    }
+
+    normalization = null;
+
+    modelMetadata = null;
+
+    updateModelStatus();
+
+    alert(
+        "Saved model deleted."
+    );
+}
+
+function updateModelStatus() {
+
+    const status =
+        $("modelStatus");
+
+    if (
+        currentModel &&
+        modelMetadata
+    ) {
+
+        status.textContent =
+            "MODEL READY";
+
+        status.className =
+            "status ok";
+
+        const testAccuracy =
+            Number(
+                modelMetadata.testAccuracy
+            );
+
+        setText(
+            "modelStorageInfo",
+            "Model version " +
+            modelMetadata.modelVersion +
+            " | Test accuracy: " +
+            (
+                testAccuracy *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+
+    } else {
+
+        status.textContent =
+            "MODEL NOT TRAINED";
+
+        status.className =
+            "status warn";
+
+        setText(
+            "modelStorageInfo",
+            "No trained model loaded."
+        );
+    }
+
+    updateStorageInfo();
+}
+
+/* ============================================================
+   LIVE PREDICTION
+   ============================================================ */
+
+function startLivePrediction() {
+
+    if (!espConnected) {
+
+        alert(
+            "Please connect the ESP32 first."
+        );
+
+        return;
+    }
+
+    if (!currentModel) {
+
+        alert(
+            "Please train or load a model first."
+        );
+
+        return;
+    }
+
+    if (!normalization) {
+
+        alert(
+            "Model normalization information is missing."
+        );
+
+        return;
+    }
+
+    if (liveRunning) {
+        return;
+    }
+
+    liveRunning = true;
+
+    liveBuffer = [];
+
+    predictionHistory = [];
+
+    $("startLiveBtn")
+        .disabled = true;
+
+    $("stopLiveBtn")
+        .disabled = false;
+
+    setText(
+        "liveActivity",
+        "COLLECTING..."
+    );
+
+    setText(
+        "liveConfidence",
+        "Collecting a new sensor window..."
+    );
+
+    $("liveProgress")
+        .style
+        .width = "0%";
+
+    predictionTimer =
+        setInterval(
+            processLiveWindow,
+            50
+        );
+}
+
+async function processLiveWindow() {
+
+    if (!liveRunning) {
+        return;
+    }
+
+    if (
+        liveBuffer.length <
+        WINDOW_SIZE
+    ) {
+
+        updateLiveProgress();
+
+        return;
+    }
+
+    const sequence =
+        liveBuffer
+            .slice(
+                0,
+                WINDOW_SIZE
+            );
+
+    liveBuffer =
+        liveBuffer.slice(
+            Math.floor(
+                WINDOW_SIZE / 2
+            )
+        );
+
+    try {
+
+        await predictLiveSequence(
+            sequence
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Live prediction error:",
+            error
+        );
+
+        setText(
+            "liveActivity",
+            "ERROR"
+        );
+    }
+
+    updateLiveProgress();
+}
+
+function stopLivePrediction() {
+
+    liveRunning = false;
+
+    liveBuffer = [];
+
+    predictionHistory = [];
+
+    if (
+        predictionTimer !== null
+    ) {
+
+        clearInterval(
+            predictionTimer
+        );
+
+        predictionTimer = null;
+    }
+
+    $("startLiveBtn")
+        .disabled = false;
+
+    $("stopLiveBtn")
+        .disabled = true;
+
+    $("liveProgress")
+        .style
+        .width = "0%";
+
+    setText(
+        "liveProgressText",
+        "Live prediction stopped."
+    );
+
+    setText(
+        "liveActivity",
+        "--"
+    );
+
+    setText(
+        "liveConfidence",
+        "Confidence: --"
+    );
+
+    resetProbabilities();
+}
+
+function updateLiveProgress() {
+
+    const count =
+        Math.min(
+            liveBuffer.length,
+            WINDOW_SIZE
+        );
+
+    const percent =
+        count /
+        WINDOW_SIZE *
+        100;
+
+    $("liveProgress")
+        .style
+        .width =
+        percent + "%";
+
+    setText(
+        "liveProgressText",
+        count +
+        " / " +
+        WINDOW_SIZE +
+        " samples"
+    );
+}
+
+async function predictLiveSequence(
+    sequence
+) {
+
+    const normalized =
+        normalizeSequence(
+            sequence,
+            normalization
+        );
+
+    const input =
+        tf.tensor3d(
+            [normalized],
+            [
+                1,
+                WINDOW_SIZE,
+                FEATURE_COUNT
+            ],
+            "float32"
+        );
+
+    const prediction =
+        currentModel.predict(
+            input
+        );
+
+    const probabilities =
+        await prediction.data();
+
+    input.dispose();
+
+    prediction.dispose();
+
+    /*
+      Keep a small history of actual ML
+      probability vectors for smoothing.
+    */
+
+    predictionHistory.push(
+        Array.from(
+            probabilities
+        )
+    );
+
+    if (
+        predictionHistory.length >
+        5
+    ) {
+        predictionHistory.shift();
+    }
+
+    const averaged =
+        new Array(
+            CLASS_NAMES.length
+        ).fill(0);
+
+    predictionHistory.forEach(
+        vector => {
+
+            vector.forEach(
+                (value, index) => {
+
+                    averaged[index] +=
+                        value;
+                }
+            );
+        }
+    );
+
+    for (
+        let i = 0;
+        i < averaged.length;
+        i++
+    ) {
+
+        averaged[i] /=
+            predictionHistory.length;
+    }
+
+    let bestIndex = 0;
+
+    for (
+        let i = 1;
+        i < averaged.length;
+        i++
+    ) {
+
+        if (
+            averaged[i] >
+            averaged[bestIndex]
+        ) {
+
+            bestIndex = i;
+        }
+    }
+
+    const confidence =
+        averaged[bestIndex];
+
+    updateProbabilityUI(
+        averaged
+    );
+
+    if (
+        confidence <
+        CONFIDENCE_THRESHOLD
+    ) {
+
+        setText(
+            "liveActivity",
+            "UNKNOWN"
+        );
+
+        setText(
+            "liveConfidence",
+            "Confidence: " +
+            (
+                confidence *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+
+    } else {
+
+        const label =
+            CLASS_NAMES[
+                bestIndex
+            ];
+
+        setText(
+            "liveActivity",
+            CLASS_DISPLAY_NAMES[
+                label
+            ]
+        );
+
+        setText(
+            "liveConfidence",
+            "Confidence: " +
+            (
+                confidence *
+                100
+            ).toFixed(2) +
+            "%"
+        );
+    }
+}
+
+function updateProbabilityUI(
+    probabilities
+) {
+
+    const elements = [
+        {
+            text: "probWalking",
+            bar: "barWalking"
+        },
+        {
+            text: "probRunning",
+            bar: "barRunning"
+        },
+        {
+            text: "probSquat",
+            bar: "barSquat"
+        },
+        {
+            text: "probStanding",
+            bar: "barStanding"
+        }
+    ];
+
+    elements.forEach(
+        (element, index) => {
+
+            const percentage =
+                probabilities[index] *
+                100;
+
+            setText(
+                element.text,
+                percentage.toFixed(2) +
+                "%"
+            );
+
+            $(element.bar)
+                .style
+                .width =
+                percentage +
+                "%";
+        }
+    );
+}
+
+function resetProbabilities() {
+
+    updateProbabilityUI([
+        0,
+        0,
+        0,
+        0
+    ]);
+}
+
+/* ============================================================
+   STORAGE INFORMATION
+   ============================================================ */
+
+async function updateStorageInfo() {
+
+    if (!db) {
+        return;
+    }
+
+    const samples =
+        await getAllDatasetSamples();
+
+    let text =
+        "Dataset windows: " +
+        samples.length +
+        "\n";
+
+    if (modelMetadata) {
+
+        text +=
+            "\nModel:\n";
+
+        text +=
+            "Version: " +
+            modelMetadata.modelVersion +
+            "\n";
+
+        text +=
+            "Training date: " +
+            modelMetadata.trainingDate +
+            "\n";
+
+        text +=
+            "Train accuracy: " +
+            (
+                Number(
+                    modelMetadata.trainingAccuracy
+                ) * 100
+            ).toFixed(2) +
+            "%\n";
+
+        text +=
+            "Validation accuracy: " +
+            (
+                Number(
+                    modelMetadata.validationAccuracy
+                ) * 100
+            ).toFixed(2) +
+            "%\n";
+
+        text +=
+            "Test accuracy: " +
+            (
+                Number(
+                    modelMetadata.testAccuracy
+                ) * 100
+            ).toFixed(2) +
+            "%\n";
+
+        text +=
+            "Window: " +
+            modelMetadata.windowSize +
+            " samples\n";
+
+        text +=
+            "Sample rate: " +
+            modelMetadata.sampleRate +
+            " Hz\n";
+    }
+
+    $("storageInfo")
+        .textContent = text;
+}
+
+/* ============================================================
+   UTILITY
+   ============================================================ */
+
+function sleep(ms) {
+
+    return new Promise(
+        resolve =>
+            setTimeout(
+                resolve,
+                ms
+            )
+    );
+}
+
+function escapeHtml(value) {
+
+    return String(value)
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+}
+
+/* ============================================================
+   EVENT LISTENERS
+   ============================================================ */
+
+$("connectBtn")
+    .addEventListener(
+        "click",
+        connectESP32
+    );
+
+$("disconnectBtn")
+    .addEventListener(
+        "click",
+        disconnectESP32
+    );
+
+$("startRecordingBtn")
+    .addEventListener(
+        "click",
+        startRecording
+    );
+
+$("stopRecordingBtn")
+    .addEventListener(
+        "click",
+        stopRecording
+    );
+
+$("showDatasetBtn")
+    .addEventListener(
+        "click",
+        showDataset
+    );
+
+$("clearCurrentBtn")
+    .addEventListener(
+        "click",
+        clearCurrentClass
+    );
+
+$("clearAllDataBtn")
+    .addEventListener(
+        "click",
+        clearAllData
+    );
+
+$("exportCsvBtn")
+    .addEventListener(
+        "click",
+        exportCSV
+    );
+
+$("importCsvBtn")
+    .addEventListener(
+        "click",
+        () => {
+            $("csvFileInput").click();
+        }
+    );
+
+$("csvFileInput")
+    .addEventListener(
+        "change",
+        async event => {
+
+            const file =
+                event.target.files[0];
+
+            if (file) {
+
+                await importCSVFile(
+                    file
+                );
+            }
+
+            event.target.value =
+                "";
+        }
+    );
+
+$("trainModelBtn")
+    .addEventListener(
+        "click",
+        trainModel
+    );
+
+$("stopTrainingBtn")
+    .addEventListener(
+        "click",
+        stopTraining
+    );
+
+$("saveModelBtn")
+    .addEventListener(
+        "click",
+        saveModel
+    );
+
+$("loadModelBtn")
+    .addEventListener(
+        "click",
+        loadModel
+    );
+
+$("deleteModelBtn")
+    .addEventListener(
+        "click",
+        deleteModel
+    );
+
+$("startLiveBtn")
+    .addEventListener(
+        "click",
+        startLivePrediction
+    );
+
+$("stopLiveBtn")
+    .addEventListener(
+        "click",
+        stopLivePrediction
+    );
+
+/* ============================================================
+   INITIALIZATION
+   ============================================================ */
+
+async function initializeApplication() {
+
+    try {
+
+        await openDatabase();
+
+        await updateDatasetSummary();
+
+        await updateStorageInfo();
+
+        updateConnectionUI();
+
+        resetProbabilities();
+
+        /*
+          Check whether a saved model exists.
+          The model is loaded automatically only when
+          both the model and metadata are valid.
+        */
+
+        try {
+
+            const metadataText =
+                localStorage.getItem(
+                    "activity-model-metadata"
+                );
+
+            if (metadataText) {
+
+                const metadata =
+                    JSON.parse(
+                        metadataText
+                    );
+
+                if (
+                    metadata &&
+                    metadata.normalization &&
+                    metadata.classNames &&
+                    JSON.stringify(
+                        metadata.classNames
+                    ) ===
+                    JSON.stringify(
+                        CLASS_NAMES
+                    )
+                ) {
+
+                    const loaded =
+                        await tf.loadLayersModel(
+                            MODEL_KEY
+                        );
+
+                    currentModel =
+                        loaded;
+
+                    modelMetadata =
+                        metadata;
+
+                    normalization =
+                        metadata.normalization;
+
+                    updateModelStatus();
+
+                    setText(
+                        "trainingStatus",
+                        "SAVED MODEL READY"
+                    );
+                }
+
+            }
+
+        } catch (error) {
+
+            console.log(
+                "No compatible saved model loaded.",
+                error
+            );
+        }
+
+        setText(
+            "connectionMessage",
+            "Connect to AI_ACTIVITY_ESP32 and click CONNECT ESP32."
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "Application initialization failed:\n" +
+            error.message
+        );
+    }
+}
+
+window.addEventListener(
+    "resize",
+    () => {
+
+        drawGraph(
+            $("sensorCanvas"),
+            sensorHistory
+        );
+
+        drawGraph(
+            $("liveCanvas"),
+            sensorHistory
+        );
+    }
+);
+
+initializeApplication();
+
+</script>
+
+</body>
+</html>
