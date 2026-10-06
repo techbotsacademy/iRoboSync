@@ -3346,20 +3346,16 @@ async function trainModel() {
         }
     });
 
-    const insufficient =
-        CLASS_NAMES.filter(
-            label =>
-                counts[label] <
-                MIN_SAMPLES_PER_CLASS
-        );
+    const hasEnoughSamples = CLASS_NAMES.every(
+        label => counts[label] >= 2
+    );
 
-    if (
-        insufficient.length > 0
-    ) {
-
+    if (hasEnoughSamples) {
+        // Proceed to train
+        trainModel();
+    } else {
         alert(
-            "Not enough samples.\n\n" +
-            insufficient
+            "Not enough samples. Atleast 2 categrories must have the data\n\n"
                 .map(
                     label =>
                         CLASS_DISPLAY_NAMES[
@@ -3372,8 +3368,6 @@ async function trainModel() {
                 )
                 .join("\n")
         );
-
-        return;
     }
 
     trainingRunning = true;

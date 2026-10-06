@@ -1,0 +1,93 @@
+ESP32 MPU6050 Step Counter with GC9A01 Round Display
+Project Overview
+This project uses an ESP32, MPU6050 accelerometer/gyroscope sensor, and a GC9A01 round TFT display to create a real-time step counter. The system detects walking movements using MPU6050 sensor data and displays the live step count on the round display.
+
+Features
+Real-time step counting
+Live step display on GC9A01 round TFT screen
+ESP32-based processing
+MPU6050 motion sensing
+Fitness tracker style interface
+Serial Monitor debugging output
+
+Hardware Required
+ESP32 Development Board
+MPU6050 Accelerometer & Gyroscope Sensor
+GC9A01 Round TFT Display (240x240)
+Jumper Wires
+USB Cable
+
+Required Libraries
+Install the following libraries from Arduino Library Manager:
+1. MPU6050 Library
+Library Name:
+MPU6050 by Electronic Cats
+2. Adafruit GFX Library
+Library Name:
+Adafruit GFX Library
+3. Adafruit GC9A01A Library
+Library Name:
+Adafruit GC9A01A
+4. Wire Library
+Included with Arduino IDE
+5. SPI Library
+Included with Arduino IDE
+
+MPU6050 Connections
+MPU6050 Pin
+ESP32 Pin
+VCC
+3.3V
+GND
+GND
+SDA
+GPIO 21
+SCL
+GPIO 22
+
+
+GC9A01 Display Connections
+Display Pin
+ESP32 Pin
+VCC
+3.3V
+GND
+GND
+CS
+GPIO 5
+DC
+GPIO 2
+RST
+GPIO 4
+SDA (MOSI)
+GPIO 23
+SCL (CLK)
+GPIO 18
+
+
+How It Works
+ESP32 reads acceleration data from the MPU6050 sensor.
+Motion magnitude is calculated from X, Y, and Z acceleration values.
+When the movement exceeds the step threshold, a step is detected.
+The step counter increases automatically.
+The GC9A01 display updates and shows the latest step count.
+Step data is also printed to the Serial Monitor.
+
+Upload Instructions
+Install all required libraries.
+Connect the MPU6050 and GC9A01 display according to the wiring tables.
+Select "ESP32 Dev Module" in Arduino IDE.
+Select the correct COM Port.
+Upload the code to ESP32.
+Open Serial Monitor at 115200 baud.
+Start walking and observe the live step count on the display.
+
+Serial Monitor Output Example
+Steps: 1
+Steps: 2
+Steps: 3
+Steps: 4
+
+Project Outcome
+A smartwatch-style fitness tracker that counts walking steps using MPU6050 sensor data and displays the results on a GC9A01 round TFT display in real time.
+
