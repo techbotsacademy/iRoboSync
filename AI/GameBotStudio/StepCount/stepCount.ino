@@ -1,76 +1,263 @@
 #include <Wire.h>
-#include <Adafruit_MPU6050.h>
-#include <Adafruit_Sensor.h>
+#include <WiFi.h>
+#include <WebServer.h>
+//MPU6050 by Electronic Cats
+#include <MPU6050.h>
 
-Adafruit_MPU6050 mpu;
+#define SDA_PIN 19
+#define SCL_PIN 18
+
+// ==================================================
+// WiFi Access Point
+// ==================================================
+
+const char* AP_SSID = "STEP_COUNTER_ESP32";
+const char* AP_PASSWORD = "12345678";
+
+IPAddress local_IP(192,168,4,1);
+IPAddress gateway(192,168,4,1);
+IPAddress subnet(255,255,255,0);
+
+// ==================================================
+// Objects
+// ==================================================
+
+MPU6050 mpu;
+WebServer server(80);
+
+// ==================================================
+// Step Counter Variables
+// ==================================================
 
 long stepCount = 0;
 
-// Step detection parameters
-float threshold = 1.15;          // Tune this
+float lastMagnitude = 0.0;
+
 unsigned long lastStepTime = 0;
-const unsigned long minStepTime = 300;  // ms
 
-// Gravity estimate
-float gravity = 9.81;
+const float STEP_THRESHOLD = 2500.0;
+const unsigned long STEP_DELAY = 300;
 
-// Low-pass filter coefficient
-const float alpha = 0.90;
+// ==================================================
+// CORS
+// ==================================================
 
-void setup() {
+void addCorsHeaders()
+{
+  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.sendHeader("Access-Control-Allow-Methods","GET");
+  server.sendHeader("Access-Control-Allow-Headers","Content-Type");
+}
+
+// ==================================================
+// API : Steps
+// ==================================================
+
+void handleSteps()
+{
+  addCorsHeaders();
+
+  String json = "{";
+  json += "\"steps\":";
+  json += String(stepCount);
+  json += "}";
+
+  server.send(
+    200,
+    "application/json",
+    json
+  );
+}
+
+// ==================================================
+// API : Reset
+// ==================================================
+
+void handleReset()
+{
+  addCorsHeaders();
+
+  stepCount = 0;
+
+  server.send(
+    200,
+    "text/plain",
+    "OK"
+  );
+}
+
+// ==================================================
+// Home Page
+// ==================================================
+
+void handleRoot()
+{
+  addCorsHeaders();
+
+  server.send(
+    200,
+    "text/plain",
+    "ESP32 Step Counter Running"
+  );
+}
+
+// ==================================================
+// WiFi
+// ==================================================
+
+void startAccessPoint()
+{
+  Serial.println();
+  Serial.println("Starting WiFi...");
+
+  WiFi.mode(WIFI_AP);
+
+  WiFi.softAPConfig(
+    local_IP,
+    gateway,
+    subnet
+  );
+
+  bool ok =
+    WiFi.softAP(
+      AP_SSID,
+      AP_PASSWORD
+    );
+
+  if(!ok)
+  {
+    Serial.println("WiFi Failed");
+    return;
+  }
+
+  delay(500);
+
+  Serial.println();
+  Serial.println("WiFi Started");
+
+  Serial.print("SSID: ");
+  Serial.println(AP_SSID);
+
+  Serial.print("Password: ");
+  Serial.println(AP_PASSWORD);
+
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.softAPIP());
+}
+
+// ==================================================
+// Server
+// ==================================================
+
+void startServer()
+{
+  server.on("/", handleRoot);
+
+  server.on(
+    "/api/steps",
+    HTTP_GET,
+    handleSteps
+  );
+
+  server.on(
+    "/api/reset",
+    HTTP_GET,
+    handleReset
+  );
+
+  server.begin();
+
+  Serial.println("Server Started");
+}
+
+// ==================================================
+// Setup
+// ==================================================
+
+void setup()
+{
   Serial.begin(115200);
 
-  Wire.begin(21, 22);
-
-  if (!mpu.begin()) {
-    Serial.println("MPU6050 not found!");
-    while (1);
-  }
-
-  Serial.println("MPU6050 found.");
-
-  // Accelerometer range
-  mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
-
-  // Bandwidth
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-
   delay(1000);
+
+  Serial.println();
+  Serial.println("========================");
+  Serial.println("ESP32 STEP COUNTER");
+  Serial.println("========================");
+
+  Wire.begin(
+    SDA_PIN,
+    SCL_PIN
+  );
+
+  Serial.println("Initializing MPU6050");
+
+  mpu.initialize();
+
+  Serial.println("MPU6050 Initialized");
+
+  startAccessPoint();
+
+  startServer();
+
+  Serial.println();
+  Serial.println("System Ready");
 }
 
-void loop() {
+// ==================================================
+// Loop
+// ==================================================
 
-  sensors_event_t accel, gyro, temp;
-  mpu.getEvent(&accel, &gyro, &temp);
+void loop()
+{
+  server.handleClient();
 
-  // Calculate total acceleration magnitude
-  float ax = accel.acceleration.x;
-  float ay = accel.acceleration.y;
-  float az = accel.acceleration.z;
+  int16_t ax, ay, az;
+  int16_t gx, gy, gz;
 
-  float magnitude = sqrt(ax * ax + ay * ay + az * az);
+  mpu.getMotion6(
+    &ax,
+    &ay,
+    &az,
+    &gx,
+    &gy,
+    &gz
+  );
 
-  // Estimate gravity using low-pass filtering
-  gravity = alpha * gravity + (1.0 - alpha) * magnitude;
+  float magnitude =
+    sqrt(
+      (float)ax * ax +
+      (float)ay * ay +
+      (float)az * az
+    );
 
-  // Remove gravity
-  float dynamicAcceleration = magnitude - gravity;
+  float change =
+    fabs(
+      magnitude -
+      lastMagnitude
+    );
 
-  // Absolute value
-  dynamicAcceleration = abs(dynamicAcceleration);
+  if(change > STEP_THRESHOLD)
+  {
+    if(
+      millis() -
+      lastStepTime >
+      STEP_DELAY
+    )
+    {
+      stepCount++;
 
-  unsigned long now = millis();
+      lastStepTime =
+        millis();
 
-  // Detect a step
-  if (dynamicAcceleration > threshold &&
-      now - lastStepTime > minStepTime) {
-
-    stepCount++;
-    lastStepTime = now;
-
-    Serial.print("STEP!  Count = ");
-    Serial.println(stepCount);
+      Serial.print("Steps: ");
+      Serial.println(stepCount);
+    }
   }
 
-  delay(20);  // ~50 Hz sampling
+  lastMagnitude =
+    magnitude;
+
+  delay(20);
 }
+

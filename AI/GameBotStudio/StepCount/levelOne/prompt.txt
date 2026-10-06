@@ -1,4 +1,4 @@
-Create a simple step counter using an ESP32 NodeMCU and an MPU6050.
+Create a simple step counter using a 30 pin ESP32 NodeMCU and an MPU6050.
 
 Connect the MPU6050:
 
@@ -7,5 +7,5 @@ GND → GND
 SCL → D18
 SDA → D19
 
-Write Arduino code that reads the MPU6050 movement, detects footsteps, 
-and counts the steps. Show the step count in the Serial Monitor.
+Write Arduino code that reads the MPU6050 movement using the library MPU6050 by Electronic Cats, 
+detects footsteps, and counts the steps. Show the step count in the Serial Monitor.
