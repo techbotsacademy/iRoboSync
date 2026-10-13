@@ -1,0 +1,12 @@
+Create a simple step counter using a 30 pin ESP32 NodeMCU, MPU6050 and a 1.28-inch GC9A01A round TFT display (240 × 240 pixels).
+
+Connect the TFT using:
+TFT_CS    5
+TFT_DC    2
+TFT_RST   4
+TFT_MOSI  23
+TFT_SCLK  18
+
+Write Arduino code that reads the MPU6050 movement using the library MPU6050 by Electronic Cats, 
+detects footsteps, and counts the steps. Show the step count on the Round OLED. Use the libraries 
+SPI.h, Adafruit_GFX.h and Adafruit_GC9A01A.h for the 1.28-inch GC9A01A round TFT display.
