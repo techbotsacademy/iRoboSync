@@ -1,0 +1,49 @@
+Use the following evaluation matrix as a prompt or scoring specification for another AI to assess the submitted ESP32 + MPU6050 step-counter code. The AI should evaluate the code itself, identify evidence for each score, and avoid assuming that untested performance has been achieved.
+
+## AI code evaluation and scoring matrix (100 points)
+
+| ID | Evaluation criterion | Weight | What the AI must evaluate |
+| --- | --- | --- | --- |
+| C1 | Step-detection algorithm | 20 | Acceleration processing, step-event detection logic, peak detection, and suitability for walking motion |
+| C2 | Threshold selection | 10 | Appropriateness of `STEP_THRESHOLD`, sensitivity to noise, and need for calibration |
+| C3 | Sensor initialization and configuration | 8 | MPU6050 initialization, accelerometer range, sample rate, connection failure handling, and sensor validity |
+| C4 | Sampling and signal processing | 14 | Sampling interval, filtering, gravity effects, noise handling, and aliasing risks |
+| C5 | Step-count accuracy design | 11 | Whether the algorithm is designed to minimize missed steps and false positives across different walking speeds |
+| C6 | Display correctness and layout | 11 | Round TFT layout, text positioning, count visibility, number overflow, and stale digits |
+| C7 | Display update efficiency | 8 | Full-screen redraw overhead, flicker, unnecessary redraws, and partial-update opportunities |
+| C8 | ESP32 implementation quality | 9 | Code structure, data types, timing functions, computational efficiency, and maintainability |
+| C9 | Error handling and robustness | 9 | Sensor failures, startup behavior, counter integrity, recovery, and long-duration operation |
+| Total |  | 100 |  |
+
+## Rating scale
+
+Apply the same rating scale to every criterion.
+
+| Rating | Classification | Scoring guidance |
+| --- | --- | --- |
+| 5 | Excellent | Robust implementation; relevant edge cases addressed |
+| 4 | Good | Correct implementation with minor limitations |
+| 3 | Adequate | Functional, but notable improvements are needed |
+| 2 | Weak | Significant design or implementation deficiencies |
+| 1 | Poor | Major flaws or largely unsuitable implementation |
+| 0 | Missing / defective | Criterion is absent or fundamentally broken |
+
+## Final assessment categories
+
+| Final score | AI assessment |
+| --- | --- |
+| 90–100 | Excellent code design |
+| 80–89 | Good; minor improvements needed |
+| 70–79 | Satisfactory; several improvements recommended |
+| 60–69 | Needs substantial improvement |
+| Below 60 | Major redesign recommended |
+
+## Rules the evaluating AI must follow
+
+- Score only what can be justified from the source code.
+- Distinguish code-level design quality from measured runtime performance.
+- Do not claim actual step-count accuracy, display latency, sampling stability, or battery life without test data.
+- Cite specific variables, functions, statements, and missing safeguards as evidence.
+- Explain each rating and provide actionable recommendations.
+- Do not penalize the code merely for omitting features outside the stated project scope.
+- Report critical defects separately from the numerical score.
