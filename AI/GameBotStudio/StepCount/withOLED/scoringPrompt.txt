@@ -1,4 +1,6 @@
-Use the following evaluation matrix as a prompt or scoring specification for another AI to assess the submitted ESP32 + MPU6050 step-counter code. The AI should evaluate the code itself, identify evidence for each score, and avoid assuming that untested performance has been achieved.
+Evaluate my code 
+[Code]
+Based on the following criteria
 
 ## AI code evaluation and scoring matrix (100 points)
 
