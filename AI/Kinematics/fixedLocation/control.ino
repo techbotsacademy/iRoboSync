@@ -22,7 +22,7 @@ const int BASE_POINT_RIGHT  = 45;  // Right point
 
 void setup() {
   Serial.begin(9600);
-  baseServo.attach(9);
+  baseServo.attach(18);
   baseServo.write(BASE_HOME);
 }
 
