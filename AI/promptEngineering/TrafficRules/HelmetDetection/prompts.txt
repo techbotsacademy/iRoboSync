@@ -1,0 +1,11 @@
+### Step-1: Install Required Libraries
+Install the required Python packages for deep learning and Computer Vision. We use `ultralytics` for YOLO object detection to identify motorcycles and riders, and `opencv-python` for handling image visualization.
+
+### Step-2: Import Libraries and Helpers
+Import OpenCV for image processing, YOLO from the Ultralytics library for handling object detection models, PaddleOCR for character recognition on number plates, and the Colab-specific OpenCV patch to safely display output images.
+
+### Step-3: Load the Object Detection Models
+Load the pre-trained standard `yolov8n.pt` model to detect motorcycles and a custom-trained `violation_det.pt` model to identify traffic violations (such as riding without a helmet) and locate license plates.
+### Step-4: Perform Inference and Visualize Helmet Violations
+Read the target image and perform object detection using standard and custom YOLO models. We identify motorcycles and check whether the riders are wearing helmets. Finally, we draw color-coded bounding boxes and label the violations directly on the image.
+

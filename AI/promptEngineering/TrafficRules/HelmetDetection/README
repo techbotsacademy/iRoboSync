@@ -1,0 +1,47 @@
+# Motorcycle Helmet Violation Detection System
+
+This project uses Deep Learning and Computer Vision to automatically detect motorcycles and identify riders who are violating safety rules by not wearing helmets.
+
+---
+
+## 📋 Project Overview
+The pipeline uses two Object Detection models to process road images:
+1. **Standard YOLOv8 Model (`yolov8n.pt`)**: Detects motorcycles on the road.
+2. **Custom YOLOv8 Model (`violation_det.pt`)**: Detects riders and identifies whether they are wearing a helmet or not.
+
+---
+
+## 📂 Required Files to Upload
+Before running the project, you need to upload the following files to your current workspace directory in Google Colab:
+
+1. **`violation_det.pt`**: Your custom-trained YOLO weights file.
+2. **`test.jpg`**: The input image you want to test and perform detection on.
+
+### 💡 How to Upload Files in Google Colab:
+1. On the far left of your Colab screen, click on the **Folder Icon** (Files Panel).
+2. Click the **Upload to session storage** icon (the document icon with an upward arrow).
+3. Browse and select `violation_det.pt` and your test image (`test.jpg`) from your computer (This PC).
+4. Wait for the upload progress circle at the bottom-left to complete before running the cells.
+
+---
+
+## 🚀 Step-by-Step Implementation
+
+### **Step 1: Install Dependencies**
+Install the required computer vision and deep learning packages:
+```bash
+pip install ultralytics opencv-python
+```
+
+### **Step 2: Import Libraries**
+Import OpenCV for image manipulation and plotting, and YOLO from Ultralytics for running inference.
+
+### **Step 3: Load the Models**
+Initialize the standard pretrained model (`yolov8n.pt`) and safely verify and load the custom model (`violation_det.pt`).
+
+### **Step 4: Image Inference and Visualizing Results**
+* Process the input image.
+* Run detection engines sequentially.
+* Filter out class boundaries (Motorcycles and "NO HELMET" violations).
+* Draw custom bounding boxes on violators (Red box for **NO HELMET**, Blue box for **Motorcycle**).
+* Save the final analyzed image as `result.jpg`.
