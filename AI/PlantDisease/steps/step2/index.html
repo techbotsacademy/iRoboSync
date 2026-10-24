@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plant Disease Detection</title>
+    <style>
+      :root {
+        --bg: #f3f8f2;
+        --panel: #ffffff;
+        --primary: #2d8a4c;
+        --primary-dark: #1f6d38;
+        --accent: #e7f7eb;
+        --danger: #d64545;
+        --danger-soft: #ffe6e6;
+        --success: #1d9d6a;
+        --success-soft: #dcfaee;
+        --warning: #c98000;
+        --warning-soft: #fff3d5;
+        --info: #326cc8;
+        --info-soft: #edf4ff;
+        --text: #1d2a1d;
+        --muted: #617163;
+        --border: #dfe8df;
+        --shadow: 0 18px 35px rgba(21, 41, 28, 0.08);
+      }
+
+
+      * {
+        box-sizing: border-box;
+      }
+
+
+      html, body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: linear-gradient(180deg, #edf7ef 0%, #f9fbf8 100%);
+        color: var(--text);
+      }
+
+
+      body {
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+      }
+
+
+      .app {
+        width: min(1100px, 100%);
+        padding: 18px 16px 40px;
+      }
+
+
+      .topbar {
+        background: rgba(255,255,255,0.82);
+        backdrop-filter: blur(8px);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        padding: 18px 18px 14px;
+        margin-bottom: 18px;
+      }
+
+
+      .topbar h1 {
+        margin: 0 0 12px;
+        font-size: clamp(1.9rem, 2.3vw, 2.7rem);
+      }
+
+
+      .esp32-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: end;
+      }
+
+
+      .field {
+        flex: 1 1 260px;
+        display: flex;
+        flex-direction: column;
+        min-width: 180px;
+      }
+
+
+      .field label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+
+      .field input {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 1rem;
+        background: #fff;
+        color: var(--text);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+
+      .field input:focus {
+        outline: none;
+        border-color: rgba(45,138,76,0.9);
+        box-shadow: 0 0 0 4px rgba(45,138,76,0.12);
+      }
+
+
+      .connect-btn,
+      .primary-btn,
+      .secondary-btn {
+        border: none;
+        border-radius: 12px;
+        padding: 12px 18px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s ease, opacity 0.2s ease, background 0.2s ease;
+      }
+
+
+      .connect-btn:hover,
+      .primary-btn:hover,
+      .secondary-btn:hover {
+        transform: translateY(-1px);
+      }
+
+
+      .connect-btn {
+        background: var(--primary);
+        color: white;
+        min-width: 170px;
+      }
+
+
+      .connect-btn:hover {
+        background: var(--primary-dark);
+      }
+
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 14px;
+        font-weight: 700;
+      }
+
+
+      .status-badge {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        min-width: 130px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        letter-spacing: 0.02em;
+      }
+
+
+      .status-disconnected {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+
+      .status-connected {
+        background: var(--success-soft);
+        color: var(--success);
+      }
+
+
+      .content {
+        display: grid;
+        grid-template-columns: 1.05fr 1.3fr;
+        gap: 18px;
+      }
+
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
+
+
+      .upload-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+
+      .upload-area {
+        position: relative;
+        border: 2px dashed #b7d9bd;
+        background: linear-gradient(180deg, #f6faf7, #eef7f0);
+        border-radius: 16px;
+        min-height: 260px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        cursor: pointer;
+        transition: border-color 0.2s ease, transform 0.2s ease;
+      }
+
+
+      .upload-area:hover {
+        border-color: var(--primary);
+        transform: translateY(-1px);
+      }
+
+
+      .upload-area input {
+        display: none;
+      }
+
+
+      .upload-inner {
+        text-align: center;
+        color: var(--muted);
+      }
+
+
+      .leaf-icon {
+        font-size: 4rem;
+        margin-bottom: 12px;
+      }
+
+
+      .upload-area p {
+        margin: 0;
+        font-size: 1rem;
+        line-height: 1.5;
+      }
+
+
+      .image-preview {
+        display: none;
+        width: 100%;
+        max-height: 320px;
+        object-fit: contain;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #f7faf7;
+      }
+
+
+      .primary-btn {
+        background: var(--primary);
+        color: white;
+      }
+
+
+      .primary-btn:hover {
+        background: var(--primary-dark);
+      }
+
+
+      .primary-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+
+      .result-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+
+      .message {
+        display: none;
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        border: 1px solid transparent;
+      }
+
+
+      .message.info {
+        display: block;
+        background: var(--info-soft);
+        color: var(--info);
+        border-color: rgba(50,108,200,0.2);
+      }
+
+
+      .message.success {
+        display: block;
+        background: var(--success-soft);
+        color: var(--success);
+        border-color: rgba(29,157,106,0.2);
+      }
+
+
+      .message.error {
+        display: block;
+        background: var(--danger-soft);
+        color: var(--danger);
+        border-color: rgba(214,69,69,0.2);
+      }
+
+
+      .message.loading {
+        display: block;
+        background: var(--warning-soft);
+        color: var(--warning);
+        border-color: rgba(201,128,0,0.2);
+      }
+
+
+      .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+      }
+
+
+      .result-item {
+        background: #f8fbf9;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 13px;
+      }
+
+
+      .result-item .label {
+        display: block;
+        font-size: 0.74rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+
+      .result-item .value {
+        font-size: 1.08rem;
+        font-weight: 700;
+        color: var(--text);
+        word-break: break-word;
+      }
+
+
+      .result-item .value.muted {
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+
+      .secondary-btn {
+        width: 100%;
+        background: white;
+        border: 1px solid var(--primary);
+        color: var(--primary);
+      }
+
+
+      .secondary-btn:hover {
+        background: #edf9f0;
+      }
+
+
+      .secondary-btn:disabled {
+        background: #f5f5f5;
+        color: #8ea38e;
+        border-color: #d8e0d6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+
+      @media (max-width: 760px) {
+        .content {
+          grid-template-columns: 1fr;
+        }
+        .esp32-row {
+          align-items: stretch;
+        }
+        .connect-btn {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <h1>Plant Disease Detection</h1>
+
+
+        <div class="esp32-row">
+          <div class="field">
+            <label for="espIp">ESP32 IP Address</label>
+            <input id="espIp" type="text" placeholder="192.168.1.50" autocomplete="off" />
+          </div>
+
+
+          <button id="connectBtn" class="connect-btn" type="button">Connect ESP32</button>
+        </div>
+
+
+        <div class="status-row">
+          <span>Connection Status:</span>
+          <span id="connectionStatus" class="status-badge status-disconnected">Disconnected</span>
+        </div>
+      </header>
+
+
+      <main class="content">
+        <section class="card">
+          <div class="upload-wrap">
+            <div id="uploadArea" class="upload-area" role="button" tabindex="0" aria-label="Upload leaf image">
+              <input id="imageInput" type="file" accept="image/png,image/jpeg,image/jpg" />
+              <div class="upload-inner">
+                <div class="leaf-icon">🌿</div>
+                <p>Upload a leaf image<br />or click to browse</p>
+              </div>
+            </div>
+
+
+            <img id="imagePreview" class="image-preview" alt="Plant preview" />
+
+
+            <button id="analyzeBtn" class="primary-btn" type="button">Analyze Plant</button>
+          </div>
+        </section>
+
+
+        <section class="card result-panel">
+          <div id="messageBox" class="message info">No analysis has been performed yet.</div>
+
+
+          <div class="result-grid">
+            <div class="result-item">
+              <span class="label">Plant Name</span>
+              <span id="plantName" class="value muted">-</span>
+            </div>
+
+
+            <div class="result-item">
+              <span class="label">Assessment</span>
+              <span id="assessment" class="value muted">-</span>
+            </div>
+
+
+            <div class="result-item">
+              <span class="label">Confidence</span>
+              <span id="confidence" class="value muted">-</span>
+            </div>
+
+
+            <div class="result-item" style="grid-column: 1 / -1;">
+              <span class="label">Disease Details</span>
+              <span id="diseaseDetails" class="value muted">No data yet.</span>
+            </div>
+          </div>
+
+
+          <div class="send-action">
+            <button id="sendResultBtn" class="secondary-btn" type="button" disabled>Send Result to ESP32</button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+
+
+
+<script>
+  // Use your Crop.health API key here.
+  // Do not publish this HTML with a real API key.
+  const CROP_HEALTH_API_KEY = "WGBAILO5K6SdPE1RHQI6RdTeEaskcQ05cGSHrK8x2OvVq104Gn";
+  const CROP_HEALTH_ENDPOINT =
+    "https://crop.kindwise.com/api/v1/identification";
+
+
+  const esp32State = {
+    connected: false,
+    baseUrl: "",
+    latestResult: null
+  };
+
+
+  let isAnalyzing = false;
+
+
+  const ui = {
+    espIp: document.getElementById("espIp"),
+    connectBtn: document.getElementById("connectBtn"),
+    connectionStatus: document.getElementById("connectionStatus"),
+    uploadArea: document.getElementById("uploadArea"),
+    imageInput: document.getElementById("imageInput"),
+    imagePreview: document.getElementById("imagePreview"),
+    analyzeBtn: document.getElementById("analyzeBtn"),
+    sendResultBtn: document.getElementById("sendResultBtn"),
+    messageBox: document.getElementById("messageBox"),
+    plantName: document.getElementById("plantName"),
+    assessment: document.getElementById("assessment"),
+    confidence: document.getElementById("confidence"),
+    diseaseDetails: document.getElementById("diseaseDetails")
+  };
+
+
+  function showMessage(type, message) {
+    ui.messageBox.className = "message " + type;
+    ui.messageBox.textContent = message;
+  }
+
+
+  function setConnectionStatus(connected) {
+    esp32State.connected = connected;
+    ui.connectionStatus.textContent = connected
+      ? "Connected"
+      : "Disconnected";
+    ui.connectionStatus.className = connected
+      ? "status-badge status-connected"
+      : "status-badge status-disconnected";
+    updateResultDisplay();
+  }
+
+
+  function normalizeBaseUrl(value) {
+    let normalized = value.trim();
+    if (!normalized) return "";
+
+
+    if (
+      !normalized.startsWith("http://") &&
+      !normalized.startsWith("https://")
+    ) {
+      normalized = "http://" + normalized;
+    }
+
+
+    try {
+      return new URL(normalized).origin;
+    } catch {
+      return "";
+    }
+  }
+
+
+  function safeString(value) {
+    if (value === undefined || value === null) return null;
+
+
+    if (typeof value === "string") {
+      return value.trim() || null;
+    }
+
+
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+
+
+    return null;
+  }
+
+
+  function probabilityPercent(value) {
+    if (value === undefined || value === null) return null;
+
+
+    const number = Number(value);
+    if (!Number.isFinite(number)) return null;
+
+
+    return number <= 1 ? number * 100 : number;
+  }
+
+
+  function formatProbability(value) {
+    const percent = probabilityPercent(value);
+    return percent === null ? null : percent.toFixed(2) + "%";
+  }
+
+
+  function updateResultDisplay() {
+    const result = esp32State.latestResult;
+
+
+    if (!result) {
+      ui.plantName.textContent = "-";
+      ui.assessment.textContent = "-";
+      ui.confidence.textContent = "-";
+      ui.diseaseDetails.textContent = "No analysis result yet.";
+      ui.sendResultBtn.disabled = true;
+      return;
+    }
+
+
+    ui.plantName.textContent = result.plantName || "Not identified";
+    ui.assessment.textContent = result.assessment || "Unknown";
+
+
+    ui.confidence.textContent =
+      result.confidence !== null && result.confidence !== undefined
+        ? Number(result.confidence).toFixed(2) + "%"
+        : "Not provided";
+
+
+    ui.diseaseDetails.textContent =
+      result.details || "No disease details returned by the API.";
+
+
+    ui.sendResultBtn.disabled = !esp32State.connected;
+  }
+
+
+  async function connectToEsp32() {
+    const baseUrl = normalizeBaseUrl(ui.espIp.value);
+
+
+    if (!baseUrl) {
+      setConnectionStatus(false);
+      showMessage("error", "Enter a valid ESP32 IP address.");
+      return;
+    }
+
+
+    esp32State.baseUrl = baseUrl;
+    showMessage("loading", "Connecting to ESP32...");
+
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
+
+    try {
+      const response = await fetch(baseUrl + "/status", {
+        method: "GET",
+        mode: "cors",
+        signal: controller.signal
+      });
+
+
+      if (!response.ok) {
+        throw new Error("ESP32 returned HTTP " + response.status);
+      }
+
+
+      const data = await response.json();
+
+
+      if (data.status !== "online" || !data.ip) {
+        throw new Error("Invalid ESP32 status response.");
+      }
+
+
+      setConnectionStatus(true);
+      showMessage("success", "Connected to ESP32 at " + baseUrl + ".");
+    } catch (error) {
+      setConnectionStatus(false);
+      showMessage(
+        "error",
+        "Could not connect to ESP32. Check its IP, Wi-Fi and CORS settings. " +
+          (error.message || "")
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+
+  function handleFileSelection(file) {
+    if (!file) return;
+
+
+    if (!["image/png", "image/jpeg", "image/jpg"].includes(
+      (file.type || "").toLowerCase()
+    )) {
+      showMessage("error", "Please upload a PNG or JPEG image.");
+      return;
+    }
+
+
+    const reader = new FileReader();
+
+
+    reader.onload = event => {
+      ui.imagePreview.src = event.target.result;
+      ui.imagePreview.style.display = "block";
+      esp32State.latestResult = null;
+      updateResultDisplay();
+      showMessage("info", "Image ready. Click Analyze Plant.");
+    };
+
+
+    reader.onerror = () => {
+      showMessage("error", "Could not read the selected image.");
+    };
+
+
+    reader.readAsDataURL(file);
+  }
+
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+
+      reader.onload = () => {
+        const dataUrl = String(reader.result || "");
+        const commaIndex = dataUrl.indexOf(",");
+
+
+        if (commaIndex < 0) {
+          reject(new Error("Could not convert the image to Base64."));
+          return;
+        }
+
+
+        // Crop.health expects Base64 image content, without the data URL prefix.
+        resolve(dataUrl.slice(commaIndex + 1));
+      };
+
+
+      reader.onerror = () => reject(new Error("Could not read image file."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+
+  function getCropSuggestions(payload) {
+    const suggestions = payload?.result?.crop?.suggestions;
+    return Array.isArray(suggestions) ? suggestions : [];
+  }
+
+
+  function getDiseaseSuggestions(payload) {
+    const suggestions = payload?.result?.disease?.suggestions;
+    return Array.isArray(suggestions) ? suggestions : [];
+  }
+
+
+  function getBestSuggestion(suggestions) {
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      return null;
+    }
+
+
+    return [...suggestions].sort((a, b) => {
+      return Number(b?.probability || 0) - Number(a?.probability || 0);
+    })[0];
+  }
+
+
+  function getCropDisplayName(crop) {
+    if (!crop) return "Not identified";
+
+
+    const details = crop.details || {};
+    const commonName =
+      safeString(crop.common_name) ||
+      safeString(details.common_name) ||
+      safeString(details.common_names?.[0]);
+
+
+    const scientificName = safeString(crop.name);
+
+
+    if (commonName && scientificName && commonName !== scientificName) {
+      return commonName + " (" + scientificName + ")";
+    }
+
+
+    return commonName || scientificName || "Not identified";
+  }
+
+
+  function getDiseaseDescription(disease) {
+    if (!disease) return "";
+
+
+    const details = disease.details || {};
+    const parts = [];
+
+
+    const description =
+      safeString(details.description) ||
+      safeString(details.wiki_description);
+
+
+    const symptoms = safeString(details.symptoms);
+    const treatment = safeString(details.treatment);
+    const severity = safeString(details.severity);
+
+
+    if (description) parts.push("Description: " + description);
+    if (symptoms) parts.push("Symptoms: " + symptoms);
+    if (severity) parts.push("Severity: " + severity);
+    if (treatment) parts.push("Treatment: " + treatment);
+
+
+    return parts.join("\n\n");
+  }
+
+
+  function isExplicitHealthyResult(disease) {
+    const name = (safeString(disease?.name) || "").toLowerCase();
+    const commonName = (safeString(disease?.common_name) || "").toLowerCase();
+
+
+    return (
+      name === "healthy" ||
+      name === "healthy plant" ||
+      name === "no disease" ||
+      commonName === "healthy" ||
+      commonName === "healthy plant" ||
+      commonName === "no disease"
+    );
+  }
+
+
+  async function analyzePlantImage() {
+    if (isAnalyzing) return;
+
+
+    const file = ui.imageInput.files?.[0];
+
+
+    if (!file) {
+      showMessage("error", "Upload a leaf image before analyzing.");
+      return;
+    }
+
+
+    if (
+      !CROP_HEALTH_API_KEY ||
+      CROP_HEALTH_API_KEY === "YOUR_CROP_HEALTH_API_KEY"
+    ) {
+      showMessage(
+        "error",
+        "Add your Crop.health API key to CROP_HEALTH_API_KEY before analyzing."
+      );
+      return;
+    }
+
+
+    isAnalyzing = true;
+    ui.analyzeBtn.disabled = true;
+    esp32State.latestResult = null;
+    updateResultDisplay();
+
+
+    try {
+      showMessage("loading", "Analyzing crop and checking for diseases...");
+
+
+      const imageBase64 = await fileToBase64(file);
+
+
+      // Crop.health request: do not send Plant.id-specific health parameters.
+      const requestBody = {
+        images: [imageBase64]
+      };
+
+
+      const response = await fetch(CROP_HEALTH_ENDPOINT, {
+        method: "POST",
+        mode: "cors",
+        headers: {
+          "Content-Type": "application/json",
+          "Api-Key": CROP_HEALTH_API_KEY
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+
+      // Read the response body exactly once.
+      const rawText = await response.text();
+      let payload = null;
+
+
+      if (rawText.trim()) {
+        try {
+          payload = JSON.parse(rawText);
+        } catch {
+          payload = null;
+        }
+      }
+
+
+      if (!response.ok) {
+        // Do not print the API key or response access tokens.
+        const apiMessage =
+          safeString(payload?.message) ||
+          safeString(payload?.error?.message) ||
+          safeString(payload?.detail) ||
+          rawText.slice(0, 300) ||
+          "No error details provided.";
+
+
+        console.error("Crop.health request failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          message: apiMessage
+        });
+
+
+        throw new Error(
+          "Crop.health returned HTTP " + response.status + ": " + apiMessage
+        );
+      }
+
+
+      if (!payload || typeof payload !== "object") {
+        throw new Error("Crop.health returned an empty or invalid JSON response.");
+      }
+
+
+      const cropSuggestions = getCropSuggestions(payload);
+      const diseaseSuggestions = getDiseaseSuggestions(payload);
+      const bestCrop = getBestSuggestion(cropSuggestions);
+      const bestDisease = getBestSuggestion(diseaseSuggestions);
+
+
+      if (!bestCrop && !bestDisease) {
+        console.warn("Crop.health response did not contain expected results.", {
+          topLevelKeys: Object.keys(payload),
+          resultKeys: Object.keys(payload.result || {})
+        });
+
+
+        throw new Error(
+          "The response did not contain result.crop.suggestions or result.disease.suggestions. Check the documented response format."
+        );
+      }
+
+
+      const plantName = getCropDisplayName(bestCrop);
+
+
+      const cropConfidence = bestCrop
+        ? probabilityPercent(bestCrop.probability)
+        : null;
+
+
+      let assessment = "Unknown";
+      let details = "The API returned no disease suggestions. This does not confirm that the leaf is healthy.";
+
+
+      if (bestDisease && isExplicitHealthyResult(bestDisease)) {
+        assessment = "Healthy";
+        details =
+          "The API returned an explicit healthy result: " +
+          (safeString(bestDisease.common_name) ||
+            safeString(bestDisease.name) ||
+            "Healthy");
+
+
+        const description = getDiseaseDescription(bestDisease);
+        if (description) details += "\n\n" + description;
+
+
+        const probability = formatProbability(bestDisease.probability);
+        if (probability) details += "\n\nAPI confidence: " + probability;
+      } else if (bestDisease) {
+        assessment = "Possible Disease Detected";
+
+
+        const diseaseName =
+          safeString(bestDisease.common_name) ||
+          safeString(bestDisease.name) ||
+          "Disease suggestion";
+
+
+        const probability = formatProbability(bestDisease.probability);
+
+
+        details = diseaseName;
+
+
+        if (probability) {
+          details += "\nDisease confidence: " + probability;
+        }
+
+
+        const description = getDiseaseDescription(bestDisease);
+        if (description) {
+          details += "\n\n" + description;
+        }
+
+
+        if (diseaseSuggestions.length > 1) {
+          details += "\n\nOther API suggestions:";
+
+
+          diseaseSuggestions.slice(1, 4).forEach(suggestion => {
+            const name =
+              safeString(suggestion.common_name) ||
+              safeString(suggestion.name) ||
+              "Unnamed suggestion";
+
+
+            const confidence = formatProbability(suggestion.probability);
+
+
+            details +=
+              "\n• " + name +
+              (confidence ? " (" + confidence + ")" : "");
+          });
+        }
+      }
+
+
+      esp32State.latestResult = {
+        plantName,
+        assessment,
+        confidence: cropConfidence,
+        details
+      };
+
+
+      updateResultDisplay();
+
+
+      if (!bestDisease) {
+        showMessage(
+          "info",
+          "Crop identification completed, but no disease suggestions were returned. The leaf's health is not confirmed."
+        );
+      } else {
+        showMessage("success", "Crop.health analysis completed successfully.");
+      }
+    } catch (error) {
+      console.error("Crop.health analysis error:", error);
+
+
+      esp32State.latestResult = null;
+      updateResultDisplay();
+
+
+      const message = error?.message || "Unknown error.";
+
+
+      if (
+        message.toLowerCase().includes("failed to fetch") ||
+        message.toLowerCase().includes("networkerror")
+      ) {
+        showMessage(
+          "error",
+          "Could not reach Crop.health. Check your internet connection and browser CORS restrictions."
+        );
+      } else {
+        showMessage("error", "Analysis failed: " + message);
+      }
+    } finally {
+      isAnalyzing = false;
+      ui.analyzeBtn.disabled = false;
+    }
+  }
+
+
+  async function sendResultToEsp32() {
+    if (!esp32State.connected || !esp32State.baseUrl) {
+      showMessage("error", "Connect to ESP32 first.");
+      return;
+    }
+
+
+    if (!esp32State.latestResult) {
+      showMessage("error", "There is no analysis result to send.");
+      return;
+    }
+
+
+    showMessage("loading", "Sending result to ESP32...");
+
+
+    try {
+      // Keep these JSON fields compatible with the existing ESP32 firmware.
+      const response = await fetch(
+        esp32State.baseUrl + "/plant-result",
+        {
+          method: "POST",
+          mode: "cors",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            plantName: esp32State.latestResult.plantName || "",
+            assessment: esp32State.latestResult.assessment || "",
+            details: esp32State.latestResult.details || "",
+            confidence: Number(esp32State.latestResult.confidence ?? 0)
+          })
+        }
+      );
+
+
+      const responseText = await response.text();
+
+
+      if (!response.ok) {
+        throw new Error(
+          responseText || "ESP32 returned HTTP " + response.status
+        );
+      }
+
+
+      showMessage("success", "Result sent to ESP32 successfully.");
+    } catch (error) {
+      showMessage(
+        "error",
+        "Failed to send result to ESP32: " + (error.message || "Unknown error.")
+      );
+    }
+  }
+
+
+  ui.connectBtn.addEventListener("click", connectToEsp32);
+  ui.analyzeBtn.addEventListener("click", analyzePlantImage);
+  ui.sendResultBtn.addEventListener("click", sendResultToEsp32);
+
+
+  ui.uploadArea.addEventListener("click", () => ui.imageInput.click());
+
+
+  ui.uploadArea.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      ui.imageInput.click();
+    }
+  });
+
+
+  ui.imageInput.addEventListener("change", event => {
+    const file = event.target.files?.[0];
+    handleFileSelection(file);
+  });
+
+
+  setConnectionStatus(false);
+  updateResultDisplay();
+</script>
+  </body>
+</html>

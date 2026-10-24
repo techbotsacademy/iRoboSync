@@ -1,0 +1,49 @@
+STEP-1: Plant Disease Detection Project — Basic Setup
+Create the complete Step-1 foundation for my Plant Disease Detection project using HTML, CSS, JavaScript, ESP32, Arduino IDE, and Wi-Fi.
+1. Website Setup
+Create a complete, responsive index.html with a clean, modern Plant Disease Detection interface.
+The website must work on both laptop and mobile.
+Add a section to upload or capture a plant leaf image using the device camera.
+Add a Plant Disease Detection button and an area to display the future detection result.
+Add ESP32 connection status: Connected, Disconnected, or Connecting.
+Display clear error and success messages.
+2. ESP32 Setup
+Create the complete Arduino sketch named PlantDiseaseDetector.ino.
+Connect the ESP32 to Wi-Fi using configurable placeholders for Wi-Fi name and password.
+Start an HTTP web server on the ESP32.
+Print the ESP32 IP address in the Serial Monitor after Wi-Fi connects.
+Add these endpoints:
+/ — basic ESP32 server response.
+/ping — simple connection test.
+/status — return JSON containing the ESP32 connection status.
+Use the Arduino WebServer library and standard ESP32-compatible code.
+Include suitable CORS headers so the website can communicate with the ESP32.
+Add clear Serial Monitor messages for Wi-Fi connection, server startup, and incoming requests.
+3. Website–ESP32 Communication
+The website must connect to the ESP32 using its configurable local IP address.
+Add a Test ESP32 Connection button.
+When clicked, send a request to /ping or /status and display the actual result.
+Do not display “Connected” unless the ESP32 responds successfully.
+Handle incorrect IP addresses, Wi-Fi disconnections, timeouts, CORS errors, and unavailable servers gracefully.
+Do not use fake connection status or simulated responses.
+4. Prepare for Step-2 and Step-3
+Keep the code modular so plant disease detection can be added in Step-2.
+Keep the ESP32 HTTP server structure ready for the Step-3 Gmail notification feature.
+Do not implement the actual disease-detection API or Gmail SMTP sending in Step-1.
+Do not remove or break the endpoints needed for future integration.
+Use consistent JSON response formats and clear error handling.
+5. Security and Code Quality
+Use placeholders such as YOUR_WIFI_NAME and YOUR_WIFI_PASSWORD.
+Do not include real passwords, Gmail App Passwords, or API keys in the code.
+Add comments explaining important code sections.
+Provide complete, working code, not partial snippets or pseudocode.
+6. Required Output
+Provide:
+Complete index.html.
+Complete PlantDiseaseDetector.ino.
+Required Arduino IDE board and library setup.
+Exact ESP32 wiring instructions, if any hardware wiring is required.
+Step-by-step instructions to upload the sketch and test the website.
+A final checklist confirming that Wi-Fi, the ESP32 server, /ping, /status, and website communication work.
+Important: This is only Step-1. Preserve compatibility with the existing Plant Disease Detection and Gmail notification workflow planned for Step-2 and Step-3. Do not unnecessarily redesign or change the future project architecture.
+

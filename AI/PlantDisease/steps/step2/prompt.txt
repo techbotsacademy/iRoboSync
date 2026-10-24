@@ -1,0 +1,87 @@
+Step-2: Complete Plant Disease Detection System — HTML + ESP32
+Create a complete, working Plant Disease Detection System using two files: step-2.html and PlantDiseaseDetector.ino. Both files must work together correctly.
+Part 1: HTML Website (step-2.html)
+Use HTML, CSS, and JavaScript in one single HTML file. Do not create additional frontend files.
+1. Website UI
+Keep the existing green-and-white responsive design.
+Include an ESP32 IP address input and Connect ESP32 button.
+Include leaf image upload for PNG and JPEG.
+Display the uploaded image preview.
+Include an Analyze Plant button.
+Display Plant Name, Assessment, Confidence, and Disease Details.
+Include a Send Result to ESP32 button.
+Do not unnecessarily change the existing UI or remove working features.
+2. Real plant disease detection
+Use the official Kindwise Crop.health API.
+API endpoint: https://crop.kindwise.com/api/v1/identification
+Use the current official Crop.health API documentation to confirm the correct endpoint, authentication header, request body, and response structure.
+Store the API key in a clearly marked configuration constant. Never invent a working API key.
+Do not use fake detection, random confidence, hardcoded disease names, or sample results.
+Correctly parse the actual API response for crop identification, disease identification, healthy status, and confidence/probability.
+Do not automatically mark a plant healthy if the API has not returned sufficient evidence.
+Show clear messages for invalid images, unsupported results, API errors, quota limits, and network failures.
+Remove unsupported request parameters such as health: "auto" if the current API does not support them.
+3. Send detection results to ESP32
+When the user clicks Send Result to ESP32, send the actual analyzed result to the ESP32 using:
+POST http://ESP32_IP/plant-result
+Send JSON in this format:
+{
+  "plantName": "Actual detected plant",
+  "assessment": "Actual API assessment",
+  "details": "Actual disease details",
+  "confidence": 0.95
+}
+Replace the example values with the actual API results. Do not send example or fabricated data.
+Before sending:
+Confirm that the ESP32 is connected.
+Confirm that a real analysis result exists.
+Validate the ESP32 IP address.
+Display a success message only after receiving a successful ESP32 response.
+Handle connection errors and timeouts clearly.
+Part 2: ESP32 Firmware (PlantDiseaseDetector.ino)
+Create complete Arduino IDE firmware for an ESP32 Dev Module. This must be real, compilable firmware, not pseudocode.
+1. Wi-Fi connection
+Connect the ESP32 to the user's configured Wi-Fi network.
+Keep Wi-Fi credentials in clearly marked constants.
+Print connection status and the assigned IP address in the Serial Monitor.
+If Wi-Fi disconnects, attempt to reconnect.
+Do not invent Wi-Fi credentials.
+2. Web server endpoints
+Use WiFi.h, WebServer.h, and ArduinoJson if needed.
+Implement these endpoints:
+GET /status — return JSON indicating that the ESP32 server is running.
+GET /ping — return a simple response confirming communication.
+POST /plant-result — receive and parse the JSON sent by the HTML page.
+For POST /plant-result:
+Read plantName, assessment, details, and confidence.
+Validate required fields and handle malformed JSON.
+Store the latest received result in ESP32 memory.
+Return an appropriate HTTP status and JSON response.
+Print the received plant name, assessment, disease details, and confidence in the Serial Monitor.
+Do not claim the result was received successfully if parsing or validation failed.
+3. Show the result
+Keep the latest plant-detection result available in ESP32 memory.
+Print readable results in the Serial Monitor.
+If the existing project has a display, LED, buzzer, or notification feature, preserve and integrate it using the existing pin assignments.
+Do not invent connected hardware or change the user's wiring without asking.
+If email notifications already exist in the original firmware, preserve them and check that their configuration is valid. Do not claim an email was sent unless sending succeeds.
+4. Communication and compatibility
+Make sure the endpoint paths and JSON field names match exactly between step-2.html and PlantDiseaseDetector.ino.
+Configure the website to use the actual ESP32 IP address displayed in Serial Monitor.
+Explain that browser access may require both devices to be on the same network.
+Handle browser CORS/preflight requests if required by the actual request headers and deployment.
+Do not report a successful connection merely because the IP field contains an address.
+Part 3: Final deliverables
+Return both complete files:
+step-2.html — complete frontend and real Crop.health API integration.
+PlantDiseaseDetector.ino — complete ESP32 firmware and matching web server endpoints.
+Also provide:
+Required Arduino libraries.
+Where to enter the Crop.health API key and Wi-Fi credentials.
+ESP32 board and upload instructions.
+How to find the ESP32 IP address.
+A step-by-step test procedure: connect ESP32, upload a leaf image, analyze it, send the result, and verify the received result in Serial Monitor.
+Do not return only code snippets or instructions to replace individual functions. Return the full code for both files.
+Before finishing, check that the API request/response matches the official Crop.health documentation and that both files use identical endpoint names and JSON fields.
+Important: A browser-based API key can be viewed by users. This no-backend approach is suitable mainly for local testing; explain this limitation rather than claiming the key is secure.
+

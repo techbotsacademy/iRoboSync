@@ -1,0 +1,421 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plant Disease Detection | Step 1</title>
+
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f2f7f0;
+      color: #20352a;
+    }
+
+
+    header {
+      background: #176b3a;
+      color: white;
+      padding: 24px 16px;
+      text-align: center;
+    }
+
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 27px;
+    }
+
+
+    header p {
+      margin: 0;
+    }
+
+
+    main {
+      width: min(700px, 92%);
+      margin: 28px auto;
+    }
+
+
+    .card {
+      background: white;
+      padding: 22px;
+      border-radius: 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 18px #183d2512;
+    }
+
+
+    h2 {
+      margin-top: 0;
+      font-size: 21px;
+    }
+
+
+    label {
+      display: block;
+      margin: 14px 0 7px;
+      font-weight: bold;
+    }
+
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #c7d5c9;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+
+    button {
+      background: #19723d;
+      color: white;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      margin-top: 14px;
+      width: 100%;
+    }
+
+
+    button:hover {
+      background: #10572d;
+    }
+
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+
+    .secondary {
+      background: #335d85;
+    }
+
+
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 14px;
+      background: #eef2ee;
+      overflow-wrap: anywhere;
+    }
+
+
+    .success {
+      background: #e0f5e6;
+      color: #145c2c;
+    }
+
+
+    .error {
+      background: #fde8e7;
+      color: #922b25;
+    }
+
+
+    .warning {
+      background: #fff3d7;
+      color: #79551a;
+    }
+
+
+    #leafPreview {
+      display: none;
+      width: 100%;
+      max-height: 300px;
+      object-fit: contain;
+      margin-top: 15px;
+      border-radius: 10px;
+      background: #f5f5f5;
+    }
+
+
+    .small {
+      font-size: 13px;
+      color: #58665c;
+      line-height: 1.6;
+    }
+
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: #58665c;
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+
+<body>
+  <header>
+    <h1>🌿 Plant Disease Detection</h1>
+    <p>Step 1 — Website and ESP32 Connection Setup</p>
+  </header>
+
+
+  <main>
+    <section class="card">
+      <h2>ESP32 Connection</h2>
+      <p class="small">
+        Enter the IP address shown in the Arduino IDE Serial Monitor.
+        Your computer and ESP32 should be on the same local network.
+      </p>
+
+
+      <label for="esp32IP">ESP32 IP Address</label>
+      <input
+        id="esp32IP"
+        type="text"
+        value="192.168.4.1"
+        placeholder="Example: 192.168.1.50"
+      >
+
+
+      <button id="testButton" onclick="testConnection()">
+        Test ESP32 Connection
+      </button>
+
+
+      <div id="connectionStatus" class="status warning">
+        Not tested yet. Enter your ESP32 IP address and test the connection.
+      </div>
+
+
+      <div id="deviceDetails" class="small"></div>
+    </section>
+
+
+    <section class="card">
+      <h2>🌱 Plant Leaf Image</h2>
+      <p class="small">
+        Select a leaf photo or take a photo using your device.
+        Actual disease analysis will be added in Step 2.
+      </p>
+
+
+      <label for="leafImage">Choose Leaf Image</label>
+      <input
+        id="leafImage"
+        type="file"
+        accept="image/*"
+        capture="environment"
+      >
+
+
+      <img id="leafPreview" alt="Selected plant leaf preview">
+
+
+      <button class="secondary" onclick="prepareImage()">
+        Check Image Selection
+      </button>
+
+
+      <div id="imageStatus" class="status">
+        No image selected.
+      </div>
+
+
+      <div class="status warning">
+        Disease detection is not active in Step 1.
+        Selecting an image does not diagnose a plant.
+      </div>
+    </section>
+
+
+    <section class="card">
+      <h2>Detection Result</h2>
+      <div id="result" class="status">
+        Waiting for Step 2 integration.
+      </div>
+    </section>
+  </main>
+
+
+  <footer>
+    Plant Disease Detection Project · Step 1
+  </footer>
+
+
+  <script>
+    const ipInput = document.getElementById("esp32IP");
+    const connectionStatus = document.getElementById("connectionStatus");
+    const deviceDetails = document.getElementById("deviceDetails");
+    const testButton = document.getElementById("testButton");
+
+
+    function getBaseURL() {
+      let ip = ipInput.value.trim();
+
+
+      // Accept either a bare IP/hostname or an http:// URL.
+      ip = ip.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+
+
+      if (!ip || /[\s/?#]/.test(ip)) {
+        throw new Error("Enter a valid ESP32 IP address.");
+      }
+
+
+      return "http://" + ip;
+    }
+
+
+    async function fetchWithTimeout(url, timeout = 5000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+
+
+      try {
+        return await fetch(url, {
+          method: "GET",
+          signal: controller.signal,
+          cache: "no-store"
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+
+    async function testConnection() {
+      testButton.disabled = true;
+      connectionStatus.className = "status warning";
+      connectionStatus.textContent = "Connecting to ESP32...";
+      deviceDetails.textContent = "";
+
+
+      try {
+        const baseURL = getBaseURL();
+        const response = await fetchWithTimeout(baseURL + "/status");
+
+
+        if (!response.ok) {
+          throw new Error("ESP32 returned HTTP " + response.status);
+        }
+
+
+        const data = await response.json();
+
+
+        if (data.success !== true || data.device !== "ESP32") {
+          throw new Error("Unexpected response from ESP32.");
+        }
+
+
+        connectionStatus.className = "status success";
+        connectionStatus.textContent =
+          "Connected successfully! ESP32 responded to /status.";
+
+
+        deviceDetails.textContent =
+          "IP: " + (data.ip || "Unavailable") +
+          " | Wi-Fi: " + (data.wifiConnected ? "Connected" : "Disconnected") +
+          " | Signal: " +
+          (Number.isFinite(data.rssi) ? data.rssi + " dBm" : "Unavailable");
+
+
+      } catch (error) {
+        connectionStatus.className = "status error";
+
+
+        if (error.name === "AbortError") {
+          connectionStatus.textContent =
+            "Connection timed out. Check the IP address and network.";
+        } else {
+          connectionStatus.textContent =
+            "Connection failed: " + error.message;
+        }
+
+
+        deviceDetails.textContent =
+          "Check that the ESP32 is powered on, the server has started, " +
+          "and both devices are on the same network. If using a browser, " +
+          "also check HTTPS/mixed-content or CORS restrictions.";
+      } finally {
+        testButton.disabled = false;
+      }
+    }
+
+
+    document.getElementById("leafImage").addEventListener("change", function() {
+      const file = this.files[0];
+      const preview = document.getElementById("leafPreview");
+      const imageStatus = document.getElementById("imageStatus");
+
+
+      if (!file) {
+        preview.style.display = "none";
+        preview.removeAttribute("src");
+        imageStatus.className = "status";
+        imageStatus.textContent = "No image selected.";
+        return;
+      }
+
+
+      if (!file.type.startsWith("image/")) {
+        this.value = "";
+        preview.style.display = "none";
+        imageStatus.className = "status error";
+        imageStatus.textContent = "Please select a valid image file.";
+        return;
+      }
+
+
+      const reader = new FileReader();
+
+
+      reader.onload = function(event) {
+        preview.src = event.target.result;
+        preview.style.display = "block";
+        imageStatus.className = "status success";
+        imageStatus.textContent =
+          "Image selected: " + file.name +
+          ". Disease analysis will be added in Step 2.";
+      };
+
+
+      reader.onerror = function() {
+        imageStatus.className = "status error";
+        imageStatus.textContent = "Could not read this image.";
+      };
+
+
+      reader.readAsDataURL(file);
+    });
+
+
+    function prepareImage() {
+      const file = document.getElementById("leafImage").files[0];
+      const imageStatus = document.getElementById("imageStatus");
+
+
+      if (!file) {
+        imageStatus.className = "status warning";
+        imageStatus.textContent = "Please select a plant leaf image first.";
+        return;
+      }
+
+
+      imageStatus.className = "status success";
+      imageStatus.textContent =
+        "Image is ready for Step 2. No disease diagnosis was performed.";
+    }
+  </script>
+</body>
+</html>
