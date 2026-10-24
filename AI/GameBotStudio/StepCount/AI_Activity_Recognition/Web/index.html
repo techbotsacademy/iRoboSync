@@ -736,6 +736,14 @@ input[type="number"] {
         </div>
 
         <div class="card">
+            <h2>Sensor Graph</h2>
+
+            <div class="chart-wrap">
+                <canvas id="trainCanvas"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
             <h2>Dataset Summary</h2>
 
             <div class="count-grid">
@@ -1168,7 +1176,7 @@ const BATCH_SIZE = 16;
 
 const MIN_SAMPLES_PER_CLASS = 10;
 
-const CONFIDENCE_THRESHOLD = 0.60;
+const CONFIDENCE_THRESHOLD = 0.50;
 
 const CLASS_NAMES = [
     "walking",
@@ -1840,6 +1848,11 @@ function updateSensorGraph() {
 
     drawGraph(
         $("sensorCanvas"),
+        sensorHistory
+    );
+
+    drawGraph(
+        $("trainCanvas"),
         sensorHistory
     );
 
@@ -4934,6 +4947,11 @@ window.addEventListener(
 
         drawGraph(
             $("sensorCanvas"),
+            sensorHistory
+        );
+
+        drawGraph(
+            $("trainCanvas"),
             sensorHistory
         );
 
