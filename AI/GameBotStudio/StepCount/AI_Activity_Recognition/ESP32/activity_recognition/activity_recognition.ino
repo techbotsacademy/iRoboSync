@@ -47,8 +47,8 @@ IPAddress subnet(255, 255, 255, 0);
 // I2C Configuration
 // ============================================================
 
-#define SDA_PIN 19
-#define SCL_PIN 18
+#define SDA_PIN 21
+#define SCL_PIN 22
 
 // ============================================================
 // Sampling Configuration

@@ -285,13 +285,13 @@ button:disabled {
 
 .activity-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 12px;
 }
 
 @media(max-width: 800px) {
     .activity-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(1, 1fr);
     }
 }
 
@@ -329,7 +329,7 @@ button:disabled {
 
 .count-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
     margin-top: 15px;
 }
@@ -537,7 +537,7 @@ input[type="number"] {
 <header class="header">
     <div class="header-inner">
         <div class="title">AI ACTIVITY RECOGNITION</div>
-        <div class="subtitle">ESP32 + MPU6050 + TensorFlow.js</div>
+        <div class="subtitle">ESP32 + MPU6050 + TensorFlow.js (Walking & Squat)</div>
 
         <div class="status-row">
             <div id="espStatus" class="status bad">ESP32 DISCONNECTED</div>
@@ -698,16 +698,8 @@ input[type="number"] {
                     WALKING
                 </button>
 
-                <button class="activity-btn" data-label="running">
-                    RUNNING
-                </button>
-
                 <button class="activity-btn" data-label="squat">
                     SQUAT
-                </button>
-
-                <button class="activity-btn" data-label="standing">
-                    STANDING
                 </button>
 
             </div>
@@ -754,23 +746,13 @@ input[type="number"] {
                 </div>
 
                 <div class="count">
-                    <span>RUNNING</span>
-                    <strong id="runningCount">0</strong>
-                </div>
-
-                <div class="count">
                     <span>SQUAT</span>
                     <strong id="squatCount">0</strong>
                 </div>
 
-                <div class="count">
-                    <span>STANDING</span>
-                    <strong id="standingCount">0</strong>
-                </div>
-
             </div>
 
-            <p>
+            <p style="margin-top: 15px;">
                 Total windows:
                 <strong id="totalCount">0</strong>
             </p>
@@ -1123,38 +1105,12 @@ Loading...
             <div class="probability">
 
                 <div class="probability-header">
-                    <span>RUNNING</span>
-                    <strong id="probRunning">0%</strong>
-                </div>
-
-                <div class="probability-track">
-                    <div id="barRunning" class="probability-fill"></div>
-                </div>
-
-            </div>
-
-            <div class="probability">
-
-                <div class="probability-header">
                     <span>SQUAT</span>
                     <strong id="probSquat">0%</strong>
                 </div>
 
                 <div class="probability-track">
                     <div id="barSquat" class="probability-fill"></div>
-                </div>
-
-            </div>
-
-            <div class="probability">
-
-                <div class="probability-header">
-                    <span>STANDING</span>
-                    <strong id="probStanding">0%</strong>
-                </div>
-
-                <div class="probability-track">
-                    <div id="barStanding" class="probability-fill"></div>
                 </div>
 
             </div>
@@ -1216,16 +1172,12 @@ const CONFIDENCE_THRESHOLD = 0.60;
 
 const CLASS_NAMES = [
     "walking",
-    "running",
-    "squat",
-    "standing"
+    "squat"
 ];
 
 const CLASS_DISPLAY_NAMES = {
     walking: "WALKING",
-    running: "RUNNING",
-    squat: "SQUAT",
-    standing: "STANDING"
+    squat: "SQUAT"
 };
 
 const MODEL_KEY =
@@ -1535,9 +1487,7 @@ async function updateDatasetSummary() {
 
     const counts = {
         walking: 0,
-        running: 0,
-        squat: 0,
-        standing: 0
+        squat: 0
     };
 
     samples.forEach(sample => {
@@ -1559,18 +1509,8 @@ async function updateDatasetSummary() {
     );
 
     setText(
-        "runningCount",
-        counts.running
-    );
-
-    setText(
         "squatCount",
         counts.squat
-    );
-
-    setText(
-        "standingCount",
-        counts.standing
     );
 
     setText(
@@ -2185,11 +2125,6 @@ async function startRecording() {
 
     $("recordProgress").style.width =
         "0%";
-
-    /*
-      Sampling is driven by the ESP32 polling loop.
-      A complete 100-sample window is stored.
-    */
 
     while (
         recording &&
@@ -3182,11 +3117,6 @@ function createTensorDataset(
         );
     });
 
-    /*
-      Convert class indexes to one-hot float32 labels.
-      This matches the 4-unit softmax output layer.
-    */
-
     const oneHotLabels =
         labels.map(labelIndex => {
 
@@ -3350,24 +3280,11 @@ async function trainModel() {
         label => counts[label] >= 2
     );
 
-    if (hasEnoughSamples) {
-        // Proceed to train
-        trainModel();
-    } else {
+    if (!hasEnoughSamples) {
         alert(
-            "Not enough samples. Atleast 2 categrories must have the data\n\n"
-                .map(
-                    label =>
-                        CLASS_DISPLAY_NAMES[
-                            label
-                        ] +
-                        ": " +
-                        counts[label] +
-                        " / " +
-                        MIN_SAMPLES_PER_CLASS
-                )
-                .join("\n")
+            "Not enough samples. At least 2 categories (walking and squat) must have data."
         );
+        return;
     }
 
     trainingRunning = true;
@@ -3428,11 +3345,6 @@ async function trainModel() {
             "Test windows: " +
             split.test.length
         );
-
-        /*
-          Normalization is calculated ONLY from
-          the training split to prevent data leakage.
-        */
 
         normalization =
             calculateNormalization(
@@ -3716,33 +3628,6 @@ async function trainModel() {
             "Training completed."
         );
 
-        logMessage(
-            "Train accuracy: " +
-            (
-                trainAccuracy *
-                100
-            ).toFixed(2) +
-            "%"
-        );
-
-        logMessage(
-            "Validation accuracy: " +
-            (
-                finalValAccuracy *
-                100
-            ).toFixed(2) +
-            "%"
-        );
-
-        logMessage(
-            "Test accuracy: " +
-            (
-                testAccuracy *
-                100
-            ).toFixed(2) +
-            "%"
-        );
-
         modelMetadata = {
             modelVersion: "1.0",
             classNames: CLASS_NAMES,
@@ -3794,16 +3679,6 @@ async function trainModel() {
             "ERROR: " +
             error.message
         );
-
-        if (
-            currentModel &&
-            trainingStopRequested
-        ) {
-
-            logMessage(
-                "Training was stopped."
-            );
-        }
 
     } finally {
 
@@ -4568,11 +4443,6 @@ async function predictLiveSequence(
 
     prediction.dispose();
 
-    /*
-      Keep a small history of actual ML
-      probability vectors for smoothing.
-    */
-
     predictionHistory.push(
         Array.from(
             probabilities
@@ -4694,16 +4564,8 @@ function updateProbabilityUI(
             bar: "barWalking"
         },
         {
-            text: "probRunning",
-            bar: "barRunning"
-        },
-        {
             text: "probSquat",
             bar: "barSquat"
-        },
-        {
-            text: "probStanding",
-            bar: "barStanding"
         }
     ];
 
@@ -4732,8 +4594,6 @@ function updateProbabilityUI(
 function resetProbabilities() {
 
     updateProbabilityUI([
-        0,
-        0,
         0,
         0
     ]);
@@ -4993,12 +4853,6 @@ async function initializeApplication() {
         updateConnectionUI();
 
         resetProbabilities();
-
-        /*
-          Check whether a saved model exists.
-          The model is loaded automatically only when
-          both the model and metadata are valid.
-        */
 
         try {
 
