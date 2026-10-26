@@ -1,0 +1,31 @@
+Step 1 — Basic Project Prompt Prompt: 
+"Create a simple football analytics dashboard in a single HTML file using HTML, CSS, and JavaScript.
+ Build a dark-themed dashboard with a left sidebar navigation, top header, stat cards, a main video preview area, 
+ and a right-side processing panel. Include a file upload for video, display the video in the center, 
+ show placeholder text when no video is selected, and add basic UI elements like Start Processing,
+  Stop Processing, and Reset Workspace buttons. Use modern styling with neon blue accents and mak
+
+
+
+  step-2 
+  Step 2 — Advanced Project Prompt Prompt: 
+  "Build an advanced football analytics dashboard in a single HTML file with dark UI, sidebar, 
+  stats cards, video upload, playback canvas, and processing controls. Add a canvas overlay for detection boxes, 
+  local ONNXRuntime setup, model loading from ./models/yolov8n.onnx, simple frame sampling every 5 seconds, 
+  support for player and ball detection using YOLOv8 classes 0 and 32, show processing status, FPS, frame count,
+   player count, ball count, logs, and buttons for start/stop/reset. Use a modern dark theme and keep it responsive. 
+   Model should be loaded from local files only, not from a remote URL, and the detection should work from browser video frames."
+
+
+
+   step-3 
+   Step 3 — Final Exact Prompt (Your current final-style project) Prompt: 
+   "Create a complete dark-themed football analytics dashboard in a single HTML file with a fixed left sidebar, 
+   top header, metric cards, a large video workspace, a processing control panel, and a structured log panel. 
+   Use a modern UI similar to a SaaS analytics platform. The app should allow selecting a local football video from the browser, 
+   previewing it, and then processing sampled frames using a local YOLOv8 model. The model path must be exactly ./models/yolov8n.onnx and must be loaded as a local ArrayBuffer using ONNX Runtime Web, 
+   not via a remote model URL. Do not add a trailing slash to the model path. Configure ONNX Runtime Web with one WASM thread and set wasmPaths to the ONNX Runtime CDN. Use a 640x640 input preprocessing pipeline with letterboxing, 
+   convert BGR/RGB correctly to CHW float32 tensor, and parse standard YOLOv8 output shapes [1,84,8400] and [1,8400,84]. Implement class IDs: person = 0 -> Player, sports ball = 32 -> Ball. Use confidence threshold 0.35 and IoU threshold 0.45. 
+   Draw detection boxes for Players and Balls on the canvas with green and orange colors respectively. Only sample one frame every five seconds and stop at thirty seconds of processing. Track processed frame count, current players, current balls, FPS, and video time.
+    Include file upload, placeholder when no video is selected, proper control states for start/stop/reset, session log updates, model status, and responsive layout behavior. Make the code stable in the browser using requestVideoFrameCallback when available with a fallback timeout loop.
+     Add robust error handling for missing model or failed detection. Use exact JavaScript logic suitable for a browser-based local YOLO detection dashboard."

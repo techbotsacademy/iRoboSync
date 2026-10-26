@@ -1,0 +1,1867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Football AI Analytics Dashboard</title>
+
+  <!-- ONNX Runtime Web library. The YOLO model remains local. -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #080d16;
+      --panel: #111a29;
+      --panel-light: #162235;
+      --border: rgba(148, 163, 184, .16);
+      --text: #f4f7fb;
+      --muted: #94a3b8;
+      --subtle: #64748b;
+      --blue: #3b82f6;
+      --blue-light: #60a5fa;
+      --green: #22c55e;
+      --orange: #fb923c;
+      --red: #f87171;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-width: 320px;
+      margin: 0;
+      background:
+        radial-gradient(circle at 80% 0%, rgba(37, 99, 235, .14), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Arial, sans-serif;
+    }
+
+    button,
+    label {
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .45;
+    }
+
+    .app {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: fixed;
+      display: flex;
+      flex-direction: column;
+      width: 245px;
+      height: 100vh;
+      padding: 28px 18px;
+      border-right: 1px solid var(--border);
+      background: #0b111d;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 10px 35px;
+    }
+
+    .brand-icon {
+      display: grid;
+      width: 44px;
+      height: 44px;
+      place-items: center;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      font-size: 22px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 4px;
+      color: var(--subtle);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .navigation {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav-link {
+      padding: 13px 14px;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .nav-link:hover,
+    .nav-link.active {
+      background: rgba(59, 130, 246, .14);
+      color: white;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 18px 10px;
+      border-top: 1px solid var(--border);
+      color: var(--subtle);
+      font-size: 11px;
+    }
+
+    .system-status {
+      color: var(--muted);
+      font-weight: bold;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green);
+    }
+
+    .main {
+      width: calc(100% - 245px);
+      margin-left: 245px;
+      padding: 38px clamp(20px, 4vw, 60px);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--blue-light);
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 1.5px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(25px, 3vw, 35px);
+    }
+
+    .mode-badge {
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .stat {
+      min-height: 125px;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: linear-gradient(145deg, var(--panel-light), var(--panel));
+    }
+
+    .stat-title {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .stat-value {
+      display: block;
+      margin-top: 20px;
+      overflow: hidden;
+      font-size: 23px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .stat-description {
+      display: block;
+      margin-top: 7px;
+      color: var(--subtle);
+      font-size: 10px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(300px, .8fr);
+      gap: 22px;
+    }
+
+    .panel {
+      min-width: 0;
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: linear-gradient(145deg, var(--panel-light), var(--panel));
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .25);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 18px;
+    }
+
+    .panel-header h3 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .live-label {
+      color: var(--subtle);
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    .video-container {
+      position: relative;
+      display: flex;
+      min-height: 390px;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background:
+        linear-gradient(rgba(59, 130, 246, .03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, .03) 1px, transparent 1px),
+        #070c14;
+      background-size: 32px 32px;
+    }
+
+    #videoPlayer {
+      display: none;
+    }
+
+    #videoCanvas {
+      display: none;
+      width: 100%;
+      max-height: 520px;
+      object-fit: contain;
+      background: #000;
+    }
+
+    #videoCanvas.visible {
+      display: block;
+    }
+
+    .placeholder {
+      max-width: 330px;
+      padding: 25px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .placeholder-icon {
+      display: grid;
+      width: 60px;
+      height: 60px;
+      margin: auto auto 16px;
+      place-items: center;
+      border: 1px solid rgba(96, 165, 250, .3);
+      border-radius: 50%;
+      background: rgba(59, 130, 246, .14);
+      color: var(--blue-light);
+      font-size: 22px;
+    }
+
+    .placeholder h4 {
+      margin: 0 0 8px;
+      color: white;
+      font-size: 15px;
+    }
+
+    .placeholder p {
+      margin: 0;
+      color: var(--subtle);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .video-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      padding-top: 18px;
+    }
+
+    .file-info {
+      min-width: 0;
+    }
+
+    .file-info strong,
+    .file-info span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-info strong {
+      max-width: 320px;
+      font-size: 12px;
+    }
+
+    .file-info span {
+      max-width: 320px;
+      margin-top: 5px;
+      color: var(--subtle);
+      font-size: 10px;
+    }
+
+    .upload-button {
+      flex-shrink: 0;
+      padding: 12px 15px;
+      border: 1px solid rgba(96, 165, 250, .3);
+      border-radius: 10px;
+      background: rgba(59, 130, 246, .14);
+      color: var(--blue-light);
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .upload-button:hover {
+      background: rgba(59, 130, 246, .25);
+    }
+
+    .description,
+    .model-status {
+      padding: 13px;
+      border: 1px solid rgba(96, 165, 250, .16);
+      border-radius: 12px;
+      background: rgba(59, 130, 246, .08);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .description strong {
+      display: block;
+      margin-bottom: 7px;
+      color: white;
+    }
+
+    .model-status {
+      margin-top: 12px;
+      background: rgba(0, 0, 0, .12);
+    }
+
+    .buttons {
+      display: grid;
+      gap: 10px;
+      margin-top: 19px;
+    }
+
+    .button {
+      min-height: 44px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .start {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+    }
+
+    .stop {
+      border: 1px solid rgba(248, 113, 113, .3);
+      background: rgba(248, 113, 113, .1);
+      color: #fca5a5;
+    }
+
+    .reset {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .log {
+      margin-top: 24px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, .15);
+    }
+
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    #logStatus {
+      color: var(--green);
+    }
+
+    .log-content {
+      max-height: 130px;
+      padding: 12px;
+      overflow-y: auto;
+    }
+
+    .log-content p {
+      margin: 0 0 9px;
+      color: var(--subtle);
+      font-size: 10px;
+    }
+
+    .log-time {
+      margin-right: 6px;
+      color: var(--blue-light);
+    }
+
+    .upcoming {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .feature-list {
+      display: grid;
+      gap: 9px;
+      margin-top: 12px;
+      color: var(--subtle);
+      font-size: 10px;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 24px;
+      color: var(--subtle);
+      font-size: 10px;
+    }
+
+    @media (max-width: 1250px) {
+      .stats {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .sidebar {
+        width: 210px;
+      }
+
+      .main {
+        width: calc(100% - 210px);
+        margin-left: 210px;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 850px) {
+      .app {
+        display: block;
+      }
+
+      .sidebar {
+        position: static;
+        width: 100%;
+        height: auto;
+        padding: 18px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .brand {
+        padding-bottom: 18px;
+      }
+
+      .navigation {
+        display: flex;
+        overflow-x: auto;
+      }
+
+      .nav-link {
+        flex-shrink: 0;
+      }
+
+      .sidebar-footer {
+        display: none;
+      }
+
+      .main {
+        width: 100%;
+        margin-left: 0;
+        padding: 28px 18px;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .topbar {
+        display: block;
+      }
+
+      .mode-badge {
+        display: inline-block;
+        margin-top: 15px;
+      }
+
+      .panel {
+        padding: 15px;
+      }
+
+      .video-container {
+        min-height: 245px;
+      }
+
+      .video-footer {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .upload-button,
+      .footer {
+        text-align: center;
+      }
+
+      .footer {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">⚽</div>
+
+        <div>
+          <h1>Football AI</h1>
+          <span>Analytics Platform</span>
+        </div>
+      </div>
+
+      <nav class="navigation">
+        <a class="nav-link active" href="#dashboard">▦ Dashboard</a>
+        <a class="nav-link" href="#video-analysis">▶ Video Analysis</a>
+        <a class="nav-link" href="#processing">◉ Processing</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="system-status">
+          <span class="status-dot"></span>
+          System Ready
+        </div>
+
+        <p>Step 3 · YOLO Detection</p>
+      </div>
+    </aside>
+
+    <main class="main" id="dashboard">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">AI FOOTBALL ANALYTICS</p>
+          <h2>Video Analysis Dashboard</h2>
+        </div>
+
+        <div class="mode-badge">
+          <span class="status-dot"></span>
+          Development Mode
+        </div>
+      </header>
+
+      <section class="stats">
+        <article class="stat">
+          <span class="stat-title">Processing Status</span>
+          <strong class="stat-value" id="processingStatus">Ready</strong>
+          <span class="stat-description">Waiting for video input</span>
+        </article>
+
+        <article class="stat">
+          <span class="stat-title">Video Time</span>
+          <strong class="stat-value" id="videoTime">00:00 / 00:00</strong>
+          <span class="stat-description">Current playback position</span>
+        </article>
+
+        <article class="stat">
+          <span class="stat-title">FPS</span>
+          <strong class="stat-value" id="fpsValue">0</strong>
+          <span class="stat-description">Detected browser video FPS</span>
+        </article>
+
+        <article class="stat">
+          <span class="stat-title">Frame Count</span>
+          <strong class="stat-value" id="frameCount">0</strong>
+          <span class="stat-description">Frames processed in session</span>
+        </article>
+
+        <article class="stat">
+          <span class="stat-title">Players Detected</span>
+          <strong class="stat-value" id="playerCount">0</strong>
+          <span class="stat-description">Current sampled frame</span>
+        </article>
+
+        <article class="stat">
+          <span class="stat-title">Balls Detected</span>
+          <strong class="stat-value" id="ballCount">0</strong>
+          <span class="stat-description">Current sampled frame</span>
+        </article>
+      </section>
+
+      <section class="workspace" id="video-analysis">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">VIDEO WORKSPACE</p>
+              <h3>Match Footage</h3>
+            </div>
+
+            <span class="live-label">
+              <span class="status-dot"></span>
+              YOLO PREVIEW
+            </span>
+          </div>
+
+          <div class="video-container">
+            <video id="videoPlayer" controls preload="metadata"></video>
+            <canvas id="videoCanvas"></canvas>
+
+            <div class="placeholder" id="videoPlaceholder">
+              <div class="placeholder-icon">▶</div>
+              <h4>Upload football.mp4 to begin</h4>
+              <p>
+                Select a football video file to preview the match footage
+                inside the analytics workspace.
+              </p>
+            </div>
+          </div>
+
+          <div class="video-footer">
+            <div class="file-info">
+              <strong id="fileName">No video selected</strong>
+              <span id="fileSize">
+                MP4, WebM, or compatible browser video
+              </span>
+            </div>
+
+            <label class="upload-button" for="videoUpload">
+              ＋ Upload Video
+            </label>
+
+            <input
+              type="file"
+              id="videoUpload"
+              accept="video/mp4,video/webm,video/ogg,video/*"
+              hidden
+            />
+          </div>
+        </div>
+
+        <aside class="panel" id="processing">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">CONTROL CENTER</p>
+              <h3>Processing Controls</h3>
+            </div>
+          </div>
+
+          <div class="description">
+            <strong>Step 3: Local YOLO Detection</strong>
+            YOLO detects only Players and Balls. One frame is sampled every
+            five seconds until thirty seconds of video are processed.
+          </div>
+
+          <div class="model-status" id="modelStatus">
+            Model status: Waiting for local model
+          </div>
+
+          <div class="buttons">
+            <button class="button start" id="startButton" disabled>
+              ▶ Start Processing
+            </button>
+
+            <button class="button stop" id="stopButton" disabled>
+              Ⅱ Stop Processing
+            </button>
+
+            <button class="button reset" id="resetButton" disabled>
+              ↻ Reset Workspace
+            </button>
+          </div>
+
+          <div class="log">
+            <div class="log-header">
+              <span>Session Log</span>
+              <span id="logStatus">IDLE</span>
+            </div>
+
+            <div class="log-content" id="sessionLog">
+              <p>
+                <span class="log-time">--:--:--</span>
+                Workspace initialized.
+              </p>
+
+              <p>
+                <span class="log-time">--:--:--</span>
+                Waiting for a video upload.
+              </p>
+            </div>
+          </div>
+
+          <div class="upcoming">
+            <p class="eyebrow">PROJECT MODULES</p>
+
+            <div class="feature-list">
+              <span>✓ YOLO player detection</span>
+              <span>✓ Ball detection</span>
+              <span>○ Player tracking</span>
+              <span>○ ByteTrack integration</span>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="footer">
+        <span>Football AI Analytics Dashboard</span>
+        <span>Step 3 of the analysis pipeline</span>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    /*
+      The YOLO model is loaded only from this exact local path:
+      ./models/yolov8n.onnx
+
+      It is loaded as an ArrayBuffer. This prevents ONNX Runtime
+      from making another request such as:
+
+      ./models/yolov8n.onnx/
+
+      Supported classes:
+      COCO class 0  = person       -> Player
+      COCO class 32 = sports ball  -> Ball
+    */
+
+    const MODEL_PATH = "./models/yolov8n.onnx";
+
+    const YOLO_INPUT_SIZE = 640;
+    const SAMPLE_INTERVAL_SECONDS = 5;
+    const MAX_PROCESSING_SECONDS = 30;
+    const CONFIDENCE_THRESHOLD = 0.35;
+    const IOU_THRESHOLD = 0.45;
+
+    const PERSON_CLASS_ID = 0;
+    const SPORTS_BALL_CLASS_ID = 32;
+
+    const videoUpload = document.getElementById("videoUpload");
+    const videoPlayer = document.getElementById("videoPlayer");
+    const videoCanvas = document.getElementById("videoCanvas");
+    const canvasContext = videoCanvas.getContext("2d");
+    const videoPlaceholder = document.getElementById("videoPlaceholder");
+
+    const startButton = document.getElementById("startButton");
+    const stopButton = document.getElementById("stopButton");
+    const resetButton = document.getElementById("resetButton");
+
+    const processingStatus = document.getElementById("processingStatus");
+    const videoTime = document.getElementById("videoTime");
+    const fpsValue = document.getElementById("fpsValue");
+    const frameCount = document.getElementById("frameCount");
+    const playerCount = document.getElementById("playerCount");
+    const ballCount = document.getElementById("ballCount");
+
+    const fileName = document.getElementById("fileName");
+    const fileSize = document.getElementById("fileSize");
+    const sessionLog = document.getElementById("sessionLog");
+    const logStatus = document.getElementById("logStatus");
+    const modelStatus = document.getElementById("modelStatus");
+
+    let yoloSession = null;
+    let modelLoadingPromise = null;
+    let videoUrl = null;
+
+    let isProcessing = false;
+    let isDetecting = false;
+
+    let processedFrameCount = 0;
+    let nextSampleTime = 0;
+
+    let videoFrameCallbackId = null;
+    let fallbackTimerId = null;
+
+    let fpsStartTime = 0;
+    let fpsFrameCount = 0;
+
+    function formatTime(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) {
+        return "00:00";
+      }
+
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = Math.floor(seconds % 60);
+
+      return `${String(minutes).padStart(2, "0")}:${String(
+        remainingSeconds
+      ).padStart(2, "0")}`;
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) {
+        return "0 KB";
+      }
+
+      const units = ["Bytes", "KB", "MB", "GB"];
+      const index = Math.min(
+        Math.floor(Math.log(bytes) / Math.log(1024)),
+        units.length - 1
+      );
+
+      return `${(bytes / Math.pow(1024, index)).toFixed(1)} ${
+        units[index]
+      }`;
+    }
+
+    function addLog(message) {
+      const paragraph = document.createElement("p");
+      const timestamp = document.createElement("span");
+
+      timestamp.className = "log-time";
+      timestamp.textContent = new Date().toLocaleTimeString();
+
+      paragraph.appendChild(timestamp);
+      paragraph.appendChild(document.createTextNode(message));
+
+      sessionLog.appendChild(paragraph);
+      sessionLog.scrollTop = sessionLog.scrollHeight;
+    }
+
+    function updateVideoTime() {
+      videoTime.textContent =
+        `${formatTime(videoPlayer.currentTime)} / ` +
+        `${formatTime(videoPlayer.duration)}`;
+    }
+
+    function updateButtons() {
+      const hasVideo = Boolean(videoPlayer.src);
+      const modelReady = Boolean(yoloSession);
+
+      startButton.disabled =
+        !hasVideo || !modelReady || isProcessing;
+
+      stopButton.disabled = !isProcessing;
+
+      resetButton.disabled =
+        !hasVideo && processedFrameCount === 0;
+    }
+
+    function updateFps(timestamp) {
+      if (!fpsStartTime) {
+        fpsStartTime = timestamp;
+      }
+
+      fpsFrameCount++;
+
+      const elapsedSeconds =
+        (timestamp - fpsStartTime) / 1000;
+
+      if (elapsedSeconds >= 1) {
+        fpsValue.textContent =
+          (fpsFrameCount / elapsedSeconds).toFixed(1);
+
+        fpsStartTime = timestamp;
+        fpsFrameCount = 0;
+      }
+    }
+
+    /*
+      Configure ONNX Runtime Web for one WASM thread.
+      This avoids needing crossOriginIsolated.
+    */
+    function configureOnnxRuntime() {
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.proxy = false;
+
+      /*
+        These are runtime files only.
+        The YOLO model is still loaded locally.
+      */
+      ort.env.wasm.wasmPaths =
+        "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
+    }
+
+    /*
+      Load the model from the local project folder.
+
+      The model URL is exactly:
+      ./models/yolov8n.onnx
+
+      The model is first fetched once, converted to an ArrayBuffer,
+      and then passed directly to ONNX Runtime.
+    */
+    async function loadYoloModel() {
+      if (yoloSession) {
+        return yoloSession;
+      }
+
+      if (modelLoadingPromise) {
+        return modelLoadingPromise;
+      }
+
+      modelLoadingPromise = (async function () {
+        try {
+          if (typeof ort === "undefined") {
+            throw new Error("ONNX Runtime Web did not load.");
+          }
+
+          configureOnnxRuntime();
+
+          processingStatus.textContent = "Loading YOLO";
+          logStatus.textContent = "LOADING";
+          logStatus.style.color = "var(--blue-light)";
+
+          modelStatus.textContent =
+            "Model status: Loading local model";
+
+          addLog("Loading local YOLO model.");
+
+          /*
+            This is the only model path in the application.
+            It has no trailing slash.
+          */
+          const response = await fetch(MODEL_PATH, {
+            method: "GET",
+            cache: "no-store"
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              `Model request failed with HTTP ${response.status}.`
+            );
+          }
+
+          const modelBuffer = await response.arrayBuffer();
+
+          if (modelBuffer.byteLength === 0) {
+            throw new Error("The local model file is empty.");
+          }
+
+          /*
+            IMPORTANT:
+            Pass modelBuffer, not MODEL_PATH.
+
+            This prevents the extra request:
+            /models/yolov8n.onnx/
+          */
+          yoloSession =
+            await ort.InferenceSession.create(
+              modelBuffer,
+              {
+                executionProviders: ["wasm"],
+                graphOptimizationLevel: "all"
+              }
+            );
+
+          processingStatus.textContent = "Ready";
+          logStatus.textContent = "READY";
+          logStatus.style.color = "var(--green)";
+
+          modelStatus.textContent =
+            "Model status: Local YOLO model loaded";
+
+          addLog("Local YOLO model loaded successfully.");
+
+          updateButtons();
+
+          return yoloSession;
+        } catch (error) {
+          console.error("YOLO model loading error:", error);
+
+          yoloSession = null;
+          modelLoadingPromise = null;
+
+          processingStatus.textContent = "Model Error";
+          logStatus.textContent = "ERROR";
+          logStatus.style.color = "var(--red)";
+
+          modelStatus.textContent =
+            "YOLO model not found. Please place yolov8n.onnx inside the models folder.";
+
+          addLog(
+            "YOLO model not found. Please place yolov8n.onnx inside the models folder."
+          );
+
+          updateButtons();
+
+          throw error;
+        }
+      })();
+
+      return modelLoadingPromise;
+    }
+
+    /*
+      Preprocess the video frame for YOLOv8.
+
+      The image is letterboxed into 640 x 640 and converted
+      into an RGB tensor with CHW layout.
+    */
+    function createYoloInput() {
+      const sourceWidth = videoPlayer.videoWidth;
+      const sourceHeight = videoPlayer.videoHeight;
+
+      const inputCanvas = document.createElement("canvas");
+      inputCanvas.width = YOLO_INPUT_SIZE;
+      inputCanvas.height = YOLO_INPUT_SIZE;
+
+      const inputContext = inputCanvas.getContext("2d", {
+        willReadFrequently: true
+      });
+
+      const scale = Math.min(
+        YOLO_INPUT_SIZE / sourceWidth,
+        YOLO_INPUT_SIZE / sourceHeight
+      );
+
+      const resizedWidth =
+        Math.round(sourceWidth * scale);
+
+      const resizedHeight =
+        Math.round(sourceHeight * scale);
+
+      const paddingX =
+        (YOLO_INPUT_SIZE - resizedWidth) / 2;
+
+      const paddingY =
+        (YOLO_INPUT_SIZE - resizedHeight) / 2;
+
+      inputContext.fillStyle = "#808080";
+      inputContext.fillRect(
+        0,
+        0,
+        YOLO_INPUT_SIZE,
+        YOLO_INPUT_SIZE
+      );
+
+      inputContext.drawImage(
+        videoPlayer,
+        paddingX,
+        paddingY,
+        resizedWidth,
+        resizedHeight
+      );
+
+      const imageData = inputContext.getImageData(
+        0,
+        0,
+        YOLO_INPUT_SIZE,
+        YOLO_INPUT_SIZE
+      );
+
+      const pixelCount =
+        YOLO_INPUT_SIZE * YOLO_INPUT_SIZE;
+
+      const tensorData =
+        new Float32Array(pixelCount * 3);
+
+      for (let pixel = 0; pixel < pixelCount; pixel++) {
+        const sourceIndex = pixel * 4;
+
+        tensorData[pixel] =
+          imageData.data[sourceIndex] / 255;
+
+        tensorData[pixelCount + pixel] =
+          imageData.data[sourceIndex + 1] / 255;
+
+        tensorData[pixelCount * 2 + pixel] =
+          imageData.data[sourceIndex + 2] / 255;
+      }
+
+      return {
+        tensor: new ort.Tensor(
+          "float32",
+          tensorData,
+          [1, 3, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE]
+        ),
+        scale,
+        paddingX,
+        paddingY,
+        sourceWidth,
+        sourceHeight
+      };
+    }
+
+    /*
+      Parse standard YOLOv8 output.
+
+      Supported shapes:
+      [1, 84, 8400]
+      [1, 8400, 84]
+    */
+    function parseYoloOutput(outputTensor, inputDetails) {
+      const data = outputTensor.data;
+      const dimensions = outputTensor.dims;
+
+      let candidateCount;
+      let readValue;
+
+      if (
+        dimensions.length === 3 &&
+        dimensions[1] === 84
+      ) {
+        candidateCount = dimensions[2];
+
+        readValue = function (candidate, feature) {
+          return data[
+            feature * candidateCount + candidate
+          ];
+        };
+      } else if (
+        dimensions.length === 3 &&
+        dimensions[2] === 84
+      ) {
+        candidateCount = dimensions[1];
+
+        readValue = function (candidate, feature) {
+          return data[candidate * 84 + feature];
+        };
+      } else {
+        throw new Error(
+          `Unsupported YOLO output shape: ${
+            dimensions.join(" x ")
+          }`
+        );
+      }
+
+      const detections = [];
+
+      for (
+        let candidate = 0;
+        candidate < candidateCount;
+        candidate++
+      ) {
+        const centerX = readValue(candidate, 0);
+        const centerY = readValue(candidate, 1);
+        const width = readValue(candidate, 2);
+        const height = readValue(candidate, 3);
+
+        const personConfidence =
+          readValue(candidate, 4 + PERSON_CLASS_ID);
+
+        const ballConfidence =
+          readValue(candidate, 4 + SPORTS_BALL_CLASS_ID);
+
+        const classId =
+          personConfidence >= ballConfidence
+            ? PERSON_CLASS_ID
+            : SPORTS_BALL_CLASS_ID;
+
+        const confidence =
+          classId === PERSON_CLASS_ID
+            ? personConfidence
+            : ballConfidence;
+
+        if (confidence < CONFIDENCE_THRESHOLD) {
+          continue;
+        }
+
+        let x1 = centerX - width / 2;
+        let y1 = centerY - height / 2;
+        let x2 = centerX + width / 2;
+        let y2 = centerY + height / 2;
+
+        /*
+          Remove the letterbox padding and map the
+          coordinates back to the original video size.
+        */
+        x1 =
+          (x1 - inputDetails.paddingX) /
+          inputDetails.scale;
+
+        y1 =
+          (y1 - inputDetails.paddingY) /
+          inputDetails.scale;
+
+        x2 =
+          (x2 - inputDetails.paddingX) /
+          inputDetails.scale;
+
+        y2 =
+          (y2 - inputDetails.paddingY) /
+          inputDetails.scale;
+
+        x1 = Math.max(
+          0,
+          Math.min(inputDetails.sourceWidth, x1)
+        );
+
+        y1 = Math.max(
+          0,
+          Math.min(inputDetails.sourceHeight, y1)
+        );
+
+        x2 = Math.max(
+          0,
+          Math.min(inputDetails.sourceWidth, x2)
+        );
+
+        y2 = Math.max(
+          0,
+          Math.min(inputDetails.sourceHeight, y2)
+        );
+
+        if (x2 <= x1 || y2 <= y1) {
+          continue;
+        }
+
+        detections.push({
+          classId,
+          label:
+            classId === PERSON_CLASS_ID
+              ? "Player"
+              : "Ball",
+          confidence,
+          x1,
+          y1,
+          x2,
+          y2
+        });
+      }
+
+      return applyNms(detections);
+    }
+
+    /*
+      Remove duplicate boxes using class-aware NMS.
+    */
+    function applyNms(detections) {
+      const finalDetections = [];
+
+      for (const classId of [
+        PERSON_CLASS_ID,
+        SPORTS_BALL_CLASS_ID
+      ]) {
+        const group = detections
+          .filter(item => item.classId === classId)
+          .sort(
+            (first, second) =>
+              second.confidence - first.confidence
+          );
+
+        while (group.length > 0) {
+          const best = group.shift();
+          finalDetections.push(best);
+
+          for (
+            let index = group.length - 1;
+            index >= 0;
+            index--
+          ) {
+            if (
+              calculateIoU(
+                best,
+                group[index]
+              ) >= IOU_THRESHOLD
+            ) {
+              group.splice(index, 1);
+            }
+          }
+        }
+      }
+
+      return finalDetections;
+    }
+
+    function calculateIoU(firstBox, secondBox) {
+      const x1 = Math.max(
+        firstBox.x1,
+        secondBox.x1
+      );
+
+      const y1 = Math.max(
+        firstBox.y1,
+        secondBox.y1
+      );
+
+      const x2 = Math.min(
+        firstBox.x2,
+        secondBox.x2
+      );
+
+      const y2 = Math.min(
+        firstBox.y2,
+        secondBox.y2
+      );
+
+      const intersectionWidth =
+        Math.max(0, x2 - x1);
+
+      const intersectionHeight =
+        Math.max(0, y2 - y1);
+
+      const intersectionArea =
+        intersectionWidth * intersectionHeight;
+
+      const firstArea =
+        (firstBox.x2 - firstBox.x1) *
+        (firstBox.y2 - firstBox.y1);
+
+      const secondArea =
+        (secondBox.x2 - secondBox.x1) *
+        (secondBox.y2 - secondBox.y1);
+
+      const unionArea =
+        firstArea +
+        secondArea -
+        intersectionArea;
+
+      return unionArea > 0
+        ? intersectionArea / unionArea
+        : 0;
+    }
+
+    /*
+      Draw the Player and Ball boxes with confidence values.
+    */
+    function drawDetections(detections) {
+      for (const detection of detections) {
+        const color =
+          detection.classId === SPORTS_BALL_CLASS_ID
+            ? "#fb923c"
+            : "#22c55e";
+
+        const label =
+          `${detection.label} ` +
+          `${(detection.confidence * 100).toFixed(1)}%`;
+
+        const width =
+          detection.x2 - detection.x1;
+
+        const height =
+          detection.y2 - detection.y1;
+
+        canvasContext.strokeStyle = color;
+        canvasContext.lineWidth =
+          Math.max(2, videoCanvas.width / 500);
+
+        canvasContext.strokeRect(
+          detection.x1,
+          detection.y1,
+          width,
+          height
+        );
+
+        canvasContext.font = "bold 16px Arial";
+
+        const labelWidth =
+          canvasContext.measureText(label).width + 14;
+
+        const labelHeight = 25;
+
+        const labelY = Math.max(
+          0,
+          detection.y1 - labelHeight
+        );
+
+        canvasContext.fillStyle = color;
+
+        canvasContext.fillRect(
+          detection.x1,
+          labelY,
+          labelWidth,
+          labelHeight
+        );
+
+        canvasContext.fillStyle = "#07111f";
+
+        canvasContext.fillText(
+          label,
+          detection.x1 + 7,
+          labelY + 17
+        );
+      }
+    }
+
+    /*
+      Run YOLO on one frame every five seconds.
+    */
+    async function processSampledFrame(mediaTime) {
+      if (
+        !isProcessing ||
+        isDetecting ||
+        mediaTime < nextSampleTime
+      ) {
+        return;
+      }
+
+      if (mediaTime >= MAX_PROCESSING_SECONDS) {
+        finishProcessing();
+        return;
+      }
+
+      isDetecting = true;
+
+      try {
+        videoCanvas.width = videoPlayer.videoWidth;
+        videoCanvas.height = videoPlayer.videoHeight;
+
+        canvasContext.drawImage(
+          videoPlayer,
+          0,
+          0,
+          videoCanvas.width,
+          videoCanvas.height
+        );
+
+        videoCanvas.classList.add("visible");
+        videoPlaceholder.style.display = "none";
+
+        processingStatus.textContent = "Detecting";
+
+        const inputDetails = createYoloInput();
+        const inputName = yoloSession.inputNames[0];
+
+        const outputs = await yoloSession.run({
+          [inputName]: inputDetails.tensor
+        });
+
+        const outputName = yoloSession.outputNames[0];
+
+        const detections = parseYoloOutput(
+          outputs[outputName],
+          inputDetails
+        );
+
+        drawDetections(detections);
+
+        const players = detections.filter(
+          item => item.classId === PERSON_CLASS_ID
+        );
+
+        const balls = detections.filter(
+          item => item.classId === SPORTS_BALL_CLASS_ID
+        );
+
+        playerCount.textContent = players.length;
+        ballCount.textContent = balls.length;
+
+        processedFrameCount++;
+        frameCount.textContent =
+          processedFrameCount;
+
+        addLog(
+          `Frame ${processedFrameCount}: ` +
+          `${players.length} Player(s), ` +
+          `${balls.length} Ball(s).`
+        );
+
+        processingStatus.textContent = "Processing";
+
+        nextSampleTime += SAMPLE_INTERVAL_SECONDS;
+      } catch (error) {
+        console.error("YOLO detection error:", error);
+
+        processingStatus.textContent =
+          "Detection Error";
+
+        logStatus.textContent = "ERROR";
+        logStatus.style.color = "var(--red)";
+
+        addLog(
+          "YOLO detection failed for the current frame."
+        );
+      } finally {
+        isDetecting = false;
+      }
+    }
+
+    /*
+      Modern video frame loop.
+    */
+    function handleVideoFrame(timestamp, metadata) {
+      if (!isProcessing) {
+        return;
+      }
+
+      updateFps(timestamp);
+      updateVideoTime();
+
+      processSampledFrame(metadata.mediaTime);
+
+      if (isProcessing) {
+        videoFrameCallbackId =
+          videoPlayer.requestVideoFrameCallback(
+            handleVideoFrame
+          );
+      }
+    }
+
+    /*
+      Fallback loop for browsers that do not support
+      requestVideoFrameCallback.
+    */
+    function fallbackProcessingLoop() {
+      if (!isProcessing) {
+        return;
+      }
+
+      updateVideoTime();
+
+      processSampledFrame(
+        videoPlayer.currentTime
+      );
+
+      fallbackTimerId = setTimeout(
+        fallbackProcessingLoop,
+        100
+      );
+    }
+
+    async function startProcessing() {
+      if (!videoPlayer.src) {
+        processingStatus.textContent =
+          "No Video";
+
+        addLog(
+          "Please upload a video before starting."
+        );
+
+        return;
+      }
+
+      if (!yoloSession) {
+        try {
+          await loadYoloModel();
+        } catch {
+          return;
+        }
+      }
+
+      if (isProcessing) {
+        return;
+      }
+
+      if (
+        videoPlayer.currentTime >=
+          MAX_PROCESSING_SECONDS ||
+        videoPlayer.currentTime >=
+          videoPlayer.duration
+      ) {
+        videoPlayer.currentTime = 0;
+        processedFrameCount = 0;
+        nextSampleTime = 0;
+
+        frameCount.textContent = "0";
+        playerCount.textContent = "0";
+        ballCount.textContent = "0";
+      } else {
+        nextSampleTime =
+          Math.ceil(
+            videoPlayer.currentTime /
+            SAMPLE_INTERVAL_SECONDS
+          ) * SAMPLE_INTERVAL_SECONDS;
+      }
+
+      isProcessing = true;
+      isDetecting = false;
+
+      processingStatus.textContent =
+        "Processing";
+
+      logStatus.textContent = "RUNNING";
+      logStatus.style.color =
+        "var(--blue-light)";
+
+      fpsStartTime = 0;
+      fpsFrameCount = 0;
+
+      addLog(
+        "Processing started with local YOLO detection."
+      );
+
+      videoPlayer.play().catch(() => {
+        addLog(
+          "Press the video play button to begin playback."
+        );
+      });
+
+      if (
+        "requestVideoFrameCallback" in
+        HTMLVideoElement.prototype
+      ) {
+        videoFrameCallbackId =
+          videoPlayer.requestVideoFrameCallback(
+            handleVideoFrame
+          );
+      } else {
+        fallbackProcessingLoop();
+      }
+
+      updateButtons();
+    }
+
+    function stopProcessing(addMessage = true) {
+      isProcessing = false;
+      isDetecting = false;
+
+      videoPlayer.pause();
+
+      if (videoFrameCallbackId !== null) {
+        videoPlayer.cancelVideoFrameCallback(
+          videoFrameCallbackId
+        );
+
+        videoFrameCallbackId = null;
+      }
+
+      if (fallbackTimerId !== null) {
+        clearTimeout(fallbackTimerId);
+        fallbackTimerId = null;
+      }
+
+      if (addMessage) {
+        processingStatus.textContent = "Stopped";
+
+        logStatus.textContent = "STOPPED";
+        logStatus.style.color =
+          "var(--orange)";
+
+        addLog(
+          "Processing stopped by user."
+        );
+      }
+
+      updateButtons();
+    }
+
+    function finishProcessing() {
+      stopProcessing(false);
+
+      processingStatus.textContent =
+        "Complete";
+
+      logStatus.textContent = "COMPLETE";
+      logStatus.style.color =
+        "var(--green)";
+
+      addLog(
+        "Processing stopped after 30 seconds of video."
+      );
+    }
+
+    videoUpload.addEventListener(
+      "change",
+      async function (event) {
+        const file = event.target.files[0];
+
+        if (!file) {
+          return;
+        }
+
+        stopProcessing(false);
+
+        if (videoUrl) {
+          URL.revokeObjectURL(videoUrl);
+        }
+
+        videoUrl = URL.createObjectURL(file);
+        videoPlayer.src = videoUrl;
+
+        fileName.textContent = file.name;
+
+        fileSize.textContent =
+          `${formatFileSize(file.size)} · ` +
+          `${file.type || "Video file"}`;
+
+        processedFrameCount = 0;
+        nextSampleTime = 0;
+
+        frameCount.textContent = "0";
+        fpsValue.textContent = "0";
+        playerCount.textContent = "0";
+        ballCount.textContent = "0";
+        videoTime.textContent = "00:00 / 00:00";
+
+        videoCanvas.classList.remove("visible");
+        videoPlaceholder.style.display = "block";
+
+        addLog(`Loaded ${file.name}.`);
+
+        try {
+          await loadYoloModel();
+
+          processingStatus.textContent =
+            "Video Loaded";
+        } catch {
+          processingStatus.textContent =
+            "Model Error";
+        }
+
+        updateButtons();
+      }
+    );
+
+    videoPlayer.addEventListener(
+      "loadedmetadata",
+      function () {
+        videoCanvas.width =
+          videoPlayer.videoWidth;
+
+        videoCanvas.height =
+          videoPlayer.videoHeight;
+
+        updateVideoTime();
+
+        addLog(
+          "Video metadata loaded successfully."
+        );
+      }
+    );
+
+    videoPlayer.addEventListener(
+      "timeupdate",
+      updateVideoTime
+    );
+
+    videoPlayer.addEventListener(
+      "ended",
+      function () {
+        if (isProcessing) {
+          finishProcessing();
+        }
+      }
+    );
+
+    function resetWorkspace() {
+      stopProcessing(false);
+
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl);
+        videoUrl = null;
+      }
+
+      videoPlayer.removeAttribute("src");
+      videoPlayer.load();
+
+      videoCanvas.width = 0;
+      videoCanvas.height = 0;
+
+      videoCanvas.classList.remove("visible");
+      videoPlaceholder.style.display = "block";
+      videoUpload.value = "";
+
+      fileName.textContent =
+        "No video selected";
+
+      fileSize.textContent =
+        "MP4, WebM, or compatible browser video";
+
+      processingStatus.textContent =
+        "Ready";
+
+      videoTime.textContent =
+        "00:00 / 00:00";
+
+      fpsValue.textContent = "0";
+      frameCount.textContent = "0";
+      playerCount.textContent = "0";
+      ballCount.textContent = "0";
+
+      processedFrameCount = 0;
+      nextSampleTime = 0;
+      fpsStartTime = 0;
+      fpsFrameCount = 0;
+
+      modelStatus.textContent =
+        yoloSession
+          ? "Model status: Local YOLO model loaded"
+          : "Model status: Waiting for local model";
+
+      logStatus.textContent = "IDLE";
+      logStatus.style.color = "var(--green)";
+
+      sessionLog.innerHTML = `
+        <p>
+          <span class="log-time">--:--:--</span>
+          Workspace reset.
+        </p>
+
+        <p>
+          <span class="log-time">--:--:--</span>
+          Waiting for a video upload.
+        </p>
+      `;
+
+      updateButtons();
+    }
+
+    startButton.addEventListener(
+      "click",
+      startProcessing
+    );
+
+    stopButton.addEventListener(
+      "click",
+      function () {
+        stopProcessing(true);
+      }
+    );
+
+    resetButton.addEventListener(
+      "click",
+      resetWorkspace
+    );
+
+    /*
+      Load the local model once when the page starts.
+      The model is read from:
+      ./models/yolov8n.onnx
+    */
+    loadYoloModel().catch(() => {});
+
+    updateButtons();
+  </script>
+</body>
+</html>

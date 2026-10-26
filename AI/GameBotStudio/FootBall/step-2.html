@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football AI Analytics Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: #07111d;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: 100vh;
+    }
+    .sidebar {
+      background: #0b1420;
+      padding: 20px;
+      border-right: 1px solid rgba(255,255,255,0.08);
+    }
+    .main {
+      padding: 24px;
+    }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .stat {
+      background: #101c2e;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: 1.8fr 0.8fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .panel {
+      background: #101c2e;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 18px;
+    }
+    .video-container {
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: #050c15;
+      min-height: 350px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    video, canvas {
+      width: 100%;
+      max-height: 500px;
+      object-fit: contain;
+      display: block;
+    }
+    #videoCanvas { display: none; }
+    #videoCanvas.visible { display: block; }
+    button {
+      padding: 12px 18px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      margin: 5px 0;
+      width: 100%;
+    }
+    .start { background: #3b82f6; color: white; }
+    .stop { background: rgba(248,113,113,0.15); color: #fca5a5; border: 1px solid rgba(248,113,113,0.3); }
+    .reset { background: transparent; color: #dbeafe; border: 1px solid rgba(255,255,255,0.1); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h2>Football AI</h2>
+      <nav>
+        <div>Dashboard</div>
+        <div>Video Analysis</div>
+        <div>Processing</div>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <h1>Video Analysis Dashboard</h1>
+        <span>Development Mode</span>
+      </header>
+
+      <section class="stats">
+        <div class="stat"><div>Processing Status</div><h3 id="processingStatus">Ready</h3></div>
+        <div class="stat"><div>Video Time</div><h3 id="videoTime">00:00 / 00:00</h3></div>
+        <div class="stat"><div>FPS</div><h3 id="fpsValue">0</h3></div>
+        <div class="stat"><div>Frame Count</div><h3 id="frameCount">0</h3></div>
+      </section>
+
+      <section class="workspace">
+        <div class="panel">
+          <h3>Match Footage</h3>
+          <div class="video-container">
+            <video id="videoPlayer" controls preload="metadata"></video>
+            <canvas id="videoCanvas"></canvas>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:12px;">
+            <div>
+              <strong id="fileName">No video selected</strong>
+              <div id="fileSize">MP4, WebM</div>
+            </div>
+            <label for="videoUpload" style="padding:10px 14px; background:#1d4ed8; border-radius:8px; cursor:pointer;">Upload Video</label>
+            <input type="file" id="videoUpload" accept="video/*" hidden />
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Processing Controls</h3>
+          <div id="modelStatus">Model status: Waiting for local model</div>
+          <button id="startButton" class="start" disabled>▶ Start Processing</button>
+          <button id="stopButton" class="stop" disabled>Ⅱ Stop Processing</button>
+          <button id="resetButton" class="reset" disabled>↻ Reset Workspace</button>
+          <div id="sessionLog" style="margin-top:20px; background:#08111d; padding:10px; border-radius:8px; min-height:120px;"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const MODEL_PATH = "./models/yolov8n.onnx";
+    const videoUpload = document.getElementById("videoUpload");
+    const videoPlayer = document.getElementById("videoPlayer");
+    const videoCanvas = document.getElementById("videoCanvas");
+    const canvasContext = videoCanvas.getContext("2d");
+    const processingStatus = document.getElementById("processingStatus");
+    const fileName = document.getElementById("fileName");
+    const fileSize = document.getElementById("fileSize");
+    const startButton = document.getElementById("startButton");
+    const stopButton = document.getElementById("stopButton");
+    const resetButton = document.getElementById("resetButton");
+    const modelStatus = document.getElementById("modelStatus");
+    const sessionLog = document.getElementById("sessionLog");
+    let yoloSession = null;
+
+    function addLog(msg) {
+      const p = document.createElement("p");
+      p.textContent = msg;
+      sessionLog.appendChild(p);
+    }
+
+    async function loadYoloModel() {
+      if (yoloSession) return yoloSession;
+
+      modelStatus.textContent = "Model status: Loading local model";
+      addLog("Loading YOLO model...");
+
+      const response = await fetch(MODEL_PATH, { cache: "no-store" });
+      const modelBuffer = await response.arrayBuffer();
+
+      yoloSession = await ort.InferenceSession.create(modelBuffer, {
+        executionProviders: ["wasm"],
+        graphOptimizationLevel: "all"
+      });
+
+      modelStatus.textContent = "Model status: Local YOLO model loaded";
+      addLog("YOLO model loaded successfully.");
+      updateButtons();
+      return yoloSession;
+    }
+
+    function updateButtons() {
+      startButton.disabled = !videoPlayer.src || !yoloSession;
+      stopButton.disabled = false;
+      resetButton.disabled = !videoPlayer.src;
+    }
+
+    videoUpload.addEventListener("change", async function (event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const url = URL.createObjectURL(file);
+      videoPlayer.src = url;
+      fileName.textContent = file.name;
+      fileSize.textContent = file.size + " bytes";
+      addLog("Loaded " + file.name);
+
+      try {
+        await loadYoloModel();
+      } catch (error) {
+        modelStatus.textContent = "Model status: Model not found";
+      }
+
+      updateButtons();
+    });
+
+    startButton.addEventListener("click", async function () {
+      if (!videoPlayer.src) return;
+      if (!yoloSession) {
+        await loadYoloModel();
+      }
+      processingStatus.textContent = "Processing";
+      addLog("Processing started.");
+      updateButtons();
+    });
+
+    stopButton.addEventListener("click", function () {
+      processingStatus.textContent = "Stopped";
+      addLog("Processing stopped.");
+      updateButtons();
+    });
+
+    resetButton.addEventListener("click", function () {
+      videoPlayer.removeAttribute("src");
+      videoPlayer.load();
+      fileName.textContent = "No video selected";
+      fileSize.textContent = "MP4, WebM";
+      processingStatus.textContent = "Ready";
+      modelStatus.textContent = "Model status: Local YOLO model loaded";
+      addLog("Workspace reset.");
+      updateButtons();
+    });
+
+    loadYoloModel().catch(() => {});
+    updateButtons();
+  </script>
+</body>
+</html>
