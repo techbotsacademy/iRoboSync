@@ -27,6 +27,11 @@ void loop() {
     int val3 = Serial.parseInt();
     int val4 = Serial.parseInt();
 
+    val1 = constrain(val1, 0, 165);
+    val2 = constrain(val2, 0, 165);
+    val3 = constrain(val3, 0, 165);
+    val4 = constrain(val4, 0, 165);
+
     // Jab newline '\n' mile tab execute karein
     if (Serial.read() == '\n') {
       servo1.write(val1);
