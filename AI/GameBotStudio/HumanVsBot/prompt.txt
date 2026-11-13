@@ -1,0 +1,1 @@
+Create a HTML, for a ping pong game, where one side of the paddle is controlled by the human hand detected using Media pipe and camera. The other side is paddle is controlled by AI(Tensor flow) predicting where the ball will be next. This prediction should also control a physical robotic 4DOF arm connected to the laptop using ESP32-wifi.
