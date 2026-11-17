@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <title>Face Detection — MediaPipe</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #101827;
+      color: #eef4ff;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      padding: clamp(18px, 4vw, 48px) 16px;
+      background: radial-gradient(ellipse at 50% -20%, #20385b 0, #101827 62%);
+    }
+    main { width: min(100%, 960px); margin: 0 auto; }
+    header { margin-bottom: 24px; text-align: center; }
+    .eyebrow { color: #6ee7c1; font-size: .76rem; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 9px 0 8px; font-size: clamp(1.8rem, 5vw, 2.8rem); letter-spacing: -.04em; }
+    .intro { max-width: 620px; margin: 0 auto; color: #aab8cf; line-height: 1.6; }
+    .card {
+      overflow: hidden;
+      border: 1px solid #293852;
+      border-radius: 20px;
+      background: #151f30;
+      box-shadow: 0 24px 70px #050a1390;
+    }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 18px; border-bottom: 1px solid #293852; }
+    .status { display: flex; align-items: center; gap: 9px; color: #c6d2e5; font-size: .92rem; }
+    .dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #8794a8; }
+    .dot.live { background: #42e3a9; box-shadow: 0 0 12px #42e3a9a0; }
+    .actions { display: flex; flex-wrap: wrap; gap: 9px; }
+    button { min-height: 42px; padding: 0 16px; border: 0; border-radius: 10px; font: inherit; font-size: .9rem; font-weight: 700; cursor: pointer; transition: transform .15s, opacity .15s, background .15s; }
+    button:hover:not(:disabled) { transform: translateY(-1px); }
+    button:focus-visible { outline: 3px solid #91f3d2; outline-offset: 3px; }
+    button:disabled { cursor: not-allowed; opacity: .48; }
+    #startButton { color: #06241b; background: #6ee7c1; }
+    #stopButton { color: #f5f7fb; background: #34445d; }
+    .stage { position: relative; display: grid; min-height: 260px; place-items: center; overflow: hidden; background: #080d15; }
+    #video { display: block; width: 100%; height: auto; max-height: 72vh; object-fit: contain; }
+    #overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; color: #92a1b8; text-align: center; }
+    .camera-icon { font-size: 2.5rem; opacity: .8; }
+    .placeholder strong { color: #d7e1ef; font-size: 1.02rem; }
+    .stats { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; color: #aab8cf; font-size: .9rem; }
+    .count { color: #eef4ff; font-weight: 750; }
+    .count span { color: #6ee7c1; font-size: 1.15rem; }
+    #message { min-height: 1.4em; text-align: right; }
+    .privacy { margin: 16px 8px 0; color: #91a0b7; font-size: .82rem; line-height: 1.6; text-align: center; }
+    .privacy strong { color: #bdcbe0; }
+    @media (max-width: 560px) {
+      .toolbar { align-items: flex-start; flex-direction: column; }
+      .actions { width: 100%; }
+      button { flex: 1; }
+      .stats { align-items: flex-start; flex-direction: column; }
+      #message { text-align: left; }
+      .stage { min-height: 220px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Live · Private · In your browser</div>
+      <h1>Face Detection</h1>
+      <p class="intro">See faces detected in your webcam stream, with bounding boxes around each face.</p>
+    </header>
+
+    <section class="card" aria-label="Live face detection">
+      <div class="toolbar">
+        <div class="status" aria-live="polite"><span class="dot" id="statusDot"></span><span id="statusText">Camera is off</span></div>
+        <div class="actions">
+          <button id="startButton" type="button">Start Camera</button>
+          <button id="stopButton" type="button" disabled>Stop Camera</button>
+        </div>
+      </div>
+      <div class="stage" id="stage">
+        <video id="video" autoplay muted playsinline aria-label="Webcam video"></video>
+        <canvas id="overlay" aria-hidden="true"></canvas>
+        <div class="placeholder" id="placeholder">
+          <span class="camera-icon" aria-hidden="true">◉</span>
+          <strong>Your camera preview will appear here</strong>
+          <span>Select Start Camera and allow camera access to begin.</span>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="count" aria-live="polite">Faces detected: <span id="faceCount">0</span></div>
+        <div id="message" role="status">Ready when you are.</div>
+      </div>
+    </section>
+    <p class="privacy"><strong>Privacy:</strong> video frames are processed locally in this browser and are not uploaded. Camera access requires HTTPS or localhost in Chrome.</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+  <script>
+    (() => {
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('overlay');
+      const ctx = canvas.getContext('2d');
+      const startButton = document.getElementById('startButton');
+      const stopButton = document.getElementById('stopButton');
+      const statusText = document.getElementById('statusText');
+      const statusDot = document.getElementById('statusDot');
+      const faceCount = document.getElementById('faceCount');
+      const message = document.getElementById('message');
+      const placeholder = document.getElementById('placeholder');
+
+      let stream = null;
+      let detector = null;
+      let running = false;
+      let frameRequest = 0;
+      let busy = false;
+
+      function setStatus(text, live) {
+        statusText.textContent = text;
+        statusDot.classList.toggle('live', live);
+      }
+
+      function clearOverlay() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        faceCount.textContent = '0';
+      }
+
+      function drawDetections(results) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const detections = results.detections || [];
+//        faceCount.textContent = String(detections.length);
+        ctx.lineWidth = Math.max(2, canvas.width / 400);
+
+        detections.forEach((detection) => {
+          const box = detection.boundingBox;
+          if (!box) return;
+          const x = box.xCenter * canvas.width - box.width * canvas.width / 2;
+          const y = box.yCenter * canvas.height - box.height * canvas.height / 2;
+          const width = box.width * canvas.width;
+          const height = box.height * canvas.height;
+
+          ctx.strokeStyle = '#6ee7c1';
+          ctx.strokeRect(x, y, width, height);
+        });
+        message.textContent = detections.length
+          ? `${detections.length} ${detections.length === 1 ? 'face' : 'faces'} in view`
+          : 'No faces detected';
+      }
+
+      async function detectFrame() {
+        if (!running || busy) return;
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth) {
+          busy = true;
+          try {
+            await detector.send({ image: video });
+          } catch (error) {
+            if (running) {
+              message.textContent = 'Detection paused: ' + (error.message || 'unable to process video');
+              stopCamera();
+              return;
+            }
+          } finally {
+            busy = false;
+          }
+        }
+        if (running) frameRequest = requestAnimationFrame(detectFrame);
+      }
+
+      async function startCamera() {
+        if (running) return;
+        startButton.disabled = true;
+        message.textContent = 'Starting camera…';
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Camera access is unavailable. Open this page in Chrome over HTTPS or localhost.');
+          }
+          if (typeof FaceDetection === 'undefined') {
+            throw new Error('MediaPipe could not load. Check your internet connection and reload the page.');
+          }
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+          });
+          video.srcObject = stream;
+          await video.play();
+          detector = new FaceDetection({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
+          });
+          detector.setOptions({ model: 'short', minDetectionConfidence: 0.5 });
+          detector.onResults(drawDetections);
+          await detector.initialize();
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          placeholder.hidden = true;
+          running = true;
+          startButton.disabled = true;
+          stopButton.disabled = false;
+          setStatus('Camera is on', true);
+          message.textContent = 'Looking for faces…';
+          frameRequest = requestAnimationFrame(detectFrame);
+        } catch (error) {
+          stopCamera();
+          startButton.disabled = false;
+          setStatus('Camera is off', false);
+          message.textContent = error.name === 'NotAllowedError'
+            ? 'Camera permission was denied. Allow access in Chrome and try again.'
+            : (error.message || 'Could not start the camera.');
+        }
+      }
+
+      function stopCamera() {
+        running = false;
+        cancelAnimationFrame(frameRequest);
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+          stream = null;
+        }
+        video.srcObject = null;
+        if (detector) {
+          detector.close().catch(() => {});
+          detector = null;
+        }
+        placeholder.hidden = false;
+        clearOverlay();
+        stopButton.disabled = true;
+        startButton.disabled = false;
+        setStatus('Camera is off', false);
+        if (message.textContent === 'Looking for faces…' || message.textContent.includes('faces in view') || message.textContent === 'No faces detected') {
+          message.textContent = 'Camera stopped.';
+        }
+      }
+
+      startButton.addEventListener('click', startCamera);
+      stopButton.addEventListener('click', stopCamera);
+      window.addEventListener('pagehide', stopCamera);
+    })();
+  </script>
+</body>
+</html>
