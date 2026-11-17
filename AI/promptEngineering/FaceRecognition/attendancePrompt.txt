@@ -1,0 +1,21 @@
+Create a **single-page HTML Student Attendance System using real-time face recognition**.
+
+Requirements:
+1. **Student Registration:** Allow registration of up to 3 students by capturing their face through the webcam and entering their name.
+2. **Face Memory:** Store each student's face data and name in browser LocalStorage or IndexedDB so registrations persist after refreshing or reopening the page.
+3. **Face Recognition:** Provide a live webcam interface that detects and recognizes registered students in real time.
+4. **Attendance:** Automatically mark recognized students as PRESENT with their name and timestamp. Avoid duplicate attendance entries for the same student on the same day.
+5. **Absent Students:** At the end of the attendance session, list registered students who were not recognized as ABSENT.
+6. **Dashboard:** Display registered students, live recognition status, and an attendance table with Name, Status, Date and Time.
+7. **Controls:** Provide Start Attendance, Stop Attendance, Register Student and Reset Attendance buttons.
+8. **Recognition:** Use a browser-compatible face recognition library such as face-api.js. Do not use mock recognition or random matching.
+
+**Technical constraints:**
+- Use HTML, CSS and JavaScript.
+- No backend, API keys or paid services.
+- Use the webcam through `navigator.mediaDevices.getUserMedia()`.
+- Make the UI clean, modern and suitable for a school classroom.
+- Include proper error handling for camera permissions and face recognition failures.
+- Ensure face recognition works locally in the browser after the required models are loaded.
+
+Return complete, working code in a single HTML file.
